@@ -6,7 +6,17 @@
   import { lyrics } from './lyrics.svelte'
   import { player, formatTime } from './player.svelte'
 
-  let { nowPlaying = false, onToggleNowPlaying }: { nowPlaying?: boolean; onToggleNowPlaying?: () => void } = $props()
+  let {
+    nowPlaying = false,
+    onToggleNowPlaying,
+    queueOpen = false,
+    onToggleQueue,
+  }: {
+    nowPlaying?: boolean
+    onToggleNowPlaying?: () => void
+    queueOpen?: boolean
+    onToggleQueue?: () => void
+  } = $props()
 
   // While the user drags the seek bar we show the drag value and only send
   // one seek command when they let go.
@@ -157,6 +167,23 @@
     >
       <Icon name="lyrics" />
     </button>
+    {#if onToggleQueue}
+      <button
+        type="button"
+        class={[
+          'rounded-full p-2 transition-colors',
+          queueOpen
+            ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950'
+            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white',
+        ]}
+        onclick={onToggleQueue}
+        aria-pressed={queueOpen}
+        aria-label={t("Queue")}
+        title={t("Queue")}
+      >
+        <Icon name="queue" />
+      </button>
+    {/if}
     <button
       class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
       onclick={toggleMute}

@@ -32,22 +32,20 @@
 
   type View = 'songs' | 'albums' | 'search' | 'queue' | 'folders' | 'settings' | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
-  // section and Settings sits at the bottom.
-  type NavView = 'songs' | 'albums' | 'search' | 'queue' | 'folders'
-  const NAV: NavView[] = ['songs', 'albums', 'search', 'queue', 'folders']
-  const VIEWS: View[] = [...NAV, 'settings']
+  // section, Queue is toggled from the bottom bar, and Settings sits at the bottom.
+  type NavView = 'songs' | 'albums' | 'search' | 'folders'
+  const NAV: NavView[] = ['songs', 'albums', 'search', 'folders']
+  const VIEWS: View[] = [...NAV, 'queue', 'settings']
   const LABELS: Record<NavView, string> = {
     songs: 'Songs',
     albums: 'Albums',
     search: 'Search',
-    queue: 'Queue',
     folders: 'Folders',
   } // English keys, shown through t()
-  const ICONS: Record<NavView, 'music' | 'album' | 'search' | 'queue' | 'folder'> = {
+  const ICONS: Record<NavView, 'music' | 'album' | 'search' | 'folder'> = {
     songs: 'music',
     albums: 'album',
     search: 'search',
-    queue: 'queue',
     folders: 'folder',
   }
   const KEY = 'foomodern.view'
@@ -82,6 +80,7 @@
   let playlistId = $state<number | null>(null)
   let creatingPlaylist = $state(false)
   let newPlaylistName = $state('')
+  let beforeQueue = $state<{ view: View; playlistId: number | null }>({ view: 'songs', playlistId: null })
 
   function go(next: View) {
     view = next
@@ -92,6 +91,25 @@
     } catch {
       // ignore
     }
+  }
+
+  function toggleQueue() {
+    if (view === 'queue' && !nowPlaying) {
+      if (
+        beforeQueue.view === 'playlist' &&
+        beforeQueue.playlistId !== null &&
+        playlists.byId(beforeQueue.playlistId)
+      ) {
+        openPlaylist(beforeQueue.playlistId)
+      } else {
+        go(beforeQueue.view === 'queue' ? 'songs' : beforeQueue.view)
+      }
+      return
+    }
+    if (view !== 'queue') {
+      beforeQueue = { view, playlistId }
+    }
+    go('queue')
   }
 
   function openPlaylist(id: number) {
@@ -118,7 +136,6 @@
     songs: library.stats.tracks,
     albums: library.stats.albums,
     search: null,
-    queue: player.snapshot.queueLength,
     folders: library.folders.length,
   })
 
@@ -325,7 +342,12 @@
     {/if}
   </div>
 
-  <PlayerBar {nowPlaying} onToggleNowPlaying={() => (nowPlaying = !nowPlaying)} />
+  <PlayerBar
+    {nowPlaying}
+    onToggleNowPlaying={() => (nowPlaying = !nowPlaying)}
+    queueOpen={view === 'queue' && !nowPlaying}
+    onToggleQueue={toggleQueue}
+  />
 </div>
 {/if}
 
