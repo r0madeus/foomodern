@@ -12,7 +12,7 @@
 //! Known benign race: engine events are asynchronous, so an event produced
 //! just before a user command (e.g. a late `Idle`) can be applied after it.
 
-use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent, ReplayGain};
+use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent, RemoteCommand, ReplayGain};
 use crate::queue::{EntryId, Queue, RepeatMode, Track};
 use crate::session::{SavedTrack, SessionState};
 use serde::Serialize;
@@ -539,6 +539,16 @@ impl Player {
 
     /// Apply an event coming from the audio engine.
     pub fn handle_engine_event(&self, event: EngineEvent) {
+        if let EngineEvent::Remote(command) = event {
+            let result = match command {
+                RemoteCommand::Next => self.next(),
+                RemoteCommand::Previous => self.previous(),
+            };
+            if let Err(e) = result {
+                log::warn!("remote {command:?} failed: {e}");
+            }
+            return;
+        }
         enum Out {
             None,
             State,
@@ -617,6 +627,7 @@ impl Player {
                     log::warn!("audio engine: {msg}");
                     Out::Error(msg)
                 }
+                EngineEvent::Remote(_) => Out::None, // handled above
             };
             let seq = s.next_seq();
             (out, s.snapshot(), seq)
@@ -1097,6 +1108,25 @@ mod tests {
         let snap = p.next().unwrap();
         assert_eq!(snap.current_index, Some(1));
         assert!(calls.take().is_empty());
+    }
+
+    #[test]
+    fn remote_commands_move_through_the_rust_queue() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c"]), 0).unwrap();
+        calls.take();
+        p.handle_engine_event(EngineEvent::Remote(RemoteCommand::Next));
+        assert_eq!(p.snapshot().current_index, Some(1));
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Load(pb("b")),
+                Call::Play,
+                Call::SetNext(Some(pb("c")))
+            ]
+        );
+        p.handle_engine_event(EngineEvent::Remote(RemoteCommand::Previous));
+        assert_eq!(p.snapshot().current_index, Some(0));
     }
 
     #[test]

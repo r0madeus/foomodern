@@ -124,7 +124,7 @@
 
 <aside
   aria-label="Lyrics"
-  class="flex w-80 shrink-0 flex-col border-l border-zinc-200 bg-zinc-50/70 lg:w-96 dark:border-zinc-800 dark:bg-zinc-950/70"
+  class="flex w-80 shrink-0 flex-col border-l border-zinc-200 bg-zinc-50/70 max-sm:absolute max-sm:inset-0 max-sm:z-30 max-sm:w-full max-sm:border-l-0 max-sm:bg-zinc-50 lg:w-96 dark:border-zinc-800 dark:bg-zinc-950/70 max-sm:dark:bg-zinc-950"
 >
   <header class="flex items-start justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
     <div class="min-w-0">

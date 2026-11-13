@@ -77,7 +77,7 @@
               {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
             </span>
           </button>
-          <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+          <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
             <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
           </span>
         </li>

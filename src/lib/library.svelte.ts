@@ -3,6 +3,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
+import { appSettings } from './appSettings.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
 
 export type Sort = 'artist' | 'title' | 'album' | 'added'
@@ -188,7 +189,12 @@ class LibraryStore {
 
   async addFolder(): Promise<void> {
     try {
-      const path = await open({ directory: true, multiple: false })
+      // Android: no folder picker for plain paths; Rust asks for access and
+      // returns the shared Music folder.
+      const path =
+        appSettings.platform === 'android'
+          ? await invoke<string>('library_android_music_folder')
+          : await open({ directory: true, multiple: false })
       if (!path) return
       this.folders = await invoke<FolderInfo[]>('library_add_folder', { path })
     } catch (e) {

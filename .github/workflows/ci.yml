@@ -41,6 +41,41 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
+  android:
+    name: Android (debug APK)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rust Android target
+        run: rustup target add aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # The runner image ships the Android SDK and NDK.
+      - name: Point Tauri at the NDK
+        run: echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - run: npm ci
+      # The Android project is generated on each run (src-tauri/gen/android is
+      # not committed yet); the audio plugin's Kotlin code is wired in by
+      # tauri-build.
+      - name: Generate Android project
+        run: npm run tauri -- android init --ci
+      - name: Build APK
+        run: npm run tauri -- android build --apk --target aarch64 --debug --ci
+      - uses: actions/upload-artifact@v7
+        with:
+          name: foomodern-android-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
   windows:
     name: Windows (test + installer)
     runs-on: windows-latest

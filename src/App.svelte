@@ -15,6 +15,7 @@
   import { library } from './lib/library.svelte'
   import { lyrics } from './lib/lyrics.svelte'
   import { playlists } from './lib/playlists.svelte'
+  import { appSettings } from './lib/appSettings.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -87,6 +88,7 @@
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
+    void appSettings.load()
   })
 
   $effect(() => {
@@ -111,8 +113,8 @@
 </script>
 
 <div class="flex h-screen flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-  <div class="flex min-h-0 flex-1">
-    <aside class="flex w-52 shrink-0 flex-col gap-4 border-r border-zinc-200 px-3 py-4 dark:border-zinc-800">
+  <div class="relative flex min-h-0 flex-1">
+    <aside class="hidden w-52 shrink-0 flex-col gap-4 border-r sm:flex border-zinc-200 px-3 py-4 dark:border-zinc-800">
       <h1 class="px-2 text-lg font-semibold tracking-tight">FooModern</h1>
       <nav aria-label="Library" class="flex flex-col gap-0.5">
         {#each NAV as v (v)}
@@ -247,6 +249,25 @@
   </div>
 
   <PlayerBar />
+
+  <!-- Phones: the sidebar is hidden, its main entries become a tab bar. -->
+  <nav
+    aria-label="Library"
+    class="grid grid-cols-5 border-t border-zinc-200 bg-white sm:hidden dark:border-zinc-800 dark:bg-zinc-900"
+  >
+    {#each [...NAV, 'settings' as const] as v (v)}
+      <button
+        class={[
+          'py-2.5 text-xs',
+          view === v ? 'font-semibold text-teal-700 dark:text-teal-300' : 'text-zinc-500 dark:text-zinc-400',
+        ]}
+        aria-current={view === v ? 'page' : undefined}
+        onclick={() => go(v)}
+      >
+        {v === 'settings' ? 'Settings' : LABELS[v]}
+      </button>
+    {/each}
+  </nav>
 </div>
 
 <TagEditor />

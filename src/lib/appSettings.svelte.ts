@@ -6,6 +6,7 @@ import { player } from './player.svelte'
 interface AppSettingsPayload {
   closeToTray: boolean
   trayAvailable: boolean
+  platform: 'android' | 'desktop'
 }
 
 class AppSettings {
@@ -13,6 +14,8 @@ class AppSettings {
   closeToTray = $state(true)
   /** False when no tray icon exists in this run (closing quits anyway). */
   trayAvailable = $state(true)
+  /** Android has no tray, no free folder/file picker and a narrow screen. */
+  platform = $state<'android' | 'desktop'>('desktop')
   loaded = $state(false)
 
   async load(): Promise<void> {
@@ -35,6 +38,7 @@ class AppSettings {
   #apply(s: AppSettingsPayload): void {
     this.closeToTray = s.closeToTray
     this.trayAvailable = s.trayAvailable
+    this.platform = s.platform
     this.loaded = true
   }
 }

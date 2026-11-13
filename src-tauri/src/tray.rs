@@ -6,21 +6,32 @@
 //! exists on this run lives in [`TrayStatus`]. Without a tray the window is
 //! always allowed to close, otherwise the user would be left with a hidden
 //! window and no way to bring it back.
+//!
+//! Android has no tray (and no window to close): [`install`] just marks the
+//! tray unavailable there.
 
+#[cfg(not(target_os = "android"))]
 use crate::player::Player;
 use crate::session::SessionStore;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(target_os = "android"))]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+#[cfg(not(target_os = "android"))]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Window, WindowEvent};
 
 pub const MAIN_WINDOW: &str = "main";
 
+#[cfg(not(target_os = "android"))]
 const ID_SHOW: &str = "tray-show";
+#[cfg(not(target_os = "android"))]
 const ID_PLAY_PAUSE: &str = "tray-play-pause";
+#[cfg(not(target_os = "android"))]
 const ID_NEXT: &str = "tray-next";
+#[cfg(not(target_os = "android"))]
 const ID_PREVIOUS: &str = "tray-previous";
+#[cfg(not(target_os = "android"))]
 const ID_QUIT: &str = "tray-quit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +65,7 @@ impl TrayStatus {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub fn show_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return;
@@ -71,6 +83,7 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn run_player(app: &AppHandle, what: &str, f: impl FnOnce(&Player) -> Result<(), String>) {
     let Some(player) = app.try_state::<Arc<Player>>() else {
         return;
@@ -80,6 +93,7 @@ fn run_player(app: &AppHandle, what: &str, f: impl FnOnce(&Player) -> Result<(),
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn on_menu(app: &AppHandle, id: &str) {
     match id {
         ID_SHOW => show_main_window(app),
@@ -98,6 +112,7 @@ fn on_menu(app: &AppHandle, id: &str) {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn build(app: &AppHandle) -> tauri::Result<tauri::tray::TrayIcon> {
     let menu = Menu::with_items(
         app,
@@ -136,6 +151,9 @@ fn build(app: &AppHandle) -> tauri::Result<tauri::tray::TrayIcon> {
 /// unavailable, so closing the window quits as it did before.
 pub fn install(app: &AppHandle) {
     let status = app.state::<TrayStatus>();
+    #[cfg(target_os = "android")]
+    status.set_available(false);
+    #[cfg(not(target_os = "android"))]
     match build(app) {
         Ok(tray) => {
             app.manage(tray);

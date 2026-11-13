@@ -204,7 +204,7 @@
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
               </span>
-              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                 <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
                 <button
                   type="button"

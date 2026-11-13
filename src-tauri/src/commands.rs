@@ -133,6 +133,41 @@ pub fn library_add_folder(lib: State<'_, Arc<Library>>, path: String) -> Res<Vec
     Ok(folders)
 }
 
+/// Android has no folder picker for plain file paths: ask for read access to
+/// the music library and return the shared Music folder to add.
+#[tauri::command]
+pub async fn library_android_music_folder(app: tauri::AppHandle) -> Res<String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        #[derive(serde::Deserialize)]
+        struct Access {
+            granted: bool,
+        }
+        let handle = app
+            .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+            .0
+            .clone();
+        let access: Access = handle
+            .run_mobile_plugin_async("requestAudioAccess", ())
+            .await
+            .map_err(|e| e.to_string())?;
+        if !access.granted {
+            return Err("Permission to read music was denied.".into());
+        }
+        const MUSIC: &str = "/storage/emulated/0/Music";
+        if !std::path::Path::new(MUSIC).is_dir() {
+            return Err(format!("{MUSIC} does not exist."));
+        }
+        Ok(MUSIC.into())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("only available on Android".into())
+    }
+}
+
 #[tauri::command]
 pub fn library_remove_folder(lib: State<'_, Arc<Library>>, id: i64) -> Res<Vec<FolderInfo>> {
     le(lib.remove_folder(id))?;
@@ -362,12 +397,19 @@ pub struct AppSettings {
     /// False when no tray icon could be created in this run; closing the
     /// window then quits whatever the setting says.
     tray_available: bool,
+    /// `"android"` or `"desktop"`; the UI adapts its layout and dialogs.
+    platform: &'static str,
 }
 
 fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
     AppSettings {
         close_to_tray: store.close_to_tray(),
         tray_available: tray.available(),
+        platform: if cfg!(target_os = "android") {
+            "android"
+        } else {
+            "desktop"
+        },
     }
 }
 

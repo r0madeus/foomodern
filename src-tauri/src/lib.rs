@@ -2,12 +2,14 @@ pub mod audio;
 mod commands;
 pub mod library;
 pub mod lyrics;
+#[cfg(not(target_os = "android"))]
 pub mod media_keys;
 pub mod player;
 pub mod queue;
 pub mod session;
 pub mod tray;
 
+#[cfg(not(target_os = "android"))]
 use audio::mpv::{MpvEngine, MpvOptions};
 use library::{Hooks, Library};
 use lyrics::LyricsService;
@@ -26,8 +28,10 @@ struct PositionPayload {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_android_audio::init());
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -42,7 +46,16 @@ pub fn run() {
             let session_store = Arc::new(SessionStore::new(data_dir.join("session.json")));
 
             let (tx, rx) = mpsc::channel();
-            let engine = MpvEngine::new(MpvOptions::default(), tx).map_err(|e| {
+            #[cfg(not(target_os = "android"))]
+            let engine = MpvEngine::new(MpvOptions::default(), tx);
+            #[cfg(target_os = "android")]
+            let engine = audio::android::AndroidEngine::new(
+                app.state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+                    .0
+                    .clone(),
+                tx,
+            );
+            let engine = engine.map_err(|e| {
                 log::error!("failed to start audio engine: {e}");
                 e
             })?;
@@ -57,6 +70,7 @@ pub fn run() {
                             if let Some(p) = handle.try_state::<Arc<Player>>() {
                                 observer_session.on_player_state(&snap, || p.export_session());
                             }
+                            #[cfg(not(target_os = "android"))]
                             if let Some(keys) = handle.try_state::<media_keys::MediaKeys>() {
                                 keys.publish(&snap, |path| {
                                     let Some(lib) = handle.try_state::<Arc<Library>>() else {
@@ -95,15 +109,18 @@ pub fn run() {
                     }
                 })?;
 
-            #[cfg(target_os = "windows")]
-            let hwnd = app
-                .get_webview_window("main")
-                .and_then(|w| w.hwnd().ok())
-                .map(|h| h.0 as *mut std::ffi::c_void);
-            #[cfg(not(target_os = "windows"))]
-            let hwnd = None;
-            if let Some(keys) = media_keys::create(hwnd, &player) {
-                app.manage(keys);
+            #[cfg(not(target_os = "android"))]
+            {
+                #[cfg(target_os = "windows")]
+                let hwnd = app
+                    .get_webview_window("main")
+                    .and_then(|w| w.hwnd().ok())
+                    .map(|h| h.0 as *mut std::ffi::c_void);
+                #[cfg(not(target_os = "windows"))]
+                let hwnd = None;
+                if let Some(keys) = media_keys::create(hwnd, &player) {
+                    app.manage(keys);
+                }
             }
 
             app.manage(player);
@@ -164,6 +181,7 @@ pub fn run() {
             commands::player_set_replaygain,
             commands::player_snapshot,
             commands::library_add_folder,
+            commands::library_android_music_folder,
             commands::library_remove_folder,
             commands::library_folders,
             commands::library_rescan,

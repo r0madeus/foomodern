@@ -1,0 +1,14 @@
+[package]
+name = "tauri-plugin-android-audio"
+version = "0.1.0"
+description = "FooModern's Android audio backend: Media3/ExoPlayer behind a Tauri mobile plugin"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+links = "tauri-plugin-android-audio"
+
+[dependencies]
+tauri = { version = "=2.12.5" }
+
+[build-dependencies]
+tauri-plugin = { version = "=2.7.2", features = ["build"] }

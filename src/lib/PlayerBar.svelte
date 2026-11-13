@@ -32,10 +32,12 @@
   }
 </script>
 
+<!-- Narrow screens (phones): track info on top, controls below, lyrics
+     toggle in the corner; volume is left to the hardware keys. -->
 <footer
-  class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-6 border-t border-zinc-200 bg-white/80 px-5 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80"
+  class="relative grid grid-cols-1 items-center gap-2 border-t border-zinc-200 bg-white/80 px-3 py-2 backdrop-blur sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] sm:gap-6 sm:px-5 sm:py-3 dark:border-zinc-800 dark:bg-zinc-900/80"
 >
-  <div class="min-w-0">
+  <div class="min-w-0 pr-12 sm:pr-0">
     {#if snap.current}
       <p class="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={snap.current.path}>
         {snap.current.title}
@@ -122,7 +124,7 @@
     </div>
   </div>
 
-  <div class="flex items-center justify-end gap-2">
+  <div class="absolute top-1.5 right-2 flex items-center justify-end gap-2 sm:static">
     <button
       class={[
         'rounded-full p-2 transition-colors',
@@ -138,7 +140,7 @@
       <Icon name="lyrics" />
     </button>
     <button
-      class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+      class="hidden rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 sm:inline-flex dark:hover:bg-zinc-800 dark:hover:text-white"
       onclick={toggleMute}
       aria-label={snap.volume > 0 ? 'Mute' : 'Unmute'}
     >
@@ -146,7 +148,7 @@
     </button>
     <input
       type="range"
-      class="seek h-1 w-28"
+      class="seek hidden h-1 w-28 sm:block"
       style:--progress="{snap.volume}%"
       min="0"
       max="100"

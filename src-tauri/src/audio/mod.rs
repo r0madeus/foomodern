@@ -7,6 +7,10 @@
 //! "next" slot in sync with it (decision K3). This is what makes gapless
 //! playback work without a second, competing playlist inside mpv.
 
+#[cfg(target_os = "android")]
+pub mod android;
+mod android_events;
+#[cfg(not(target_os = "android"))]
 pub mod mpv;
 
 use serde::{Deserialize, Serialize};
@@ -67,6 +71,16 @@ pub enum EngineEvent {
     Idle,
     /// A non-fatal error worth showing or logging.
     Error(String),
+    /// The OS asked for a queue move (Android media notification or headset
+    /// button). ExoPlayer only holds two items, so the player handles it.
+    Remote(RemoteCommand),
+}
+
+/// Queue moves requested from outside the app, see [`EngineEvent::Remote`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteCommand {
+    Next,
+    Previous,
 }
 
 #[derive(Debug, thiserror::Error)]

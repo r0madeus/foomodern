@@ -2,6 +2,10 @@
   import QueueList from './QueueList.svelte'
   import { player } from './player.svelte'
   import { playlists } from './playlists.svelte'
+  import { appSettings } from './appSettings.svelte'
+
+  // Android's picker returns content:// URIs, which the player cannot open.
+  const canOpenFiles = $derived(appSettings.platform !== 'android')
 
   let { onOpenFiles, onSaved }: { onOpenFiles: (append: boolean) => void; onSaved?: (id: number) => void } = $props()
 
@@ -63,19 +67,23 @@
             Save as playlist
           </button>
         {/if}
+        {#if canOpenFiles}
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            onclick={() => onOpenFiles(true)}
+          >
+            Add to queue
+          </button>
+        {/if}
+      {/if}
+      {#if canOpenFiles}
         <button
-          class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          onclick={() => onOpenFiles(true)}
+          class="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          onclick={() => onOpenFiles(false)}
         >
-          Add to queue
+          Open files
         </button>
       {/if}
-      <button
-        class="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-        onclick={() => onOpenFiles(false)}
-      >
-        Open files
-      </button>
     </div>
   </div>
   <div class="min-h-0 flex-1 overflow-y-auto">
