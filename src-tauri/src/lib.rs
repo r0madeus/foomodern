@@ -8,6 +8,7 @@ pub mod queue;
 
 use audio::mpv::{MpvEngine, MpvOptions};
 use library::{Hooks, Library};
+use lyrics::LyricsService;
 use player::{Player, PlayerEvent};
 use serde::Serialize;
 use std::sync::{Arc, mpsc};
@@ -93,6 +94,12 @@ pub fn run() {
                 })?,
             );
             app.manage(library);
+
+            let lyrics = Arc::new(LyricsService::new(&cache_dir.join("lyrics")).map_err(|e| {
+                log::error!("failed to start lyrics service: {e}");
+                e
+            })?);
+            app.manage(lyrics);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -120,6 +127,7 @@ pub fn run() {
             commands::library_album,
             commands::library_play_album,
             commands::library_play_all,
+            commands::lyrics_for_track,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
