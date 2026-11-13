@@ -28,6 +28,8 @@
     | 'queue'
     | 'settings'
     | 'expand'
+    | 'download'
+    | 'check'
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
@@ -59,6 +61,9 @@
     up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41Z',
     down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z',
     trash: 'M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z',
+    download:
+      'M5 20h14v-2H5v2Zm7-16v8.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V4h1Z',
+    check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17Z',
   }
 </script>
 

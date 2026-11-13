@@ -46,6 +46,13 @@ pub struct SessionState {
     /// [`SessionStore`], which fills it in on every save.
     #[serde(default = "default_close_to_tray")]
     pub close_to_tray: bool,
+    /// Folder where downloaded tracks/albums are saved. `None` = first library
+    /// folder or the OS Music folder.
+    #[serde(default)]
+    pub download_dir: Option<PathBuf>,
+    /// Optional custom path to the `yt-dlp` executable (`None` = search PATH).
+    #[serde(default)]
+    pub ytdlp_path: Option<PathBuf>,
 }
 
 impl Default for SessionState {
@@ -59,6 +66,8 @@ impl Default for SessionState {
             position_seconds: 0.0,
             replaygain: ReplayGain::default(),
             close_to_tray: default_close_to_tray(),
+            download_dir: None,
+            ytdlp_path: None,
         }
     }
 }
@@ -127,11 +136,17 @@ struct GuardState {
     last_structure: Option<StructuralKey>,
 }
 
+fn clean_opt_path(path: Option<PathBuf>) -> Option<PathBuf> {
+    path.filter(|p| !p.as_os_str().is_empty())
+}
+
 /// Serializes disk writes and throttles high-frequency position/volume saves.
 pub struct SessionStore {
     path: PathBuf,
     guard: Mutex<GuardState>,
     close_to_tray: AtomicBool,
+    download_dir: Mutex<Option<PathBuf>>,
+    ytdlp_path: Mutex<Option<PathBuf>>,
 }
 
 impl SessionStore {
@@ -140,14 +155,20 @@ impl SessionStore {
             path,
             guard: Mutex::new(GuardState::default()),
             close_to_tray: AtomicBool::new(default_close_to_tray()),
+            download_dir: Mutex::new(None),
+            ytdlp_path: Mutex::new(None),
         }
     }
 
-    /// Loads the saved state and adopts its window settings.
+    /// Loads the saved state and adopts its window and download settings.
     pub fn load(&self) -> SessionState {
         let state = load(&self.path);
         self.close_to_tray
             .store(state.close_to_tray, Ordering::SeqCst);
+        *self.download_dir.lock().unwrap_or_else(|e| e.into_inner()) =
+            clean_opt_path(state.download_dir.clone());
+        *self.ytdlp_path.lock().unwrap_or_else(|e| e.into_inner()) =
+            clean_opt_path(state.ytdlp_path.clone());
         state
     }
 
@@ -159,8 +180,32 @@ impl SessionStore {
         self.close_to_tray.store(enabled, Ordering::SeqCst);
     }
 
+    pub fn download_dir(&self) -> Option<PathBuf> {
+        self.download_dir
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn set_download_dir(&self, dir: Option<PathBuf>) {
+        *self.download_dir.lock().unwrap_or_else(|e| e.into_inner()) = clean_opt_path(dir);
+    }
+
+    pub fn ytdlp_path(&self) -> Option<PathBuf> {
+        self.ytdlp_path
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn set_ytdlp_path(&self, path: Option<PathBuf>) {
+        *self.ytdlp_path.lock().unwrap_or_else(|e| e.into_inner()) = clean_opt_path(path);
+    }
+
     fn write_locked(&self, g: &mut GuardState, mut state: SessionState, now: Instant) {
         state.close_to_tray = self.close_to_tray();
+        state.download_dir = self.download_dir();
+        state.ytdlp_path = self.ytdlp_path();
         if let Err(e) = save(&self.path, &state) {
             log::warn!("failed to save session state: {e}");
         } else {
@@ -236,6 +281,8 @@ mod tests {
             position_seconds: 18.25,
             replaygain: ReplayGain::Track,
             close_to_tray: false,
+            download_dir: Some(PathBuf::from("/music/downloads")),
+            ytdlp_path: None,
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);

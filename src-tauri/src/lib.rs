@@ -5,6 +5,7 @@ pub mod lyrics;
 #[cfg(not(target_os = "android"))]
 pub mod media_keys;
 mod net;
+pub mod online;
 pub mod player;
 pub mod queue;
 pub mod session;
@@ -15,6 +16,7 @@ pub mod update;
 use audio::mpv::{MpvEngine, MpvOptions};
 use library::{Hooks, Library};
 use lyrics::LyricsService;
+use online::OnlineService;
 use player::{Player, PlayerEvent};
 use serde::Serialize;
 use session::SessionStore;
@@ -177,6 +179,23 @@ pub fn run() {
             })?);
             app.manage(lyrics);
 
+            let default_downloads = app
+                .path()
+                .audio_dir()
+                .unwrap_or_else(|_| data_dir.join("Downloads"))
+                .join("FooModern");
+            let online_handle = app.handle().clone();
+            let online = Arc::new(OnlineService::new(
+                cache_dir.join("covers/online"),
+                default_downloads,
+                Arc::new(move |jobs| {
+                    if let Err(e) = online_handle.emit("online://downloads", jobs) {
+                        log::warn!("failed to emit download jobs: {e}");
+                    }
+                }),
+            ));
+            app.manage(online);
+
             app.manage(tray::TrayStatus::default());
             tray::install(app.handle());
             Ok(())
@@ -243,6 +262,16 @@ pub fn run() {
             commands::tags_write,
             commands::lyrics_for_track,
             commands::lyrics_attach_file,
+            commands::online_status,
+            commands::online_set_download_dir,
+            commands::online_set_ytdlp_path,
+            commands::online_search,
+            commands::online_album_detail,
+            commands::online_play_track,
+            commands::online_download_track,
+            commands::online_download_album,
+            commands::online_downloads,
+            commands::online_clear_finished,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

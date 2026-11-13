@@ -8,6 +8,7 @@
   import AlbumsView from './lib/AlbumsView.svelte'
   import QueueView from './lib/QueueView.svelte'
   import FoldersView from './lib/FoldersView.svelte'
+  import SearchView from './lib/SearchView.svelte'
   import SettingsView from './lib/SettingsView.svelte'
   import PlaylistView from './lib/PlaylistView.svelte'
   import LyricsPanel from './lib/LyricsPanel.svelte'
@@ -17,6 +18,7 @@
   import { lyrics } from './lib/lyrics.svelte'
   import { playlists } from './lib/playlists.svelte'
   import { appSettings } from './lib/appSettings.svelte'
+  import { online } from './lib/online.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
   import NowPlayingView from './lib/NowPlayingView.svelte'
   import UpdateBanner from './lib/UpdateBanner.svelte'
@@ -28,14 +30,26 @@
     'wma', 'aif', 'aiff', 'dsf', 'dff', 'mka', 'mpc', 'tta', 'alac',
   ]
 
-  type View = 'songs' | 'albums' | 'queue' | 'folders' | 'settings' | 'playlist'
+  type View = 'songs' | 'albums' | 'search' | 'queue' | 'folders' | 'settings' | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
   // section and Settings sits at the bottom.
-  type NavView = 'songs' | 'albums' | 'queue' | 'folders'
-  const NAV: NavView[] = ['songs', 'albums', 'queue', 'folders']
+  type NavView = 'songs' | 'albums' | 'search' | 'queue' | 'folders'
+  const NAV: NavView[] = ['songs', 'albums', 'search', 'queue', 'folders']
   const VIEWS: View[] = [...NAV, 'settings']
-  const LABELS: Record<NavView, string> = { songs: 'Songs', albums: 'Albums', queue: 'Queue', folders: 'Folders' } // English keys, shown through t()
-  const ICONS: Record<NavView, 'music' | 'album' | 'queue' | 'folder'> = { songs: 'music', albums: 'album', queue: 'queue', folders: 'folder' }
+  const LABELS: Record<NavView, string> = {
+    songs: 'Songs',
+    albums: 'Albums',
+    search: 'Search',
+    queue: 'Queue',
+    folders: 'Folders',
+  } // English keys, shown through t()
+  const ICONS: Record<NavView, 'music' | 'album' | 'search' | 'queue' | 'folder'> = {
+    songs: 'music',
+    albums: 'album',
+    search: 'search',
+    queue: 'queue',
+    folders: 'folder',
+  }
   const KEY = 'foomodern.view'
 
   function loadView(): View {
@@ -103,6 +117,7 @@
   const counts = $derived<Record<NavView, number | null>>({
     songs: library.stats.tracks,
     albums: library.stats.albums,
+    search: null,
     queue: player.snapshot.queueLength,
     folders: library.folders.length,
   })
@@ -111,7 +126,9 @@
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
-    void appSettings.load()
+    void appSettings.load().then(() => {
+      if (appSettings.platform !== 'android') void online.init()
+    })
     updates.autoCheck()
   })
 
@@ -278,6 +295,8 @@
           <SongsView />
         {:else if view === 'albums'}
           <AlbumsView />
+        {:else if view === 'search'}
+          <SearchView onOpenSettings={() => go('settings')} />
         {:else if view === 'queue'}
           <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
         {:else if view === 'playlist' && playlistId !== null}

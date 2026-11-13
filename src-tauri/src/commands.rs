@@ -135,8 +135,16 @@ pub fn library_add_folder(lib: State<'_, Arc<Library>>, path: String) -> Res<Vec
 
 /// Cached cover of the album containing `path` (the playing track in the UI).
 #[tauri::command]
-pub fn library_track_cover(lib: State<'_, Arc<Library>>, path: String) -> Res<Option<String>> {
-    le(lib.track_cover(&path))
+pub fn library_track_cover(
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    path: String,
+) -> Res<Option<String>> {
+    let local = le(lib.track_cover(&path))?;
+    if local.is_some() {
+        return Ok(local);
+    }
+    Ok(online.stream_cover(&path))
 }
 
 /// The latest GitHub release if it is newer than this build.
@@ -765,4 +773,157 @@ pub async fn lyrics_attach_file(audio_path: String, lrc_path: String) -> Res<Lyr
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------
+// Online search & downloads
+// ---------------------------------------------------------------------
+
+use crate::online::{
+    DownloadJob, DownloadKind, OnlineAlbum, OnlineAlbumDetail, OnlineService, OnlineStatus,
+    OnlineTrack, SearchResults,
+};
+use crate::queue::Track;
+
+#[tauri::command]
+pub async fn online_status(
+    store: State<'_, Arc<SessionStore>>,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+) -> Res<OnlineStatus> {
+    let store = Arc::clone(&store);
+    let lib = Arc::clone(&lib);
+    let online = Arc::clone(&online);
+    tokio::task::spawn_blocking(move || online.status(&store, &lib))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn online_set_download_dir(
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    dir: Option<String>,
+) -> Res<OnlineStatus> {
+    store.set_download_dir(dir.map(PathBuf::from));
+    store.save_now(&player.export_session());
+    let store = Arc::clone(&store);
+    let lib = Arc::clone(&lib);
+    let online = Arc::clone(&online);
+    tokio::task::spawn_blocking(move || online.status(&store, &lib))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn online_set_ytdlp_path(
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    path: Option<String>,
+) -> Res<OnlineStatus> {
+    store.set_ytdlp_path(path.map(PathBuf::from));
+    store.save_now(&player.export_session());
+    let store = Arc::clone(&store);
+    let lib = Arc::clone(&lib);
+    let online = Arc::clone(&online);
+    tokio::task::spawn_blocking(move || online.status(&store, &lib))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn online_search(
+    store: State<'_, Arc<SessionStore>>,
+    online: State<'_, Arc<OnlineService>>,
+    query: String,
+) -> Res<SearchResults> {
+    let bin = online.resolve_ytdlp_bin(&store);
+    online
+        .search(&query, &bin)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn online_album_detail(
+    store: State<'_, Arc<SessionStore>>,
+    online: State<'_, Arc<OnlineService>>,
+    album: OnlineAlbum,
+) -> Res<OnlineAlbumDetail> {
+    let bin = online.resolve_ytdlp_bin(&store);
+    online
+        .album_detail(&album, &bin)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn online_play_track(
+    store: State<'_, Arc<SessionStore>>,
+    online: State<'_, Arc<OnlineService>>,
+    player: State<'_, Arc<Player>>,
+    track: OnlineTrack,
+) -> Res<PlayerSnapshot> {
+    let bin = online.resolve_ytdlp_bin(&store);
+    let (stream_url, _) = online
+        .resolve_stream(&track, &bin)
+        .await
+        .map_err(|e| e.to_string())?;
+    let entry = Track {
+        path: PathBuf::from(stream_url),
+        title: (!track.title.is_empty()).then_some(track.title),
+        artist: (!track.artist.is_empty()).then_some(track.artist),
+    };
+    s(player.replace_queue(vec![entry], 0))
+}
+
+#[tauri::command]
+pub fn online_download_track(
+    store: State<'_, Arc<SessionStore>>,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    track: OnlineTrack,
+) -> Res<DownloadJob> {
+    let title = track.title.clone();
+    let artist = track.artist.clone();
+    let cover = track.cover.clone().or_else(|| track.cover_url.clone());
+    online
+        .enqueue_download(DownloadKind::Track, title, artist, cover, vec![track], &store, &lib)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn online_download_album(
+    store: State<'_, Arc<SessionStore>>,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    album: OnlineAlbum,
+    tracks: Vec<OnlineTrack>,
+) -> Res<DownloadJob> {
+    let cover = album.cover.or(album.cover_url);
+    online
+        .enqueue_download(
+            DownloadKind::Album,
+            album.title,
+            album.artist,
+            cover,
+            tracks,
+            &store,
+            &lib,
+        )
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn online_downloads(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJob> {
+    online.downloads()
+}
+
+#[tauri::command]
+pub fn online_clear_finished(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJob> {
+    online.clear_finished()
 }

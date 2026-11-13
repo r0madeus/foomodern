@@ -2,11 +2,27 @@
   import { i18n, t, type LangChoice } from './i18n.svelte'
   import { onMount } from 'svelte'
   import { getVersion } from '@tauri-apps/api/app'
+  import { open } from '@tauri-apps/plugin-dialog'
   import { player, type ReplayGain } from './player.svelte'
   import { prefs } from './prefs.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { appSettings } from './appSettings.svelte'
+  import { online } from './online.svelte'
   import { updates } from './updates.svelte'
+
+  async function pickDownloadDir() {
+    const picked = await open({ directory: true, multiple: false, title: t('Choose download folder') })
+    if (typeof picked === 'string') {
+      await online.setDownloadDir(picked)
+    }
+  }
+
+  async function pickYtdlpPath() {
+    const picked = await open({ directory: false, multiple: false, title: t('Locate yt-dlp executable') })
+    if (typeof picked === 'string') {
+      await online.setYtdlpPath(picked)
+    }
+  }
 
   const MODES: { value: ReplayGain; label: string }[] = [
     { value: 'off', label: 'Off' },
@@ -182,6 +198,82 @@
           onchange={(e) => void appSettings.setCloseToTray(e.currentTarget.checked)}
         />
       </label>
+    </section>
+
+    <section aria-labelledby="set-online" class="flex flex-col gap-3">
+      <h3 id="set-online" class="text-xs font-medium uppercase tracking-wide text-zinc-400">
+        {t('Search & Downloads')}
+      </h3>
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium">{t('Download folder')}</p>
+            <p class="mt-0.5 truncate text-xs text-zinc-500">
+              {online.status?.downloadDir ?? t('Loading…')}
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              onclick={() => void pickDownloadDir()}
+            >
+              {t('Choose…')}
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              onclick={() => void online.setDownloadDir(null)}
+            >
+              {t('Reset')}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium">yt-dlp</p>
+            <p class="mt-0.5 text-xs text-zinc-500">
+              {#if online.status?.ytdlpAvailable}
+                {t('Ready')}
+                {online.status.ytdlpVersion ? ` (${online.status.ytdlpVersion})` : ''} ·
+                {online.status.ffmpegAvailable ? t('ffmpeg available') : t('ffmpeg missing')}
+              {:else}
+                {t('Not found')} ·
+                {online.status?.ffmpegAvailable ? t('ffmpeg available') : t('ffmpeg missing')}
+              {/if}
+            </p>
+            {#if online.status?.ytdlpPath}
+              <p class="mt-0.5 truncate text-xs text-zinc-400">{online.status.ytdlpPath}</p>
+            {/if}
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              onclick={() => void pickYtdlpPath()}
+            >
+              {t('Choose…')}
+            </button>
+            {#if online.status?.ytdlpPath}
+              <button
+                type="button"
+                class="rounded-lg px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                onclick={() => void online.setYtdlpPath(null)}
+              >
+                {t('Reset')}
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="rounded-lg px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              onclick={() => void online.refreshStatus()}
+            >
+              {t('Refresh')}
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
     {/if}
 

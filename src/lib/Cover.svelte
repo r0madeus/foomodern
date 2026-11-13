@@ -27,7 +27,7 @@
 
 {#if cover && !failed}
   <img
-    src={convertFileSrc(cover)}
+    src={cover.startsWith('http://') || cover.startsWith('https://') ? cover : convertFileSrc(cover)}
     alt="Cover of {title}"
     loading="lazy"
     class={['bg-zinc-200 object-cover dark:bg-zinc-800', className]}
