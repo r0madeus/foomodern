@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 6);
+    assert_eq!(v, 7);
 }
 
 #[test]
@@ -656,7 +656,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 6);
+    assert_eq!(v, 7);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -697,7 +697,7 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -1428,7 +1428,7 @@ fn playlist_cover_file_preset_and_cleanup() {
     assert_eq!(pl.cover, None);
     assert!(pl.album_covers.is_empty());
 
-    let src = e.tmp.path().join("cover.png");
+    let src = e._tmp.path().join("cover.png");
     let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([20, 140, 200, 255]));
     img.save(&src).unwrap();
 
@@ -1546,5 +1546,52 @@ fn listening_history_aggregates_and_survives_track_removal() {
     assert_eq!(
         e.lib.listening_stats(None, None).unwrap().summary.raw_event_count,
         0
+    );
+}
+
+#[test]
+fn artist_splitting_profiles_and_meta_cache() {
+    assert_eq!(
+        super::db::split_artists("Simon & Garfunkel"),
+        vec!["Simon & Garfunkel"]
+    );
+    assert_eq!(super::db::split_artists("AC/DC"), vec!["AC/DC"]);
+    assert_eq!(
+        super::db::split_artists("Daft Punk (feat. Pharrell Williams), Nile Rodgers"),
+        vec!["Daft Punk", "Pharrell Williams", "Nile Rodgers"]
+    );
+
+    let e = env();
+    tagged_wav(
+        &e.music.join("track1.wav"),
+        &Meta {
+            title: "Collab Song",
+            artist: "Artist One feat. Artist Two",
+            album: "Album One",
+            track: 1,
+            ..Default::default()
+        },
+    );
+    e.scan();
+
+    let page = e.lib.search_artists_page(0, 20, "").unwrap();
+    let names: Vec<String> = page.items.into_iter().map(|a| a.name).collect();
+    assert!(names.contains(&"Artist One".to_string()));
+    assert!(names.contains(&"Artist Two".to_string()));
+
+    let prof = e.lib.artist_profile("Artist Two").unwrap();
+    assert_eq!(prof.track_count, 1);
+    assert_eq!(prof.album_count, 1);
+    assert_eq!(prof.tracks[0].title, "Collab Song");
+
+    let meta = e
+        .lib
+        .save_artist_meta("Artist Two", Some("/cache/a2.jpg"), Some("Turkish singer."))
+        .unwrap();
+    assert_eq!(meta.image.as_deref(), Some("/cache/a2.jpg"));
+    assert_eq!(meta.bio.as_deref(), Some("Turkish singer."));
+    assert_eq!(
+        e.lib.artist_profile("Artist Two").unwrap().image.as_deref(),
+        Some("/cache/a2.jpg")
     );
 }

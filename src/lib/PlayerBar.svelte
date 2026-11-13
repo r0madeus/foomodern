@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import { nowCover } from './nowCover.svelte'
@@ -53,27 +54,34 @@
 >
   <div class="flex min-w-0 items-center gap-2">
     {#if snap.current}
-      <button
-        class="group flex min-w-0 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-        onclick={onToggleNowPlaying}
-        aria-pressed={nowPlaying}
-        title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
-      >
-        <span class="relative shrink-0">
+      <div class="flex min-w-0 items-center gap-3">
+        <button
+          class="group relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          onclick={onToggleNowPlaying}
+          aria-pressed={nowPlaying}
+          title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
+        >
           <Cover cover={nowCover.cover} title={snap.current.title} class="size-12 rounded-md text-sm shadow" />
           <span class="absolute inset-0 flex items-center justify-center rounded-md bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
             <Icon name={nowPlaying ? 'down' : 'up'} class="size-6" />
           </span>
-        </span>
-        <span class="min-w-0">
-          <span class="block truncate text-sm font-medium text-zinc-900 group-hover:underline dark:text-zinc-100">
+        </button>
+        <div class="min-w-0 flex-1">
+          <button
+            class="block max-w-full truncate text-left text-sm font-medium text-zinc-900 hover:underline focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-100"
+            onclick={onToggleNowPlaying}
+            aria-pressed={nowPlaying}
+            title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
+          >
             {snap.current.title}
-          </span>
-          <span class="block truncate text-xs text-zinc-500">
-            {snap.current.artist ? `${snap.current.artist} · ` : ''}{(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
-          </span>
-        </span>
-      </button>
+          </button>
+          <div class="truncate text-xs text-zinc-500">
+            {#if snap.current.artist}
+              <ArtistLinks artist={snap.current.artist} /> ·
+            {/if}{(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
+          </div>
+        </div>
+      </div>
       {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
         <FavoriteButton path={snap.current.path} title={snap.current.title} />
       {/if}

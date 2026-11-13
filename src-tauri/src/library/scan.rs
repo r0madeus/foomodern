@@ -318,7 +318,8 @@ impl Scanner<'_> {
                         size = excluded.size, title = excluded.title, artist = excluded.artist,
                         album_id = excluded.album_id, track_no = excluded.track_no,
                         disc_no = excluded.disc_no, year = excluded.year,
-                        duration_ms = excluded.duration_ms, genre = excluded.genre",
+                        duration_ms = excluded.duration_ms, genre = excluded.genre
+                     RETURNING id",
                 )?;
                 for t in batch.iter() {
                     let album_id = if t.album.is_empty() {
@@ -330,21 +331,25 @@ impl Scanner<'_> {
                             })?;
                         Some(id)
                     };
-                    upsert_track.execute(params![
-                        self.folder_id,
-                        t.path,
-                        t.mtime,
-                        t.size,
-                        t.title,
-                        t.artist,
-                        album_id,
-                        t.track_no,
-                        t.disc_no,
-                        t.year,
-                        t.duration_ms,
-                        t.genre,
-                        self.now
-                    ])?;
+                    let track_id: i64 = upsert_track.query_row(
+                        params![
+                            self.folder_id,
+                            t.path,
+                            t.mtime,
+                            t.size,
+                            t.title,
+                            t.artist,
+                            album_id,
+                            t.track_no,
+                            t.disc_no,
+                            t.year,
+                            t.duration_ms,
+                            t.genre,
+                            self.now
+                        ],
+                        |r| r.get(0),
+                    )?;
+                    db::sync_track_artists(&tx, track_id, &t.artist)?;
                 }
             }
             tx.commit()?;

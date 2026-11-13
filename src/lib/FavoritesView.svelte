@@ -2,6 +2,7 @@
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Cover from './Cover.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import VirtualList from './VirtualList.svelte'
@@ -109,7 +110,7 @@
               />
               <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
             </span>
-            <span class="truncate text-zinc-500">{track.artist}</span>
+            <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
             <span class="truncate text-zinc-500">{track.album}</span>
             <span class="text-right text-xs tabular-nums text-zinc-500">
               {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}

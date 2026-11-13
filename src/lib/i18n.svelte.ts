@@ -433,4 +433,13 @@ const TR: Record<string, string> = {
   '< 1 min': '< 1 dk',
   '{n} play': '{n} çalma',
   '{n} plays': '{n} çalma',
+  Artists: 'Sanatçılar',
+  '← Artists': '← Sanatçılar',
+  'Filter artists…': 'Sanatçı filtrele…',
+  'No artists match “{q}”.': '“{q}” ile eşleşen sanatçı yok.',
+  'Your listens: {time} · {plays}': 'Dinlemen: {time} · {plays}',
+  Popular: 'Popüler',
+  'Albums in library': 'Kütüphanendeki albümler',
+  'More albums (Online)': 'Diğer albümler (Çevrimiçi)',
+  'All tracks': 'Tüm şarkılar',
 }

@@ -4,6 +4,7 @@
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import { tagEditor } from './tags.svelte'
@@ -60,7 +61,9 @@
       <div class="min-w-0">
         <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">{t("Album")}</p>
         <h2 class="mt-1 truncate text-4xl font-bold tracking-tight">{data.album.title}</h2>
-        <p class="mt-2 truncate font-medium text-white/90">{data.album.albumArtist}</p>
+        <p class="mt-2 truncate font-medium text-white/90">
+          <ArtistLinks artist={data.album.albumArtist} onNavigate={onBack} />
+        </p>
         <p class="mt-1 text-sm text-white/60">
           {data.album.year ? `${data.album.year} · ` : ''}{count(data.album.trackCount, '{n} track', '{n} tracks')}
         </p>

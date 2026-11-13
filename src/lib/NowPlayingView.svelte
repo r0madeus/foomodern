@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
@@ -46,7 +47,13 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <h2 class="truncate text-3xl leading-tight font-bold">{snap.current.title}</h2>
-              <p class="mt-1 truncate text-lg text-white/70">{snap.current.artist || t('Unknown artist')}</p>
+              <p class="mt-1 truncate text-lg text-white/70">
+                {#if snap.current.artist}
+                  <ArtistLinks artist={snap.current.artist} onNavigate={onClose} />
+                {:else}
+                  {t('Unknown artist')}
+                {/if}
+              </p>
             </div>
             {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
               <FavoriteButton path={snap.current.path} title={snap.current.title} size="size-5" light />

@@ -306,6 +306,10 @@ pub fn run() {
             commands::favorites_play,
             commands::history_stats,
             commands::history_clear,
+            commands::library_artists_page,
+            commands::library_artist_profile,
+            commands::library_play_artist,
+            commands::artist_enrich,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ArtistLinks from './ArtistLinks.svelte'
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import { player } from './player.svelte'
@@ -27,10 +28,16 @@
           {i + 1}
         {/if}
       </span>
-      <button class="min-w-0 flex-1 truncate text-left" onclick={() => player.playIndex(i)} title={track.path}>
-        <span class="font-medium">{track.title}</span>
-        <span class="ml-2 text-xs text-zinc-400">{track.artist || track.path}</span>
-      </button>
+      <div class="flex min-w-0 flex-1 items-baseline gap-2 truncate">
+        <button class="truncate text-left font-medium hover:underline" onclick={() => player.playIndex(i)} title={track.path}>
+          {track.title}
+        </button>
+        {#if track.artist}
+          <span class="truncate text-xs text-zinc-400"><ArtistLinks artist={track.artist} /></span>
+        {:else}
+          <span class="truncate text-xs text-zinc-400">{track.path}</span>
+        {/if}
+      </div>
       <button
         class="invisible rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 group-hover:visible dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
         onclick={() => player.removeIndex(i)}

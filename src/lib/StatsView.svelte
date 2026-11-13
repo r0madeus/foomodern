@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { artists } from './artists.svelte'
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
   import { count, i18n, t } from './i18n.svelte'
@@ -437,7 +438,10 @@
           <div class="flex flex-col gap-2">
             {#each stats.topArtistsByTime as artist, i (artist.artist)}
               {@const pct = Math.max(4, Math.round((artist.listenedMs / maxArtistMs) * 100))}
-              <div class="flex items-center gap-3 rounded-xl px-2.5 py-2">
+              <button
+                class="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/70"
+                onclick={() => artists.open(artist.artist)}
+              >
                 <span class="w-5 shrink-0 text-right text-xs font-semibold tabular-nums text-zinc-400">
                   {i + 1}
                 </span>
@@ -466,7 +470,7 @@
                     ></div>
                   </div>
                 </div>
-              </div>
+              </button>
             {:else}
               <p class="text-sm text-zinc-500">—</p>
             {/each}

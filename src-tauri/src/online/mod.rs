@@ -117,6 +117,14 @@ pub struct OnlineAlbumDetail {
     pub tracks: Vec<OnlineTrack>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistOnlineInfo {
+    pub image: Option<String>,
+    pub bio: Option<String>,
+    pub albums: Vec<OnlineAlbum>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DownloadKind {
@@ -583,6 +591,272 @@ impl OnlineService {
             }
         }
     }
+
+    #[cfg(target_os = "android")]
+    pub async fn enrich_artist(
+        &self,
+        _artist: &str,
+        _prefer_tr: bool,
+        _need_image: bool,
+        _need_bio: bool,
+    ) -> ArtistOnlineInfo {
+        ArtistOnlineInfo::default()
+    }
+
+    #[cfg(not(target_os = "android"))]
+    pub async fn enrich_artist(
+        &self,
+        artist: &str,
+        prefer_tr: bool,
+        need_image: bool,
+        need_bio: bool,
+    ) -> ArtistOnlineInfo {
+        let q = artist.trim();
+        if q.is_empty() {
+            return ArtistOnlineInfo::default();
+        }
+        let c1 = self.client.clone();
+        let c2 = self.client.clone();
+        let c3 = self.client.clone();
+        let q1 = q.to_owned();
+        let q2 = q.to_owned();
+        let q3 = q.to_owned();
+
+        let (img_url, bio, raw_albums) = tokio::join!(
+            async {
+                if !need_image {
+                    return None;
+                }
+                fetch_deezer_artist_image(&c1, &q1).await
+            },
+            async {
+                if !need_bio {
+                    return None;
+                }
+                fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
+            },
+            async { fetch_itunes_albums(&c3, &q3).await.ok().unwrap_or_default() }
+        );
+
+        let image = match img_url {
+            Some(url) => ensure_cached_cover(&self.client, &self.covers_dir, &url).await,
+            None => None,
+        };
+
+        let q_low = q.to_lowercase();
+        let filtered: Vec<OnlineAlbum> = raw_albums
+            .into_iter()
+            .filter(|a| {
+                let al = a.artist.to_lowercase();
+                al == q_low || al.contains(&q_low)
+            })
+            .collect();
+        let mut results = SearchResults {
+            albums: filtered,
+            tracks: Vec::new(),
+        };
+        self.cache_search_covers(&mut results).await;
+
+        ArtistOnlineInfo {
+            image,
+            bio,
+            albums: results.albums,
+        }
+    }
+}
+
+#[cfg(any(not(target_os = "android"), test))]
+pub(crate) fn parse_deezer_artist_image(json: &str, wanted: &str) -> Option<String> {
+    let val: serde_json::Value = serde_json::from_str(json).ok()?;
+    let data = val.get("data")?.as_array()?;
+    let wanted_low = wanted.trim().to_lowercase();
+    let picked = data
+        .iter()
+        .find(|item| {
+            item.get("name")
+                .and_then(|v| v.as_str())
+                .is_some_and(|n| n.trim().to_lowercase() == wanted_low)
+        })
+        .or_else(|| data.first())?;
+    for key in ["picture_xl", "picture_big", "picture_medium"] {
+        if let Some(url) = picked.get(key).and_then(|v| v.as_str())
+            && !url.is_empty()
+            && !url.contains("artist//")
+        {
+            return Some(url.to_owned());
+        }
+    }
+    None
+}
+
+#[cfg(any(not(target_os = "android"), test))]
+pub(crate) fn parse_wikipedia_bio(json: &str) -> Option<String> {
+    let val: serde_json::Value = serde_json::from_str(json).ok()?;
+    if val.get("type").and_then(|v| v.as_str()) == Some("disambiguation") {
+        return None;
+    }
+    let desc = val
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let extract = val.get("extract").and_then(|v| v.as_str())?.trim();
+    if extract.is_empty() {
+        return None;
+    }
+    let hay = format!("{desc} {}", extract.to_lowercase());
+    let music_words = [
+        "singer",
+        "band",
+        "musician",
+        "rapper",
+        "songwriter",
+        "composer",
+        "rock",
+        "pop",
+        "hip hop",
+        "jazz",
+        "album",
+        "discography",
+        "şarkıcı",
+        "müzisyen",
+        "müzik",
+        "grubu",
+        "albüm",
+        "sanatçı",
+        "besteci",
+        "solist",
+    ];
+    if !music_words.iter().any(|w| hay.contains(w)) {
+        return None;
+    }
+    Some(trim_bio(extract, 380))
+}
+
+#[cfg(any(not(target_os = "android"), test))]
+fn trim_bio(text: &str, max_chars: usize) -> String {
+    let single = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if single.chars().count() <= max_chars {
+        return single;
+    }
+    let prefix: String = single.chars().take(max_chars).collect();
+    if let Some(dot) = prefix.rfind(". ")
+        && dot > max_chars / 2
+    {
+        return prefix[..=dot].to_owned();
+    }
+    format!("{}…", prefix.trim_end())
+}
+
+#[cfg(not(target_os = "android"))]
+async fn fetch_deezer_artist_image(client: &reqwest::Client, artist: &str) -> Option<String> {
+    let resp = client
+        .get("https://api.deezer.com/search/artist")
+        .query(&[("q", artist), ("limit", "5")])
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let text = resp.text().await.ok()?;
+    parse_deezer_artist_image(&text, artist)
+}
+
+#[cfg(not(target_os = "android"))]
+async fn fetch_wikipedia_bio(
+    client: &reqwest::Client,
+    artist: &str,
+    prefer_tr: bool,
+) -> Option<String> {
+    let langs: &[(&str, &str)] = if prefer_tr {
+        &[("tr", "müzik"), ("en", "musician band singer")]
+    } else {
+        &[("en", "musician band singer")]
+    };
+    for (lang, hint) in langs {
+        if let Some(bio) = fetch_wiki_for_lang(client, lang, artist, hint).await {
+            return Some(bio);
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "android"))]
+async fn fetch_wiki_for_lang(
+    client: &reqwest::Client,
+    lang: &str,
+    artist: &str,
+    hint: &str,
+) -> Option<String> {
+    // First try direct summary; if ambiguous/non-musician, fall back to Wiki search + hint.
+    let mut candidates = vec![artist.to_owned()];
+    let search_q = format!("{artist} {hint}");
+    if let Ok(resp) = client
+        .get(format!("https://{lang}.wikipedia.org/w/api.php"))
+        .query(&[
+            ("action", "query"),
+            ("list", "search"),
+            ("srsearch", search_q.as_str()),
+            ("srlimit", "3"),
+            ("format", "json"),
+        ])
+        .send()
+        .await
+        && resp.status().is_success()
+        && let Ok(text) = resp.text().await
+        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
+        && let Some(items) = val.pointer("/query/search").and_then(|v| v.as_array())
+    {
+        for item in items {
+            if let Some(title) = item.get("title").and_then(|v| v.as_str())
+                && !candidates.iter().any(|c| c.eq_ignore_ascii_case(title))
+            {
+                candidates.push(title.to_owned());
+            }
+        }
+    }
+
+    for title in candidates.into_iter().take(4) {
+        let slug = url_encode_segment(&title.replace(' ', "_"));
+        let url = format!("https://{lang}.wikipedia.org/api/rest_v1/page/summary/{slug}");
+        let Ok(resp) = client.get(&url).send().await else {
+            continue;
+        };
+        if !resp.status().is_success() {
+            continue;
+        }
+        let Ok(body) = resp.text().await else {
+            continue;
+        };
+        if let Some(bio) = parse_wikipedia_bio(&body) {
+            return Some(bio);
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "android"))]
+fn url_encode_segment(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                let hex = |n: u8| {
+                    char::from_digit(u32::from(n), 16)
+                        .unwrap_or('0')
+                        .to_ascii_uppercase()
+                };
+                out.push('%');
+                out.push(hex(b >> 4));
+                out.push(hex(b & 0xF));
+            }
+        }
+    }
+    out
 }
 
 #[cfg(not(target_os = "android"))]

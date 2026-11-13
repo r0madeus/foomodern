@@ -1121,3 +1121,75 @@ pub fn history_clear(app: AppHandle, lib: State<'_, Arc<Library>>) -> Res<u64> {
     let _ = app.emit("library://history", ());
     Ok(removed)
 }
+
+// ---------------------------------------------------------------------
+// Artists & profiles
+// ---------------------------------------------------------------------
+
+#[tauri::command]
+pub fn library_artists_page(
+    lib: State<'_, Arc<Library>>,
+    offset: u64,
+    limit: u64,
+    query: Option<String>,
+) -> Res<Page<crate::library::ArtistRow>> {
+    le(lib.search_artists_page(offset, limit, query.as_deref().unwrap_or("")))
+}
+
+#[tauri::command]
+pub fn library_artist_profile(
+    lib: State<'_, Arc<Library>>,
+    name: String,
+) -> Res<crate::library::ArtistProfile> {
+    le(lib.artist_profile(&name))
+}
+
+#[tauri::command]
+pub fn library_play_artist(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    name: String,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let tracks = le(lib.artist_tracks(&name))?;
+    s(player.replace_queue(tracks, start_index))
+}
+
+#[tauri::command]
+pub async fn artist_enrich(
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    name: String,
+    lang: Option<String>,
+) -> Res<crate::online::ArtistOnlineInfo> {
+    let existing = le(lib.artist_meta(&name))?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .unwrap_or(0);
+    let fresh = existing
+        .as_ref()
+        .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
+    let cached_image = existing
+        .as_ref()
+        .and_then(|m| m.image.clone())
+        .filter(|p| std::path::Path::new(p).exists());
+    let cached_bio = existing.as_ref().and_then(|m| m.bio.clone());
+    let need_image = !fresh || cached_image.is_none();
+    let need_bio = !fresh || cached_bio.is_none();
+
+    let fetched = online
+        .enrich_artist(&name, lang.as_deref() == Some("tr"), need_image, need_bio)
+        .await;
+
+    let final_image = fetched.image.or(cached_image);
+    let final_bio = fetched.bio.or(cached_bio);
+    if final_image.is_some() || final_bio.is_some() {
+        let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
+    }
+    Ok(crate::online::ArtistOnlineInfo {
+        image: final_image,
+        bio: final_bio,
+        albums: fetched.albums,
+    })
+}

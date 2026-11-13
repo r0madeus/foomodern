@@ -2,16 +2,18 @@
 //! they can be tested without the [`super::Library`] facade.
 
 use super::{
-    AlbumDetail, AlbumRow, BucketStat, FavoriteRef, FolderInfo, ListeningStats, NewListenEvent,
-    Page, PlaylistInfo, RecentListen, Result, StatsSummary, TopAlbumStat, TopArtistStat,
-    TopGenreStat, TopTrackStat, TrackMeta, TrackRow,
+    AlbumDetail, AlbumRow, ArtistMeta, ArtistProfile, ArtistRow, ArtistTopTrack, BucketStat,
+    FavoriteRef, FolderInfo, ListeningStats, NewListenEvent, Page, PlaylistInfo, RecentListen,
+    Result, StatsSummary, TopAlbumStat, TopArtistStat, TopGenreStat, TopTrackStat, TrackMeta,
+    TrackRow,
 };
 use crate::queue::Track;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -132,6 +134,24 @@ CREATE INDEX listen_events_artist ON listen_events(artist, started_at);
 CREATE INDEX listen_events_track ON listen_events(track_id);
 ";
 
+const SCHEMA_V7: &str = "
+CREATE TABLE track_artists (
+    track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    artist   TEXT NOT NULL COLLATE NOCASE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (track_id, artist)
+);
+CREATE INDEX track_artists_artist ON track_artists(artist, track_id);
+
+CREATE TABLE artists_meta (
+    name_key   TEXT PRIMARY KEY COLLATE NOCASE,
+    display    TEXT NOT NULL,
+    image      TEXT,
+    bio        TEXT,
+    fetched_at INTEGER NOT NULL
+);
+";
+
 /// Opens-time setup: pragmas and migrations.
 pub fn init(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -187,6 +207,13 @@ pub fn init(conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         tx.execute_batch(SCHEMA_V6)?;
         tx.pragma_update(None, "user_version", 6)?;
+        tx.commit()?;
+    }
+    if version < 7 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V7)?;
+        backfill_track_artists(&tx)?;
+        tx.pragma_update(None, "user_version", 7)?;
         tx.commit()?;
     }
     Ok(())
@@ -1413,5 +1440,315 @@ pub fn listening_stats(
         by_month,
         recent,
         available_years,
+    })
+}
+
+// ---------------------------------------------------------------------
+// Artists & profiles
+// ---------------------------------------------------------------------
+
+const FEATURE_TOKENS: &[&str] = &[
+    "(feat.",
+    "[feat.",
+    "(ft.",
+    "[ft.",
+    "(featuring ",
+    "[featuring ",
+    " feat. ",
+    " feat ",
+    " ft. ",
+    " ft ",
+    " featuring ",
+];
+
+/// Splits compound artist strings (`"A, B feat. C"`, `"A; B"`) into distinct
+/// artist names while preserving band names containing `&` or `+`.
+pub fn split_artists(raw: &str) -> Vec<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let mut work = trimmed.to_owned();
+    let lower = work.to_lowercase();
+    // Mark case-insensitive feature delimiters with ASCII Unit Separator (\x1F).
+    let mut offsets: Vec<(usize, usize)> = Vec::new();
+    for tok in FEATURE_TOKENS {
+        let mut from = 0;
+        while let Some(pos) = lower[from..].find(tok) {
+            let start = from + pos;
+            offsets.push((start, start + tok.len()));
+            from = start + tok.len();
+        }
+    }
+    offsets.sort_unstable_by_key(|r| r.0);
+    // Replace from back to front so byte indices stay valid.
+    for (s, e) in offsets.into_iter().rev() {
+        if work.is_char_boundary(s) && work.is_char_boundary(e) {
+            work.replace_range(s..e, "\x1F");
+        }
+    }
+
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for part in work.split([',', ';', '\x1F']) {
+        let mut p = part.trim();
+        if let Some(stripped) = p.strip_suffix(')').filter(|s| !s.contains('(')) {
+            p = stripped.trim();
+        }
+        if let Some(stripped) = p.strip_suffix(']').filter(|s| !s.contains('[')) {
+            p = stripped.trim();
+        }
+        if p.is_empty() {
+            continue;
+        }
+        let key = p.to_lowercase();
+        if seen.insert(key) {
+            out.push(p.to_owned());
+        }
+    }
+    out
+}
+
+pub fn sync_track_artists(conn: &Connection, track_id: i64, raw_artist: &str) -> Result<()> {
+    conn.execute("DELETE FROM track_artists WHERE track_id = ?1", [track_id])?;
+    let mut st = conn.prepare_cached(
+        "INSERT OR IGNORE INTO track_artists(track_id, artist, position)
+         VALUES (?1, ?2, ?3)",
+    )?;
+    for (idx, name) in split_artists(raw_artist).into_iter().enumerate() {
+        st.execute(rusqlite::params![track_id, name, idx as i64])?;
+    }
+    Ok(())
+}
+
+fn backfill_track_artists(conn: &Connection) -> Result<()> {
+    let mut st = conn.prepare("SELECT id, artist FROM tracks")?;
+    let rows: Vec<(i64, String)> = st
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    for (id, artist) in rows {
+        sync_track_artists(conn, id, &artist)?;
+    }
+    Ok(())
+}
+
+pub fn search_artists_page(
+    conn: &Connection,
+    offset: u64,
+    limit: u64,
+    query: &str,
+) -> Result<Page<ArtistRow>> {
+    let f = build_filter(query, |i| format!("ta.artist LIKE ?{i} ESCAPE '\\'"));
+    let n = f.params.len();
+    let count_sql = format!(
+        "SELECT COUNT(DISTINCT ta.artist) FROM track_artists ta {}",
+        f.where_sql
+    );
+    let page_sql = format!(
+        "SELECT MIN(ta.artist),
+                COUNT(DISTINCT ta.track_id) AS tracks_n,
+                COUNT(DISTINCT t.album_id) AS albums_n,
+                COALESCE(MAX(am.image), MAX(a.cover)),
+                COALESCE((
+                    SELECT SUM({PLAY_EXPR}) FROM listen_events e
+                    WHERE e.artist = ta.artist COLLATE NOCASE
+                ), 0),
+                COALESCE((
+                    SELECT SUM(e.listened_ms) FROM listen_events e
+                    WHERE e.artist = ta.artist COLLATE NOCASE
+                ), 0)
+         FROM track_artists ta
+         JOIN tracks t ON t.id = ta.track_id
+         LEFT JOIN albums a ON a.id = t.album_id
+         LEFT JOIN artists_meta am ON am.name_key = ta.artist
+         {}
+         GROUP BY ta.artist
+         ORDER BY MIN(ta.artist) COLLATE NOCASE
+         LIMIT ?{} OFFSET ?{}",
+        f.where_sql,
+        n + 1,
+        n + 2
+    );
+    query_page(
+        conn,
+        &count_sql,
+        &page_sql,
+        f.params,
+        offset,
+        limit,
+        |r| {
+            Ok(ArtistRow {
+                name: r.get(0)?,
+                track_count: r.get::<_, i64>(1)?.max(0) as u32,
+                album_count: r.get::<_, i64>(2)?.max(0) as u32,
+                cover: r.get(3)?,
+                play_count: u64_col(r, 4)?,
+                listened_ms: u64_col(r, 5)?,
+            })
+        },
+    )
+}
+
+pub fn artist_meta(conn: &Connection, name: &str) -> Result<Option<ArtistMeta>> {
+    conn.query_row(
+        "SELECT display, image, bio, fetched_at
+         FROM artists_meta
+         WHERE name_key = ?1 COLLATE NOCASE",
+        [name],
+        |r| {
+            Ok(ArtistMeta {
+                name: r.get(0)?,
+                image: r.get(1)?,
+                bio: r.get(2)?,
+                fetched_at: r.get(3)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub fn save_artist_meta(
+    conn: &Connection,
+    name: &str,
+    image: Option<&str>,
+    bio: Option<&str>,
+    fetched_at: i64,
+) -> Result<ArtistMeta> {
+    conn.execute(
+        "INSERT INTO artists_meta(name_key, display, image, bio, fetched_at)
+         VALUES (?1, ?1, ?2, ?3, ?4)
+         ON CONFLICT(name_key) DO UPDATE SET
+            display = excluded.display,
+            image = COALESCE(excluded.image, image),
+            bio = COALESCE(excluded.bio, bio),
+            fetched_at = excluded.fetched_at",
+        rusqlite::params![name, image, bio, fetched_at],
+    )?;
+    artist_meta(conn, name)?.ok_or_else(|| super::LibraryError::Other("meta save failed".into()))
+}
+
+pub fn artist_queue_tracks(conn: &Connection, name: &str) -> Result<Vec<Track>> {
+    let mut st = conn.prepare(
+        "SELECT t.path, t.title, t.artist
+         FROM track_artists ta
+         JOIN tracks t ON t.id = ta.track_id
+         LEFT JOIN albums a ON a.id = t.album_id
+         WHERE ta.artist = ?1 COLLATE NOCASE
+         ORDER BY COALESCE(a.year, 0) DESC, a.title COLLATE NOCASE,
+                  t.disc_no, t.track_no, t.title COLLATE NOCASE, t.id",
+    )?;
+    let rows = st.query_map([name], queue_track)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+pub fn artist_profile(conn: &Connection, name: &str) -> Result<ArtistProfile> {
+    let mut tr_st = conn.prepare(&format!(
+        "{TRACK_SELECT}
+         JOIN track_artists ta ON ta.track_id = t.id
+         WHERE ta.artist = ?1 COLLATE NOCASE
+         ORDER BY COALESCE(a.year, 0) DESC, a.title COLLATE NOCASE,
+                  t.disc_no, t.track_no, t.title COLLATE NOCASE, t.id"
+    ))?;
+    let tracks = tr_st
+        .query_map([name], track_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut al_st = conn.prepare(&format!(
+        "{ALBUM_SELECT}
+         WHERE a.album_artist = ?1 COLLATE NOCASE
+            OR EXISTS (
+                SELECT 1 FROM tracks t
+                JOIN track_artists ta ON ta.track_id = t.id
+                WHERE t.album_id = a.id AND ta.artist = ?1 COLLATE NOCASE
+            )
+         ORDER BY COALESCE(a.year, 0) DESC, a.title COLLATE NOCASE, a.id"
+    ))?;
+    let albums = al_st
+        .query_map([name], album_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut pop_st = conn.prepare(&format!(
+        "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''), t.album_id,
+                t.track_no, t.disc_no, t.year, t.duration_ms, t.path, a.cover,
+                COALESCE(SUM({PLAY_EXPR}), 0) AS plays,
+                COALESCE(SUM(e.listened_ms), 0) AS total_ms
+         FROM track_artists ta
+         JOIN tracks t ON t.id = ta.track_id
+         LEFT JOIN albums a ON a.id = t.album_id
+         LEFT JOIN listen_events e ON e.track_id = t.id
+         WHERE ta.artist = ?1 COLLATE NOCASE
+         GROUP BY t.id
+         ORDER BY plays DESC, total_ms DESC, t.disc_no, t.track_no, t.title COLLATE NOCASE
+         LIMIT 10"
+    ))?;
+    let popular_tracks = pop_st
+        .query_map([name], |r| {
+            let track = track_row(r)?;
+            let play_count = u64_col(r, 11)?;
+            let listened_ms = u64_col(r, 12)?;
+            Ok(ArtistTopTrack {
+                track,
+                play_count,
+                listened_ms,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let (play_count, listened_ms): (u64, u64) = conn.query_row(
+        &format!(
+            "SELECT COALESCE(SUM({PLAY_EXPR}), 0), COALESCE(SUM(e.listened_ms), 0)
+             FROM listen_events e
+             WHERE e.artist = ?1 COLLATE NOCASE
+                OR EXISTS (
+                    SELECT 1 FROM track_artists ta
+                    WHERE ta.track_id = e.track_id AND ta.artist = ?1 COLLATE NOCASE
+                )"
+        ),
+        [name],
+        |r| Ok((u64_col(r, 0)?, u64_col(r, 1)?)),
+    )?;
+
+    let mut gen_st = conn.prepare(
+        "SELECT TRIM(t.genre) AS g, COUNT(*) AS n
+         FROM track_artists ta
+         JOIN tracks t ON t.id = ta.track_id
+         WHERE ta.artist = ?1 COLLATE NOCASE AND TRIM(COALESCE(t.genre, '')) != ''
+         GROUP BY LOWER(TRIM(t.genre))
+         ORDER BY n DESC, g COLLATE NOCASE
+         LIMIT 5",
+    )?;
+    let genres = gen_st
+        .query_map([name], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let meta = artist_meta(conn, name)?;
+    let canonical = tracks
+        .first()
+        .and_then(|t| split_artists(&t.artist).into_iter().find(|a| a.eq_ignore_ascii_case(name)))
+        .or_else(|| meta.as_ref().map(|m| m.name.clone()))
+        .unwrap_or_else(|| name.to_owned());
+
+    let total_duration_ms: u64 = tracks.iter().filter_map(|t| t.duration_ms).sum();
+    let fallback_cover = albums
+        .iter()
+        .find_map(|a| a.cover.clone())
+        .or_else(|| tracks.iter().find_map(|t| t.cover.clone()));
+
+    Ok(ArtistProfile {
+        name: canonical,
+        track_count: tracks.len() as u32,
+        album_count: albums.len() as u32,
+        total_duration_ms,
+        genres,
+        play_count,
+        listened_ms,
+        image: meta.as_ref().and_then(|m| m.image.clone()),
+        bio: meta.as_ref().and_then(|m| m.bio.clone()),
+        fetched_at: meta.as_ref().map(|m| m.fetched_at),
+        fallback_cover,
+        popular_tracks,
+        albums,
+        tracks,
     })
 }

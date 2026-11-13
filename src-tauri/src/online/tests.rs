@@ -240,3 +240,31 @@ fn writes_tags_and_cover_to_downloaded_audio_file() {
     assert_eq!(tag.pictures().len(), 1);
     assert_eq!(tag.pictures()[0].pic_type(), PictureType::CoverFront);
 }
+
+#[test]
+fn parses_deezer_artist_and_filters_wikipedia_bio() {
+    let dz = r#"{
+        "data": [
+            {"name": "Someone Else", "picture_xl": "https://img/other.jpg"},
+            {"name": "Duman", "picture_xl": "https://img/duman.jpg"}
+        ]
+    }"#;
+    assert_eq!(
+        parse_deezer_artist_image(dz, "duman").as_deref(),
+        Some("https://img/duman.jpg")
+    );
+
+    let non_music = r#"{
+        "type": "standard",
+        "description": "Chemical element",
+        "extract": "Mercury is a chemical element with symbol Hg."
+    }"#;
+    assert_eq!(parse_wikipedia_bio(non_music), None);
+
+    let band = r#"{
+        "type": "standard",
+        "description": "Turkish rock band",
+        "extract": "Duman is a Turkish rock band formed in 1999 in Istanbul."
+    }"#;
+    assert!(parse_wikipedia_bio(band).is_some());
+}

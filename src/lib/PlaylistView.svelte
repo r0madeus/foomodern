@@ -6,6 +6,7 @@
   import ExtBadge from './ExtBadge.svelte'
   import Cover from './Cover.svelte'
   import PlaylistCover from './PlaylistCover.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import PlaylistCoverModal from './PlaylistCoverModal.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
@@ -306,7 +307,7 @@
                 <Cover cover={track.cover} title={track.title} class="size-9 shrink-0 rounded text-[10px]" />
                 <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
               </span>
-              <span class="truncate text-zinc-500">{track.artist}</span>
+              <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
               <span class="truncate text-zinc-500">{track.album}</span>
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}

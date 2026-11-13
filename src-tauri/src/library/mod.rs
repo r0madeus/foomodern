@@ -257,6 +257,53 @@ pub struct AlbumDetail {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct ArtistRow {
+    pub name: String,
+    pub track_count: u32,
+    pub album_count: u32,
+    pub cover: Option<String>,
+    pub play_count: u64,
+    pub listened_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistMeta {
+    pub name: String,
+    pub image: Option<String>,
+    pub bio: Option<String>,
+    pub fetched_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTopTrack {
+    pub track: TrackRow,
+    pub play_count: u64,
+    pub listened_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistProfile {
+    pub name: String,
+    pub track_count: u32,
+    pub album_count: u32,
+    pub total_duration_ms: u64,
+    pub genres: Vec<String>,
+    pub play_count: u64,
+    pub listened_ms: u64,
+    pub image: Option<String>,
+    pub bio: Option<String>,
+    pub fetched_at: Option<i64>,
+    pub fallback_cover: Option<String>,
+    pub popular_tracks: Vec<ArtistTopTrack>,
+    pub albums: Vec<AlbumRow>,
+    pub tracks: Vec<TrackRow>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Page<T> {
     pub total: u64,
     pub items: Vec<T>,
@@ -656,6 +703,36 @@ impl Library {
     /// Removes all recorded listening history entries and returns rows deleted.
     pub fn clear_listen_history(&self) -> Result<u64> {
         db::clear_listen_history(&self.conn())
+    }
+
+    pub fn search_artists_page(
+        &self,
+        offset: u64,
+        limit: u64,
+        query: &str,
+    ) -> Result<Page<ArtistRow>> {
+        db::search_artists_page(&self.conn(), offset, limit, query)
+    }
+
+    pub fn artist_profile(&self, name: &str) -> Result<ArtistProfile> {
+        db::artist_profile(&self.conn(), name)
+    }
+
+    pub fn artist_tracks(&self, name: &str) -> Result<Vec<Track>> {
+        db::artist_queue_tracks(&self.conn(), name)
+    }
+
+    pub fn artist_meta(&self, name: &str) -> Result<Option<ArtistMeta>> {
+        db::artist_meta(&self.conn(), name)
+    }
+
+    pub fn save_artist_meta(
+        &self,
+        name: &str,
+        image: Option<&str>,
+        bio: Option<&str>,
+    ) -> Result<ArtistMeta> {
+        db::save_artist_meta(&self.conn(), name, image, bio, unix_now())
     }
 
     /// Library file paths (and their folder ids) for the given track ids, in
