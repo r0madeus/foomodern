@@ -23,6 +23,8 @@ pub enum LyricsError {
     Json(#[from] serde_json::Error),
     #[error("task error: {0}")]
     Task(String),
+    #[error("selected file has no readable lyrics")]
+    InvalidFile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,14 +66,8 @@ pub struct TrackQuery {
     pub duration_secs: Option<u64>,
 }
 
-pub fn find_local_lrc(audio_path: &Path) -> Option<LyricsResult> {
-    let bytes = std::fs::read(audio_path.with_extension("lrc"))
-        .or_else(|_| std::fs::read(audio_path.with_extension("LRC")))
-        .ok()?;
-    let text = match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
-    };
+fn parse_lrc_bytes(bytes: &[u8]) -> Option<LyricsResult> {
+    let text = String::from_utf8_lossy(bytes);
     let parsed = lrc::parse(&text)?;
     Some(match parsed {
         lrc::ParsedLyrics::Synced(lines) => LyricsResult::Synced {
@@ -83,6 +79,32 @@ pub fn find_local_lrc(audio_path: &Path) -> Option<LyricsResult> {
             lines,
         },
     })
+}
+
+pub fn find_local_lrc(audio_path: &Path) -> Option<LyricsResult> {
+    let bytes = std::fs::read(audio_path.with_extension("lrc"))
+        .or_else(|_| std::fs::read(audio_path.with_extension("LRC")))
+        .ok()?;
+    parse_lrc_bytes(&bytes)
+}
+
+/// Validates a local `.lrc`/text file and saves it as a sidecar next to `audio_path`.
+pub fn attach_local_lrc(audio_path: &Path, lrc_path: &Path) -> Result<LyricsResult, LyricsError> {
+    if audio_path.file_name().is_none() {
+        let err = std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid track path");
+        return Err(err.into());
+    }
+    let bytes = std::fs::read(lrc_path)?;
+    let result = parse_lrc_bytes(&bytes).ok_or(LyricsError::InvalidFile)?;
+    let dest = audio_path.with_extension("lrc");
+    let same_dest = std::fs::canonicalize(lrc_path)
+        .ok()
+        .zip(std::fs::canonicalize(&dest).ok())
+        .is_some_and(|(a, b)| a == b);
+    if !same_dest {
+        scan::write_atomic(&dest, &bytes)?;
+    }
+    Ok(result)
 }
 
 fn resolve_query_sync(

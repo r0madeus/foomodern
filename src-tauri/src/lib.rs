@@ -130,6 +130,7 @@ pub fn run() {
             commands::library_play_album,
             commands::library_play_all,
             commands::lyrics_for_track,
+            commands::lyrics_attach_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

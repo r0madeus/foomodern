@@ -85,6 +85,27 @@ class LyricsStore {
       if (seq === this.#requestSeq) this.loading = false
     }
   }
+
+  async attachFile(path: string, lrcPath: string): Promise<void> {
+    const seq = ++this.#requestSeq
+    this.trackPath = path
+    this.loading = true
+    this.error = null
+
+    try {
+      const res = await invoke<LyricsResult>('lyrics_attach_file', {
+        audioPath: path,
+        lrcPath,
+      })
+      if (seq !== this.#requestSeq) return
+      this.result = res
+    } catch (e) {
+      if (seq !== this.#requestSeq) return
+      this.error = String(e)
+    } finally {
+      if (seq === this.#requestSeq) this.loading = false
+    }
+  }
 }
 
 export const lyrics = new LyricsStore()

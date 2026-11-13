@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { open } from '@tauri-apps/plugin-dialog'
   import { untrack } from 'svelte'
   import Icon from './Icon.svelte'
   import { lyrics, type LyricLine, type LyricsSource } from './lyrics.svelte'
@@ -66,6 +67,19 @@
     void lyrics.load(current.path, duration, true)
   }
 
+  async function attachLocal() {
+    if (!current || lyrics.loading) return
+    const targetPath = current.path
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Lyrics', extensions: ['lrc', 'txt'] }],
+    })
+    if (!picked || typeof picked !== 'string' || current?.path !== targetPath) return
+    follow = true
+    await lyrics.attachFile(targetPath, picked)
+  }
+
   function seekTo(seconds: number) {
     follow = true
     void player.seek(seconds)
@@ -107,6 +121,15 @@
     <div class="flex shrink-0 items-center gap-1">
       <button
         class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        onclick={() => void attachLocal()}
+        disabled={!current || lyrics.loading}
+        aria-label="Load .lrc file"
+        title="Load .lrc file"
+      >
+        <Icon name="upload" class="size-4" />
+      </button>
+      <button
+        class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
         onclick={refresh}
         disabled={!current || lyrics.loading}
         aria-label="Refresh lyrics"
@@ -146,31 +169,51 @@
         <div class="flex h-full items-center justify-center text-sm text-zinc-400">
           Looking up lyrics…
         </div>
-      {:else if lyrics.error && !res}
+      {:else if lyrics.error && (!res || res.kind === 'notFound')}
         <div class="flex h-full flex-col items-center justify-center gap-3 text-center">
           <p class="text-sm text-red-600 dark:text-red-400">{lyrics.error}</p>
-          <button
-            class="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-            onclick={refresh}
-          >
-            Retry
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              onclick={refresh}
+            >
+              Retry
+            </button>
+            <button
+              class="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              onclick={() => void attachLocal()}
+            >
+              Load .lrc
+            </button>
+          </div>
         </div>
       {:else if !res || res.kind === 'notFound'}
         <div class="flex h-full flex-col items-center justify-center gap-3 text-center">
           <p class="text-sm text-zinc-500">No lyrics found.</p>
-          <button
-            class="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            onclick={refresh}
-          >
-            Retry
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              onclick={refresh}
+            >
+              Retry
+            </button>
+            <button
+              class="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              onclick={() => void attachLocal()}
+            >
+              Load .lrc
+            </button>
+          </div>
         </div>
-      {:else if res.kind === 'instrumental'}
-        <div class="flex h-full items-center justify-center text-sm text-zinc-500">
-          Instrumental track.
-        </div>
-      {:else if res.kind === 'synced'}
+      {:else}
+        {#if lyrics.error}
+          <p class="mb-3 text-xs text-red-600 dark:text-red-400">{lyrics.error}</p>
+        {/if}
+        {#if res.kind === 'instrumental'}
+          <div class="flex h-full items-center justify-center text-sm text-zinc-500">
+            Instrumental track.
+          </div>
+        {:else if res.kind === 'synced'}
         <div class="flex flex-col gap-1.5 pb-16">
           {#each res.lines as line, i (i)}
             {#if line.text === ''}
@@ -213,6 +256,7 @@
             {/if}
           {/each}
         </div>
+        {/if}
       {/if}
     </div>
 

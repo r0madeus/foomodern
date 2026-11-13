@@ -204,7 +204,7 @@ pub fn library_play_all(
 // Lyrics
 // ---------------------------------------------------------------------
 
-use crate::lyrics::{LyricsResult, LyricsService};
+use crate::lyrics::{LyricsResult, LyricsService, attach_local_lrc};
 
 #[tauri::command]
 pub async fn lyrics_for_track(
@@ -220,4 +220,17 @@ pub async fn lyrics_for_track(
         .for_track(lib, path, duration_seconds, force)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lyrics_attach_file(audio_path: String, lrc_path: String) -> Res<LyricsResult> {
+    tokio::task::spawn_blocking(move || {
+        attach_local_lrc(
+            std::path::Path::new(&audio_path),
+            std::path::Path::new(&lrc_path),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
 }

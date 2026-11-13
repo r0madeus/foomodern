@@ -1,7 +1,10 @@
 use super::cache::{LyricsCache, NOT_FOUND_TTL_SECS, cache_key};
 use super::lrc::{ParsedLyrics, parse};
 use super::lrclib::LrclibRecord;
-use super::{LyricLine, LyricsError, LyricsResult, LyricsService, LyricsSource};
+use super::{
+    LyricLine, LyricsError, LyricsResult, LyricsService, LyricsSource, attach_local_lrc,
+    find_local_lrc,
+};
 use crate::library::{Hooks, Library};
 use lofty::config::WriteOptions;
 use lofty::prelude::*;
@@ -400,5 +403,71 @@ fn lrclib_record_deserialize_smoke() {
             source: LyricsSource::Lrclib,
             lines: vec!["Hello".into(), "World".into()],
         }
+    );
+}
+
+#[test]
+fn attach_local_lrc_copies_valid_file_as_sidecar() {
+    let dir = TempDir::new().unwrap();
+    let audio = dir.path().join("music/song.flac");
+    std::fs::create_dir_all(audio.parent().unwrap()).unwrap();
+    let picked = dir.path().join("downloads/custom.lrc");
+    std::fs::create_dir_all(picked.parent().unwrap()).unwrap();
+    std::fs::write(&picked, "[00:02.00]Hello\n[00:05.50]World\n").unwrap();
+
+    let res = attach_local_lrc(&audio, &picked).unwrap();
+    let expected = LyricsResult::Synced {
+        source: LyricsSource::LocalLrc,
+        lines: vec![
+            LyricLine {
+                time_seconds: 2.0,
+                text: "Hello".into(),
+            },
+            LyricLine {
+                time_seconds: 5.5,
+                text: "World".into(),
+            },
+        ],
+    };
+    assert_eq!(res, expected);
+    assert_eq!(find_local_lrc(&audio), Some(expected));
+}
+
+#[test]
+fn attach_local_lrc_rejects_empty_file_without_clobbering() {
+    let dir = TempDir::new().unwrap();
+    let audio = dir.path().join("song.flac");
+    let sidecar = audio.with_extension("lrc");
+    std::fs::write(&sidecar, "[00:01.00]Existing\n").unwrap();
+
+    let invalid = dir.path().join("empty.lrc");
+    std::fs::write(&invalid, "[ti:Metadata Only]\n\n").unwrap();
+
+    let err = attach_local_lrc(&audio, &invalid).unwrap_err();
+    assert!(matches!(err, LyricsError::InvalidFile));
+    assert_eq!(
+        std::fs::read_to_string(&sidecar).unwrap(),
+        "[00:01.00]Existing\n"
+    );
+}
+
+#[test]
+fn attach_local_lrc_same_path_keeps_existing_sidecar() {
+    let dir = TempDir::new().unwrap();
+    let audio = dir.path().join("song.mp3");
+    let sidecar = audio.with_extension("lrc");
+    std::fs::write(&sidecar, "First line\nSecond line\n").unwrap();
+
+    let res = attach_local_lrc(&audio, &sidecar).unwrap();
+    assert_eq!(
+        res,
+        LyricsResult::Plain {
+            source: LyricsSource::LocalLrc,
+            lines: vec!["First line".into(), "Second line".into()],
+        }
+    );
+    assert_eq!(
+        std::fs::read_to_string(&sidecar).unwrap(),
+        "First line\nSecond line\n"
     );
 }
