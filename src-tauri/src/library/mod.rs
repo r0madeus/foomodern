@@ -90,6 +90,23 @@ pub struct AlbumRow {
     pub cover: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistInfo {
+    pub id: i64,
+    pub name: String,
+    pub track_count: u32,
+}
+
+/// Result of saving the queue as a playlist.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedPlaylist {
+    pub playlist: PlaylistInfo,
+    /// Queue entries that are not in the library and were left out.
+    pub skipped: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumDetail {
@@ -285,6 +302,67 @@ impl Library {
         db::matching_tracks(&self.conn(), sort, query)
     }
 
+    pub fn playlists(&self) -> Result<Vec<PlaylistInfo>> {
+        db::playlists(&self.conn())
+    }
+
+    pub fn create_playlist(&self, name: &str, track_ids: &[i64]) -> Result<PlaylistInfo> {
+        db::create_playlist(&mut self.conn(), name, track_ids, unix_now())
+    }
+
+    pub fn rename_playlist(&self, id: i64, name: &str) -> Result<()> {
+        db::rename_playlist(&self.conn(), id, name)
+    }
+
+    pub fn delete_playlist(&self, id: i64) -> Result<()> {
+        db::delete_playlist(&self.conn(), id)
+    }
+
+    pub fn playlist_tracks(&self, id: i64, offset: u64, limit: u64) -> Result<Vec<TrackRow>> {
+        db::playlist_tracks(&self.conn(), id, offset, limit.min(1000))
+    }
+
+    /// Playlist contents in order, ready for the queue.
+    pub fn playlist_queue_tracks(&self, id: i64) -> Result<Vec<Track>> {
+        db::playlist_queue_tracks(&self.conn(), id)
+    }
+
+    /// Appends tracks; ids that are not in the library are skipped.
+    /// Returns the number of entries added.
+    pub fn playlist_add_tracks(&self, id: i64, track_ids: &[i64]) -> Result<usize> {
+        db::playlist_add_tracks(&mut self.conn(), id, track_ids)
+    }
+
+    pub fn playlist_add_album(&self, id: i64, album_id: i64) -> Result<usize> {
+        db::playlist_add_album(&mut self.conn(), id, album_id)
+    }
+
+    /// Removes the entries at the given indexes.
+    pub fn playlist_remove(&self, id: i64, indexes: &[usize]) -> Result<()> {
+        db::playlist_remove(&mut self.conn(), id, indexes)
+    }
+
+    pub fn playlist_move(&self, id: i64, from: usize, to: usize) -> Result<()> {
+        db::playlist_move(&mut self.conn(), id, from, to)
+    }
+
+    /// Creates a playlist from file paths (e.g. the queue). Files that are
+    /// not in the library are skipped and counted.
+    pub fn playlist_from_paths(&self, name: &str, paths: &[String]) -> Result<SavedPlaylist> {
+        let keys: Vec<String> = paths
+            .iter()
+            .map(|p| scan::display_path(Path::new(p)))
+            .collect();
+        let mut conn = self.conn();
+        let found = db::track_ids_by_paths(&conn, &keys)?;
+        let ids: Vec<i64> = found.iter().flatten().copied().collect();
+        let playlist = db::create_playlist(&mut conn, name, &ids, unix_now())?;
+        Ok(SavedPlaylist {
+            playlist,
+            skipped: found.len() - ids.len(),
+        })
+    }
+
     /// Queues the given folders for scanning and starts the worker thread if
     /// none is running. Folders already queued are not queued twice.
     pub fn start_scan(self: &Arc<Self>, folders: Vec<FolderInfo>) {
@@ -340,6 +418,13 @@ impl Library {
         }
         self.bump();
     }
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

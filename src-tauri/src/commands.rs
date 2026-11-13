@@ -1,5 +1,6 @@
 //! Tauri commands. Thin wrappers around [`Player`]; Rust owns all state.
 
+use crate::audio::ReplayGain;
 use crate::player::{Player, PlayerSnapshot, TrackInfo};
 use crate::queue::RepeatMode;
 use std::path::PathBuf;
@@ -97,6 +98,14 @@ pub fn player_set_shuffle(player: State<'_, Arc<Player>>, enabled: bool) -> Res<
 #[tauri::command]
 pub fn player_set_repeat(player: State<'_, Arc<Player>>, mode: RepeatMode) -> Res<PlayerSnapshot> {
     s(player.set_repeat(mode))
+}
+
+#[tauri::command]
+pub fn player_set_replaygain(
+    player: State<'_, Arc<Player>>,
+    mode: ReplayGain,
+) -> Res<PlayerSnapshot> {
+    s(player.set_replaygain(mode))
 }
 
 #[tauri::command]
@@ -198,6 +207,144 @@ pub fn library_play_all(
 ) -> Res<PlayerSnapshot> {
     let paths = le(lib.matching_tracks(SortOrder::parse(&sort), query.as_deref().unwrap_or("")))?;
     s(player.replace_queue(paths, start_index))
+}
+
+// ---------------------------------------------------------------------
+// Playlists
+// ---------------------------------------------------------------------
+
+use crate::library::{PlaylistInfo, SavedPlaylist};
+use tauri::{AppHandle, Emitter};
+
+fn playlists_changed(app: &AppHandle) {
+    if let Err(e) = app.emit("playlists://changed", ()) {
+        log::warn!("failed to emit playlists change event: {e}");
+    }
+}
+
+#[tauri::command]
+pub fn playlists_list(lib: State<'_, Arc<Library>>) -> Res<Vec<PlaylistInfo>> {
+    le(lib.playlists())
+}
+
+#[tauri::command]
+pub fn playlist_create(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    name: String,
+    track_ids: Option<Vec<i64>>,
+) -> Res<PlaylistInfo> {
+    let info = le(lib.create_playlist(&name, &track_ids.unwrap_or_default()))?;
+    playlists_changed(&app);
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn playlist_rename(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    name: String,
+) -> Res<()> {
+    le(lib.rename_playlist(id, &name))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_delete(app: AppHandle, lib: State<'_, Arc<Library>>, id: i64) -> Res<()> {
+    le(lib.delete_playlist(id))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_tracks(
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    offset: u64,
+    limit: u64,
+) -> Res<Vec<TrackRow>> {
+    le(lib.playlist_tracks(id, offset, limit))
+}
+
+#[tauri::command]
+pub fn playlist_add_tracks(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    track_ids: Vec<i64>,
+) -> Res<()> {
+    le(lib.playlist_add_tracks(id, &track_ids))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_add_album(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    album_id: i64,
+) -> Res<()> {
+    le(lib.playlist_add_album(id, album_id))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_remove(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    positions: Vec<usize>,
+) -> Res<()> {
+    le(lib.playlist_remove(id, &positions))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_move(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    from: usize,
+    to: usize,
+) -> Res<()> {
+    le(lib.playlist_move(id, from, to))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_play(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    id: i64,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let tracks = le(lib.playlist_queue_tracks(id))?;
+    s(player.replace_queue(tracks, start_index))
+}
+
+/// Saves the current queue as a playlist. Queue entries that are not in the
+/// library are skipped; the result says how many.
+#[tauri::command]
+pub fn playlist_from_queue(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    name: String,
+) -> Res<SavedPlaylist> {
+    let paths: Vec<String> = player
+        .queue_page(0, usize::MAX)
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
+    let saved = le(lib.playlist_from_paths(&name, &paths))?;
+    playlists_changed(&app);
+    Ok(saved)
 }
 
 // ---------------------------------------------------------------------

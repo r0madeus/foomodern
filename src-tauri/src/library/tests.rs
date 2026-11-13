@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 1);
+    assert_eq!(v, 2);
 }
 
 #[test]
@@ -544,4 +544,273 @@ fn search_filters_tracks_albums_and_escapes_wildcards() {
     let queued = e.lib.matching_tracks(SortOrder::Title, "pink").unwrap();
     let titles: Vec<_> = queued.iter().filter_map(|t| t.title.as_deref()).collect();
     assert_eq!(titles, ["Money", "Time"]);
+}
+
+// ---------------------------------------------------------------------
+// Playlists
+// ---------------------------------------------------------------------
+
+/// Scans `names` as tracks of one artist; returns their ids in file-name order.
+fn scanned_tracks(e: &Env, names: &[&str]) -> Vec<i64> {
+    for (i, name) in names.iter().enumerate() {
+        tagged_wav(
+            &e.music.join(format!("{name}.wav")),
+            &Meta {
+                title: name,
+                artist: "A",
+                album: "Alb",
+                track: i as u32 + 1,
+                ..Default::default()
+            },
+        );
+    }
+    e.scan();
+    names
+        .iter()
+        .map(|n| {
+            e.tracks(SortOrder::Title)
+                .into_iter()
+                .find(|t| t.title == *n)
+                .unwrap()
+                .id
+        })
+        .collect()
+}
+
+fn playlist_titles(e: &Env, id: i64) -> Vec<String> {
+    e.lib
+        .playlist_tracks(id, 0, 1000)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.title)
+        .collect()
+}
+
+#[test]
+fn migrates_a_v1_database_to_v2() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db_path = tmp.path().join("library.sqlite3");
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(super::db::SCHEMA_V1).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        conn.execute("INSERT INTO folders(id, path) VALUES (1, '/m')", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO tracks(folder_id, path, mtime, size, title, artist, added_at)
+             VALUES (1, '/m/a.flac', 1, 1, 'Old', 'Artist', 1)",
+            [],
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&db_path, &tmp.path().join("covers"), Hooks::none()).unwrap();
+    let v: i64 = lib
+        .conn()
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(v, 2);
+    let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
+    assert_eq!(tracks.len(), 1, "existing data survives the migration");
+    let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
+    assert_eq!(pl.track_count, 1);
+    drop(lib);
+
+    // Reopening an up-to-date database is a no-op.
+    let lib = Library::open(&db_path, &tmp.path().join("covers"), Hooks::none()).unwrap();
+    assert_eq!(lib.playlists().unwrap().len(), 1);
+}
+
+#[test]
+fn playlist_create_rename_delete() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b"]);
+    assert!(e.lib.create_playlist("   ", &[]).is_err());
+
+    let pl = e.lib.create_playlist("  Road trip ", &ids).unwrap();
+    assert_eq!(pl.name, "Road trip");
+    assert_eq!(pl.track_count, 2);
+    let empty = e.lib.create_playlist("alpha", &[]).unwrap();
+    assert_eq!(empty.track_count, 0);
+
+    let list = e.lib.playlists().unwrap();
+    assert_eq!(
+        list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+        ["alpha", "Road trip"],
+        "sorted by name, case-insensitively"
+    );
+
+    e.lib.rename_playlist(pl.id, "Roadtrip").unwrap();
+    assert!(e.lib.rename_playlist(pl.id, "").is_err());
+    assert!(e.lib.rename_playlist(9999, "x").is_err());
+    assert_eq!(e.lib.playlists().unwrap()[1].name, "Roadtrip");
+
+    e.lib.delete_playlist(pl.id).unwrap();
+    assert!(e.lib.delete_playlist(pl.id).is_err());
+    assert!(e.lib.playlist_tracks(pl.id, 0, 10).is_err());
+    let orphans: i64 = e
+        .lib
+        .conn()
+        .query_row("SELECT COUNT(*) FROM playlist_tracks", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(orphans, 0, "entries cascade with the playlist");
+    // Deleting a playlist never touches the library.
+    assert_eq!(e.tracks(SortOrder::Title).len(), 2);
+}
+
+#[test]
+fn playlist_add_keeps_order_allows_duplicates_and_skips_unknown_ids() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b", "c"]);
+    let pl = e.lib.create_playlist("P", &[ids[2], ids[0]]).unwrap();
+    assert_eq!(
+        e.lib
+            .playlist_add_tracks(pl.id, &[ids[1], 9999, ids[2]])
+            .unwrap(),
+        2
+    );
+    assert_eq!(playlist_titles(&e, pl.id), ["c", "a", "b", "c"]);
+    assert!(e.lib.playlist_add_tracks(4242, &ids).is_err());
+
+    // Paging.
+    let page = e.lib.playlist_tracks(pl.id, 1, 2).unwrap();
+    assert_eq!(
+        page.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(),
+        ["a", "b"]
+    );
+    assert_eq!(e.lib.playlists().unwrap()[0].track_count, 4);
+
+    // Queue view: same order, with tags.
+    let queue = e.lib.playlist_queue_tracks(pl.id).unwrap();
+    assert_eq!(queue.len(), 4);
+    assert_eq!(queue[0].title.as_deref(), Some("c"));
+    assert_eq!(queue[0].artist.as_deref(), Some("A"));
+    assert!(queue[0].path.ends_with("c.wav"));
+}
+
+#[test]
+fn playlist_add_album_appends_in_album_order() {
+    let e = env();
+    scanned_tracks(&e, &["a", "b", "c"]);
+    let album = e.lib.albums_page(0, 10).unwrap()[0].id;
+    let pl = e.lib.create_playlist("P", &[]).unwrap();
+    assert_eq!(e.lib.playlist_add_album(pl.id, album).unwrap(), 3);
+    assert_eq!(e.lib.playlist_add_album(pl.id, album).unwrap(), 3);
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "b", "c", "a", "b", "c"]);
+}
+
+#[test]
+fn playlist_remove_and_move_keep_positions_compact() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b", "c", "d", "e"]);
+    let pl = e.lib.create_playlist("P", &ids).unwrap();
+
+    e.lib.playlist_remove(pl.id, &[1, 3, 3, 99]).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "c", "e"]);
+
+    e.lib.playlist_move(pl.id, 0, 2).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["c", "e", "a"]);
+    e.lib.playlist_move(pl.id, 2, 0).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "c", "e"]);
+    e.lib.playlist_move(pl.id, 1, 1).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "c", "e"]);
+    assert!(e.lib.playlist_move(pl.id, 0, 3).is_err());
+    assert!(e.lib.playlist_move(pl.id, 3, 0).is_err());
+
+    let positions: Vec<i64> = {
+        let conn = e.lib.conn();
+        let mut st = conn
+            .prepare(
+                "SELECT position FROM playlist_tracks WHERE playlist_id = ?1 ORDER BY position",
+            )
+            .unwrap();
+        st.query_map([pl.id], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    };
+    assert_eq!(positions, [0, 1, 2]);
+
+    // Appending after removal continues the order.
+    e.lib.playlist_add_tracks(pl.id, &[ids[1]]).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "c", "e", "b"]);
+}
+
+#[test]
+fn playlist_survives_rescan_and_loses_deleted_tracks() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b", "c", "d"]);
+    let pl = e
+        .lib
+        .create_playlist("P", &[ids[3], ids[1], ids[0], ids[2]])
+        .unwrap();
+
+    // Rescan with one file modified (different size): ids must not change.
+    tagged_wav(
+        &e.music.join("b.wav"),
+        &Meta {
+            title: "b",
+            artist: "A",
+            album: "Alb",
+            track: 2,
+            picture: Some(b"extra bytes to change the size of this file"),
+            ..Default::default()
+        },
+    );
+    let stats = e.scan();
+    assert_eq!(stats.updated, 1);
+    let after: Vec<i64> = ["a", "b", "c", "d"]
+        .iter()
+        .map(|n| {
+            e.tracks(SortOrder::Title)
+                .into_iter()
+                .find(|t| t.title == *n)
+                .unwrap()
+                .id
+        })
+        .collect();
+    assert_eq!(after, ids, "track ids are stable across a rescan");
+    assert_eq!(playlist_titles(&e, pl.id), ["d", "b", "a", "c"]);
+
+    // A file that disappears drops out of the playlist, leaving a gap.
+    std::fs::remove_file(e.music.join("b.wav")).unwrap();
+    assert_eq!(e.scan().removed, 1);
+    assert_eq!(playlist_titles(&e, pl.id), ["d", "a", "c"]);
+    assert_eq!(e.lib.playlists().unwrap()[0].track_count, 3);
+
+    // Index-based edits still work across the gap.
+    e.lib.playlist_move(pl.id, 0, 2).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "c", "d"]);
+    e.lib.playlist_remove(pl.id, &[1]).unwrap();
+    assert_eq!(playlist_titles(&e, pl.id), ["a", "d"]);
+}
+
+#[test]
+fn removing_a_library_folder_cascades_into_playlists() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b"]);
+    let pl = e.lib.create_playlist("P", &ids).unwrap();
+    e.lib.remove_folder(e.folder_id).unwrap();
+    assert_eq!(e.lib.playlists().unwrap()[0].track_count, 0);
+    assert!(e.lib.playlist_tracks(pl.id, 0, 10).unwrap().is_empty());
+}
+
+#[test]
+fn playlist_from_paths_maps_library_files_and_counts_skipped() {
+    let e = env();
+    let ids = scanned_tracks(&e, &["a", "b"]);
+    let paths = vec![
+        e.music.join("b.wav").to_string_lossy().into_owned(),
+        "/not/in/library.mp3".to_string(),
+        e.music.join("a.wav").to_string_lossy().into_owned(),
+        e.music.join("b.wav").to_string_lossy().into_owned(),
+    ];
+    let saved = e.lib.playlist_from_paths("From queue", &paths).unwrap();
+    assert_eq!(saved.skipped, 1);
+    assert_eq!(saved.playlist.track_count, 3);
+    assert_eq!(playlist_titles(&e, saved.playlist.id), ["b", "a", "b"]);
+    assert_eq!(ids.len(), 2);
+
+    assert!(e.lib.playlist_from_paths(" ", &paths).is_err());
+    let none = e.lib.playlist_from_paths("Empty", &[]).unwrap();
+    assert_eq!((none.skipped, none.playlist.track_count), (0, 0));
 }

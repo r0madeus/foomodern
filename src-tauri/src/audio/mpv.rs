@@ -17,7 +17,7 @@
 //! `Idle` is only emitted after something has started playing, so the
 //! initial idle state at startup produces no event.
 
-use super::{AudioEngine, EndReason, EngineError, EngineEvent, EngineResult};
+use super::{AudioEngine, EndReason, EngineError, EngineEvent, EngineResult, ReplayGain};
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{Format, Mpv};
 use std::path::{Path, PathBuf};
@@ -263,6 +263,12 @@ impl AudioEngine for MpvEngine {
         self.mpv
             .set_property("volume", percent.clamp(0.0, 100.0))
             .map_err(|e| cmd_err("volume", e))
+    }
+
+    fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()> {
+        self.mpv
+            .set_property("replaygain", mode.mpv_value())
+            .map_err(|e| cmd_err("replaygain", e))
     }
 }
 

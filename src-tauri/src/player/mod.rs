@@ -12,7 +12,7 @@
 //! Known benign race: engine events are asynchronous, so an event produced
 //! just before a user command (e.g. a late `Idle`) can be applied after it.
 
-use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
+use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent, ReplayGain};
 use crate::queue::{EntryId, Queue, RepeatMode, Track};
 use crate::session::{SavedTrack, SessionState};
 use serde::Serialize;
@@ -58,6 +58,7 @@ pub struct PlayerSnapshot {
     pub volume: f64,
     pub shuffle: bool,
     pub repeat: RepeatMode,
+    pub replaygain: ReplayGain,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +81,7 @@ struct Inner {
     position: f64,
     duration: Option<f64>,
     volume: f64,
+    replaygain: ReplayGain,
     /// The entry currently sitting in the engine's "next" slot.
     engine_next: Option<EntryId>,
     /// True between `engine.load` and the matching non-auto `TrackStarted`.
@@ -145,6 +147,7 @@ impl Inner {
             volume: self.volume,
             shuffle: self.queue.shuffle(),
             repeat: self.queue.repeat(),
+            replaygain: self.replaygain,
         }
     }
 
@@ -205,6 +208,7 @@ impl Player {
                 position: 0.0,
                 duration: None,
                 volume: 100.0,
+                replaygain: ReplayGain::default(),
                 engine_next: None,
                 pending_load: false,
                 resume_position: None,
@@ -259,6 +263,10 @@ impl Player {
             log::warn!("failed to restore volume: {e}");
         }
         s.volume = state.volume;
+        if let Err(e) = s.engine.set_replaygain(state.replaygain) {
+            log::warn!("failed to restore replaygain mode: {e}");
+        }
+        s.replaygain = state.replaygain;
         let tracks: Vec<Track> = state
             .queue
             .into_iter()
@@ -305,6 +313,7 @@ impl Player {
             queue,
             current_index,
             position_seconds,
+            replaygain: s.replaygain,
         }
     }
 
@@ -494,6 +503,14 @@ impl Player {
         })
     }
 
+    pub fn set_replaygain(&self, mode: ReplayGain) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.engine.set_replaygain(mode)?;
+            s.replaygain = mode;
+            Ok(())
+        })
+    }
+
     /// Apply an event coming from the audio engine.
     pub fn handle_engine_event(&self, event: EngineEvent) {
         enum Out {
@@ -633,6 +650,7 @@ mod tests {
         Stop,
         Seek(f64),
         Volume(f64),
+        ReplayGain(ReplayGain),
     }
 
     #[derive(Clone, Default)]
@@ -674,6 +692,9 @@ mod tests {
         }
         fn set_volume(&self, v: f64) -> Result<(), EngineError> {
             self.rec(Call::Volume(v))
+        }
+        fn set_replaygain(&self, m: ReplayGain) -> Result<(), EngineError> {
+            self.rec(Call::ReplayGain(m))
         }
     }
 
@@ -1068,6 +1089,18 @@ mod tests {
     }
 
     #[test]
+    fn replaygain_defaults_to_album_and_is_set_on_engine() {
+        let (p, calls, _) = setup();
+        assert_eq!(p.snapshot().replaygain, ReplayGain::Album);
+        let snap = p.set_replaygain(ReplayGain::Off).unwrap();
+        assert_eq!(snap.replaygain, ReplayGain::Off);
+        assert_eq!(p.export_session().replaygain, ReplayGain::Off);
+        assert_eq!(calls.take(), [Call::ReplayGain(ReplayGain::Off)]);
+        let v = serde_json::to_value(p.snapshot()).unwrap();
+        assert_eq!(v["replaygain"], "off");
+    }
+
+    #[test]
     fn play_index_out_of_range_errors() {
         let (p, _, _) = setup();
         assert!(matches!(p.play_index(0), Err(PlayerError::InvalidIndex(0))));
@@ -1184,6 +1217,7 @@ mod tests {
             ],
             current_index: Some(1),
             position_seconds: 42.5,
+            replaygain: ReplayGain::Track,
         };
         p.restore_session(saved.clone());
 
@@ -1196,7 +1230,11 @@ mod tests {
         assert_eq!(snap.position_seconds, 42.5);
         assert_eq!(snap.queue_length, 2);
         assert_eq!(p.export_session(), saved);
-        assert_eq!(calls.take(), [Call::Volume(37.0)]);
+        assert_eq!(snap.replaygain, ReplayGain::Track);
+        assert_eq!(
+            calls.take(),
+            [Call::Volume(37.0), Call::ReplayGain(ReplayGain::Track)]
+        );
 
         // Playing from stopped loads the saved track and seeks once Duration arrives.
         let snap = p.play().unwrap();
@@ -1241,6 +1279,7 @@ mod tests {
             ],
             current_index: Some(0),
             position_seconds: 30.0,
+            replaygain: ReplayGain::Album,
         });
         calls.take();
 

@@ -10,6 +10,9 @@
     lrclib: 'LRCLIB',
   }
 
+  // Keys that scroll the focused lyrics region by hand.
+  const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])
+
   let follow = $state(true)
   let container = $state<HTMLDivElement | null>(null)
 
@@ -60,6 +63,30 @@
       }
     })
   })
+
+  // Manual scrolling (wheel, drag, or keys on the focused region) turns
+  // auto-follow off. These listeners only observe the user's intent, so they
+  // are attached directly instead of making the scroll area an interactive
+  // element. Browsers make scrollable regions keyboard-focusable themselves.
+  function watchManualScroll(el: HTMLElement) {
+    const stopFollowing = () => {
+      if (res?.kind === 'synced') follow = false
+    }
+    const onPointerDown = (e: PointerEvent) => {
+      if (!(e.target instanceof HTMLButtonElement)) stopFollowing()
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(e.key)) stopFollowing()
+    }
+    el.addEventListener('wheel', stopFollowing, { passive: true })
+    el.addEventListener('pointerdown', onPointerDown)
+    el.addEventListener('keydown', onKeyDown)
+    return () => {
+      el.removeEventListener('wheel', stopFollowing)
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('keydown', onKeyDown)
+    }
+  }
 
   function refresh() {
     if (!current) return
@@ -151,14 +178,9 @@
   <div class="relative min-h-0 flex-1">
     <div
       bind:this={container}
-      onwheel={() => {
-        if (res?.kind === 'synced') follow = false
-      }}
-      onpointerdown={(e) => {
-        if (res?.kind === 'synced' && !(e.target instanceof HTMLButtonElement)) {
-          follow = false
-        }
-      }}
+      role="region"
+      aria-label="Lyrics text"
+      {@attach watchManualScroll}
       class="h-full overflow-y-auto px-4 py-4"
     >
       {#if !current}

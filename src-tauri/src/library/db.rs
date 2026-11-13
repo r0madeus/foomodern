@@ -1,15 +1,15 @@
 //! SQLite schema and queries. All functions take a plain `&Connection` so
 //! they can be tested without the [`super::Library`] facade.
 
-use super::{AlbumDetail, AlbumRow, FolderInfo, Page, Result, TrackMeta, TrackRow};
+use super::{AlbumDetail, AlbumRow, FolderInfo, Page, PlaylistInfo, Result, TrackMeta, TrackRow};
 use crate::queue::Track;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
-const SCHEMA_V1: &str = "
+pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
     id   INTEGER PRIMARY KEY,
     path TEXT NOT NULL UNIQUE
@@ -45,6 +45,21 @@ CREATE INDEX tracks_title    ON tracks(title);
 CREATE INDEX tracks_added    ON tracks(added_at DESC);
 ";
 
+const SCHEMA_V2: &str = "
+CREATE TABLE playlists (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE playlist_tracks (
+    playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    position    INTEGER NOT NULL,
+    track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    PRIMARY KEY (playlist_id, position)
+);
+CREATE INDEX playlist_tracks_track ON playlist_tracks(track_id);
+";
+
 /// Opens-time setup: pragmas and migrations.
 pub fn init(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -60,6 +75,12 @@ pub fn init(conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         tx.execute_batch(SCHEMA_V1)?;
         tx.pragma_update(None, "user_version", 1)?;
+        tx.commit()?;
+    }
+    if version < 2 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V2)?;
+        tx.pragma_update(None, "user_version", 2)?;
         tx.commit()?;
     }
     Ok(())
@@ -408,4 +429,254 @@ pub fn track_meta_by_path(conn: &Connection, path: &str) -> Result<Option<TrackM
     )
     .optional()
     .map_err(Into::into)
+}
+
+// ---------------------------------------------------------------------
+// Playlists
+//
+// Entries are ordered by `position`. Positions can have gaps (a track that
+// disappears in a rescan cascades its entries away), so the public API
+// addresses entries by their *index* in that order, and every edit rewrites
+// the playlist compactly (0..n).
+// ---------------------------------------------------------------------
+
+fn playlist_not_found(id: i64) -> super::LibraryError {
+    super::LibraryError::Other(format!("playlist {id} not found"))
+}
+
+fn clean_name(name: &str) -> Result<&str> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(super::LibraryError::Other(
+            "playlist name must not be empty".into(),
+        ));
+    }
+    Ok(name)
+}
+
+fn ensure_playlist(conn: &Connection, id: i64) -> Result<()> {
+    let found: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM playlists WHERE id = ?1)",
+        [id],
+        |r| r.get(0),
+    )?;
+    if found {
+        Ok(())
+    } else {
+        Err(playlist_not_found(id))
+    }
+}
+
+pub fn playlist_info(conn: &Connection, id: i64) -> Result<PlaylistInfo> {
+    conn.query_row(
+        "SELECT p.id, p.name,
+                (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id)
+         FROM playlists p WHERE p.id = ?1",
+        [id],
+        |r| {
+            Ok(PlaylistInfo {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                track_count: r.get::<_, i64>(2)?.try_into().unwrap_or(u32::MAX),
+            })
+        },
+    )
+    .optional()?
+    .ok_or_else(|| playlist_not_found(id))
+}
+
+pub fn playlists(conn: &Connection) -> Result<Vec<PlaylistInfo>> {
+    let mut st = conn.prepare(
+        "SELECT p.id, p.name, COUNT(pt.track_id)
+         FROM playlists p LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+         GROUP BY p.id ORDER BY p.name COLLATE NOCASE, p.id",
+    )?;
+    let rows = st.query_map([], |r| {
+        Ok(PlaylistInfo {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            track_count: r.get::<_, i64>(2)?.try_into().unwrap_or(u32::MAX),
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+/// Appends the tracks that exist in the library; unknown ids are skipped.
+/// Returns how many entries were added.
+fn append_tracks(conn: &Connection, id: i64, track_ids: &[i64]) -> Result<usize> {
+    let mut next: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_tracks WHERE playlist_id = ?1",
+        [id],
+        |r| r.get(0),
+    )?;
+    let mut insert = conn.prepare_cached(
+        "INSERT INTO playlist_tracks(playlist_id, position, track_id)
+         SELECT ?1, ?2, id FROM tracks WHERE id = ?3",
+    )?;
+    let mut added = 0;
+    for track_id in track_ids {
+        if insert.execute(rusqlite::params![id, next, track_id])? > 0 {
+            next += 1;
+            added += 1;
+        }
+    }
+    Ok(added)
+}
+
+pub fn create_playlist(
+    conn: &mut Connection,
+    name: &str,
+    track_ids: &[i64],
+    now: i64,
+) -> Result<PlaylistInfo> {
+    let name = clean_name(name)?;
+    let tx = conn.transaction()?;
+    tx.execute(
+        "INSERT INTO playlists(name, created_at) VALUES (?1, ?2)",
+        rusqlite::params![name, now],
+    )?;
+    let id = tx.last_insert_rowid();
+    append_tracks(&tx, id, track_ids)?;
+    let info = playlist_info(&tx, id)?;
+    tx.commit()?;
+    Ok(info)
+}
+
+pub fn rename_playlist(conn: &Connection, id: i64, name: &str) -> Result<()> {
+    let name = clean_name(name)?;
+    let n = conn.execute(
+        "UPDATE playlists SET name = ?2 WHERE id = ?1",
+        rusqlite::params![id, name],
+    )?;
+    if n == 0 {
+        return Err(playlist_not_found(id));
+    }
+    Ok(())
+}
+
+pub fn delete_playlist(conn: &Connection, id: i64) -> Result<()> {
+    let n = conn.execute("DELETE FROM playlists WHERE id = ?1", [id])?;
+    if n == 0 {
+        return Err(playlist_not_found(id));
+    }
+    Ok(())
+}
+
+pub fn playlist_tracks(
+    conn: &Connection,
+    id: i64,
+    offset: u64,
+    limit: u64,
+) -> Result<Vec<TrackRow>> {
+    ensure_playlist(conn, id)?;
+    let mut st = conn.prepare(&format!(
+        "{TRACK_SELECT} JOIN playlist_tracks pt ON pt.track_id = t.id
+         WHERE pt.playlist_id = ?1 ORDER BY pt.position LIMIT ?2 OFFSET ?3"
+    ))?;
+    let rows = st.query_map(
+        rusqlite::params![id, limit as i64, offset as i64],
+        track_row,
+    )?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+/// Playlist contents in order, ready for the queue.
+pub fn playlist_queue_tracks(conn: &Connection, id: i64) -> Result<Vec<Track>> {
+    ensure_playlist(conn, id)?;
+    let mut st = conn.prepare(
+        "SELECT t.path, t.title, t.artist FROM playlist_tracks pt
+         JOIN tracks t ON t.id = pt.track_id
+         WHERE pt.playlist_id = ?1 ORDER BY pt.position",
+    )?;
+    let rows = st.query_map([id], queue_track)?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+pub fn playlist_add_tracks(conn: &mut Connection, id: i64, track_ids: &[i64]) -> Result<usize> {
+    let tx = conn.transaction()?;
+    ensure_playlist(&tx, id)?;
+    let added = append_tracks(&tx, id, track_ids)?;
+    tx.commit()?;
+    Ok(added)
+}
+
+pub fn playlist_add_album(conn: &mut Connection, id: i64, album_id: i64) -> Result<usize> {
+    let tx = conn.transaction()?;
+    ensure_playlist(&tx, id)?;
+    let ids = {
+        let mut st = tx.prepare(&format!(
+            "SELECT t.id FROM tracks t WHERE t.album_id = ?1 ORDER BY {ALBUM_TRACK_ORDER}"
+        ))?;
+        st.query_map([album_id], |r| r.get::<_, i64>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+    };
+    let added = append_tracks(&tx, id, &ids)?;
+    tx.commit()?;
+    Ok(added)
+}
+
+/// Track ids of a playlist in order.
+fn order(conn: &Connection, id: i64) -> Result<Vec<i64>> {
+    let mut st = conn.prepare_cached(
+        "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?1 ORDER BY position",
+    )?;
+    Ok(st
+        .query_map([id], |r| r.get(0))?
+        .collect::<std::result::Result<_, _>>()?)
+}
+
+/// Replaces the playlist's entries with `ids` at positions 0..n.
+fn rewrite(conn: &Connection, id: i64, ids: &[i64]) -> Result<()> {
+    conn.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?1", [id])?;
+    let mut insert = conn.prepare_cached(
+        "INSERT INTO playlist_tracks(playlist_id, position, track_id) VALUES (?1, ?2, ?3)",
+    )?;
+    for (pos, track_id) in ids.iter().enumerate() {
+        insert.execute(rusqlite::params![id, pos as i64, track_id])?;
+    }
+    Ok(())
+}
+
+/// Removes the entries at the given indexes (duplicates and out-of-range
+/// indexes are ignored) and closes the gaps.
+pub fn playlist_remove(conn: &mut Connection, id: i64, indexes: &[usize]) -> Result<()> {
+    let tx = conn.transaction()?;
+    ensure_playlist(&tx, id)?;
+    let drop: std::collections::HashSet<usize> = indexes.iter().copied().collect();
+    let kept: Vec<i64> = order(&tx, id)?
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| !drop.contains(i))
+        .map(|(_, t)| t)
+        .collect();
+    rewrite(&tx, id, &kept)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Moves the entry at index `from` so that it ends up at index `to`.
+pub fn playlist_move(conn: &mut Connection, id: i64, from: usize, to: usize) -> Result<()> {
+    let tx = conn.transaction()?;
+    ensure_playlist(&tx, id)?;
+    let mut ids = order(&tx, id)?;
+    if from >= ids.len() || to >= ids.len() {
+        return Err(super::LibraryError::Other(format!(
+            "index out of range (from {from}, to {to}, length {})",
+            ids.len()
+        )));
+    }
+    let moved = ids.remove(from);
+    ids.insert(to, moved);
+    rewrite(&tx, id, &ids)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Library track id for each path (`None` when the file is not in the library).
+pub fn track_ids_by_paths(conn: &Connection, paths: &[String]) -> Result<Vec<Option<i64>>> {
+    let mut st = conn.prepare_cached("SELECT id FROM tracks WHERE path = ?1")?;
+    paths
+        .iter()
+        .map(|p| Ok(st.query_row([p], |r| r.get(0)).optional()?))
+        .collect()
 }

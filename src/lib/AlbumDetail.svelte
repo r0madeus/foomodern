@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
+  import AddToPlaylist from './AddToPlaylist.svelte'
+  import ExtBadge from './ExtBadge.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import { player, formatTime } from './player.svelte'
 
@@ -36,20 +38,23 @@
           {data.album.year ? `${data.album.year} · ` : ''}{data.album.trackCount}
           {data.album.trackCount === 1 ? 'track' : 'tracks'}
         </p>
-        <button
-          class="mt-4 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
-          onclick={() => library.playAlbum(albumId, 0)}
-        >
-          Play
-        </button>
+        <div class="mt-4 flex items-center gap-2">
+          <button
+            class="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+            onclick={() => library.playAlbum(albumId, 0)}
+          >
+            Play
+          </button>
+          <AddToPlaylist {albumId} label="Add album to playlist" text />
+        </div>
       </div>
     </div>
     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
       {#each data.tracks as t, i (t.id)}
-        <li>
+        <li class="group flex items-center gap-1">
           <button
             class={[
-              'flex h-10 w-full items-center gap-3 px-3 text-left text-sm',
+              'flex h-10 min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm',
               t.path === currentPath
                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
@@ -57,11 +62,16 @@
             onclick={() => library.playAlbum(albumId, i)}
           >
             <span class="w-8 text-right text-xs tabular-nums text-zinc-400">{t.trackNo ?? i + 1}</span>
-            <span class="min-w-0 flex-1 truncate font-medium">{t.title}</span>
+            <span class="flex min-w-0 flex-1 items-center">
+              <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
+            </span>
             <span class="text-xs tabular-nums text-zinc-500">
               {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
             </span>
           </button>
+          <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+            <AddToPlaylist trackIds={[t.id]} label="Add “{t.title}” to playlist" />
+          </span>
         </li>
       {/each}
     </ol>

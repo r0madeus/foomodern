@@ -9,7 +9,29 @@
 
 pub mod mpv;
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+/// ReplayGain normalisation mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplayGain {
+    Off,
+    Track,
+    #[default]
+    Album,
+}
+
+impl ReplayGain {
+    /// Value of mpv's `replaygain` property.
+    pub fn mpv_value(self) -> &'static str {
+        match self {
+            Self::Off => "no",
+            Self::Track => "track",
+            Self::Album => "album",
+        }
+    }
+}
 
 /// Why a track stopped playing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,4 +95,6 @@ pub trait AudioEngine: Send + Sync {
     fn seek(&self, seconds: f64) -> EngineResult<()>;
     /// Volume in percent, 0.0..=100.0.
     fn set_volume(&self, percent: f64) -> EngineResult<()>;
+    /// Choose the ReplayGain mode. Takes effect for the current and later tracks.
+    fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()>;
 }

@@ -1,5 +1,6 @@
 //! Persistent playback settings and session queue/position state.
 
+use crate::audio::ReplayGain;
 use crate::library::scan::write_atomic;
 use crate::player::PlayerSnapshot;
 use crate::queue::RepeatMode;
@@ -35,6 +36,7 @@ pub struct SessionState {
     pub queue: Vec<SavedTrack>,
     pub current_index: Option<usize>,
     pub position_seconds: f64,
+    pub replaygain: ReplayGain,
 }
 
 impl Default for SessionState {
@@ -46,6 +48,7 @@ impl Default for SessionState {
             queue: Vec::new(),
             current_index: None,
             position_seconds: 0.0,
+            replaygain: ReplayGain::default(),
         }
     }
 }
@@ -206,6 +209,7 @@ mod tests {
             }],
             current_index: Some(0),
             position_seconds: 18.25,
+            replaygain: ReplayGain::Track,
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);
@@ -217,10 +221,29 @@ mod tests {
             queue: vec![],
             current_index: Some(3),
             position_seconds: 99.0,
+            replaygain: ReplayGain::Off,
         }
         .normalized();
         assert_eq!(clamped.volume, 100.0);
         assert_eq!(clamped.current_index, None);
         assert_eq!(clamped.position_seconds, 0.0);
+    }
+
+    #[test]
+    fn old_session_files_without_replaygain_still_load() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+        std::fs::write(&file, r#"{"volume":55.0,"shuffle":true}"#).unwrap();
+        let s = load(&file);
+        assert_eq!(s.volume, 55.0);
+        assert!(s.shuffle);
+        assert_eq!(s.replaygain, ReplayGain::Album);
+
+        let json = serde_json::to_value(SessionState {
+            replaygain: ReplayGain::Off,
+            ..SessionState::default()
+        })
+        .unwrap();
+        assert_eq!(json["replaygain"], "off");
     }
 }

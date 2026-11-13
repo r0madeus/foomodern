@@ -20,8 +20,12 @@
     return new PagedRows(library.albumsPage(q))
   })
   $effect(() => {
-    rows.ensureRange(0, 1)
-    return () => rows.dispose()
+    // Capture this instance: the cleanup runs after `rows` has already been
+    // re-derived, so reading `rows` there would dispose the NEW cache and drop
+    // its pages (the list then stayed on skeleton rows after startup).
+    const current = rows
+    current.ensureRange(0, 1)
+    return () => current.dispose()
   })
 
   const totalCount = $derived(rows.total ?? (q === '' ? library.stats.albums : 0))
