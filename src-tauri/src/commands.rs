@@ -1,6 +1,7 @@
 //! Tauri commands. Thin wrappers around [`Player`]; Rust owns all state.
 
 use crate::player::{Player, PlayerSnapshot, TrackInfo};
+use crate::queue::RepeatMode;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -86,6 +87,16 @@ pub fn player_seek(player: State<'_, Arc<Player>>, seconds: f64) -> Res<PlayerSn
 #[tauri::command]
 pub fn player_set_volume(player: State<'_, Arc<Player>>, percent: f64) -> Res<PlayerSnapshot> {
     s(player.set_volume(percent))
+}
+
+#[tauri::command]
+pub fn player_set_shuffle(player: State<'_, Arc<Player>>, enabled: bool) -> Res<PlayerSnapshot> {
+    s(player.set_shuffle(enabled))
+}
+
+#[tauri::command]
+pub fn player_set_repeat(player: State<'_, Arc<Player>>, mode: RepeatMode) -> Res<PlayerSnapshot> {
+    s(player.set_repeat(mode))
 }
 
 #[tauri::command]

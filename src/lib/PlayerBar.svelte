@@ -13,6 +13,9 @@
   const shown = $derived(dragging ?? player.position)
   const hasTrack = $derived(snap.current !== null)
   const progress = $derived(duration ? Math.min(100, (shown / duration) * 100) : 0)
+  const repeatLabel = $derived(
+    snap.repeat === 'one' ? 'Repeat: One' : snap.repeat === 'all' ? 'Repeat: All' : 'Repeat: Off',
+  )
 
   function commitSeek() {
     if (dragging !== null) void player.seek(dragging)
@@ -48,6 +51,20 @@
   <div class="flex flex-col items-center gap-1.5">
     <div class="flex items-center gap-2">
       <button
+        class={[
+          'rounded-full p-2 transition-colors',
+          snap.shuffle
+            ? 'text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/60'
+            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white',
+        ]}
+        onclick={player.toggleShuffle}
+        aria-pressed={snap.shuffle}
+        aria-label={snap.shuffle ? 'Shuffle on' : 'Shuffle off'}
+        title={snap.shuffle ? 'Shuffle: On' : 'Shuffle: Off'}
+      >
+        <Icon name="shuffle" class="size-4" />
+      </button>
+      <button
         class="rounded-full p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
         onclick={player.previous}
         disabled={!hasTrack}
@@ -70,6 +87,20 @@
         aria-label="Next"
       >
         <Icon name="next" />
+      </button>
+      <button
+        class={[
+          'rounded-full p-2 transition-colors',
+          snap.repeat !== 'off'
+            ? 'text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/60'
+            : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white',
+        ]}
+        onclick={player.cycleRepeat}
+        aria-pressed={snap.repeat !== 'off'}
+        aria-label={repeatLabel}
+        title={repeatLabel}
+      >
+        <Icon name={snap.repeat === 'one' ? 'repeatOne' : 'repeat'} class="size-4" />
       </button>
     </div>
     <div class="flex w-full items-center gap-3 text-xs tabular-nums text-zinc-500">

@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 export type Status = 'playing' | 'paused' | 'stopped'
+export type RepeatMode = 'off' | 'all' | 'one'
 
 export interface TrackInfo {
   id: number
@@ -23,6 +24,8 @@ export interface PlayerSnapshot {
   positionSeconds: number
   durationSeconds: number | null
   volume: number
+  shuffle: boolean
+  repeat: RepeatMode
 }
 
 interface PositionPayload {
@@ -39,6 +42,8 @@ const EMPTY: PlayerSnapshot = {
   positionSeconds: 0,
   durationSeconds: null,
   volume: 100,
+  shuffle: false,
+  repeat: 'off',
 }
 
 /** Queue rows are fetched in pages; never the whole list in one IPC call. */
@@ -86,6 +91,14 @@ class PlayerStore {
   next = () => this.#run('player_next')
   previous = () => this.#run('player_previous')
   setVolume = (percent: number) => this.#run('player_set_volume', { percent })
+  setShuffle = (enabled: boolean) => this.#run('player_set_shuffle', { enabled })
+  toggleShuffle = () => this.setShuffle(!this.snapshot.shuffle)
+  setRepeat = (mode: RepeatMode) => this.#run('player_set_repeat', { mode })
+  cycleRepeat = () => {
+    const order: RepeatMode[] = ['off', 'all', 'one']
+    const next = order[(order.indexOf(this.snapshot.repeat) + 1) % order.length]
+    return this.setRepeat(next)
+  }
   seek = (seconds: number) => {
     this.#setAnchor(seconds)
     return this.#run('player_seek', { seconds })

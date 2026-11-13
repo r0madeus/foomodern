@@ -2,8 +2,18 @@
 //! no engine, no Tauri. The player owns an instance and keeps the audio
 //! engine's "next" slot in sync with it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RepeatMode {
+    #[default]
+    Off,
+    All,
+    One,
+}
 
 /// Stable identity of a queue entry. Survives moves and removals of other
 /// entries; never reused within one queue.
@@ -48,11 +58,130 @@ pub struct Queue {
     current: Option<usize>,
     next_id: u64,
     version: u64,
+    shuffle: bool,
+    repeat: RepeatMode,
+    order: Vec<EntryId>,
+    rng_state: u64,
 }
 
 impl Queue {
     pub fn new() -> Self {
-        Self::default()
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0x4D59_5DF4_D0F3_3173, |d| {
+                (d.as_nanos() ^ (d.as_nanos() >> 64)) as u64
+            });
+        Self {
+            rng_state: nanos | 1,
+            ..Self::default()
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_seed(seed: u64) -> Self {
+        Self {
+            rng_state: seed,
+            ..Self::default()
+        }
+    }
+
+    fn next_random(&mut self) -> u64 {
+        self.rng_state = self.rng_state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.rng_state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn shuffle_slice<T>(&mut self, slice: &mut [T]) {
+        for i in (1..slice.len()).rev() {
+            let j = (self.next_random() % (i as u64 + 1)) as usize;
+            slice.swap(i, j);
+        }
+    }
+
+    fn rebuild_order(&mut self) {
+        self.order.clear();
+        if !self.shuffle {
+            return;
+        }
+        self.order = self.entries.iter().map(|e| e.id).collect();
+        self.shuffle_slice(&mut self.order);
+        // Keep the active entry at the front so shuffled playback continues from it.
+        if let Some(cur_id) = self.current().map(|e| e.id)
+            && let Some(pos) = self.order.iter().position(|&id| id == cur_id)
+        {
+            self.order.swap(0, pos);
+        }
+    }
+
+    fn current_order_pos(&self) -> Option<usize> {
+        let cur_id = self.current().map(|e| e.id)?;
+        self.order.iter().position(|&id| id == cur_id)
+    }
+
+    fn step(&self, forward: bool, honor_repeat_one: bool) -> Option<usize> {
+        let cur = self.current?;
+        if self.entries.is_empty() {
+            return None;
+        }
+        if honor_repeat_one && self.repeat == RepeatMode::One {
+            return Some(cur);
+        }
+        if self.shuffle {
+            let pos = self.current_order_pos()?;
+            let target_id = if forward {
+                if pos + 1 < self.order.len() {
+                    Some(self.order[pos + 1])
+                } else if self.repeat == RepeatMode::All {
+                    self.order.first().copied()
+                } else {
+                    None
+                }
+            } else if pos > 0 {
+                Some(self.order[pos - 1])
+            } else if self.repeat == RepeatMode::All {
+                self.order.last().copied()
+            } else {
+                None
+            }?;
+            return self.index_of(target_id);
+        }
+        if forward {
+            if cur + 1 < self.entries.len() {
+                Some(cur + 1)
+            } else if self.repeat == RepeatMode::All {
+                Some(0)
+            } else {
+                None
+            }
+        } else if cur > 0 {
+            Some(cur - 1)
+        } else if self.repeat == RepeatMode::All {
+            Some(self.entries.len() - 1)
+        } else {
+            None
+        }
+    }
+
+    pub fn shuffle(&self) -> bool {
+        self.shuffle
+    }
+
+    pub fn set_shuffle(&mut self, enabled: bool) {
+        if self.shuffle == enabled {
+            return;
+        }
+        self.shuffle = enabled;
+        self.rebuild_order();
+    }
+
+    pub fn repeat(&self) -> RepeatMode {
+        self.repeat
+    }
+
+    pub fn set_repeat(&mut self, mode: RepeatMode) {
+        self.repeat = mode;
     }
 
     fn make_entry(&mut self, track: Track) -> QueueEntry {
@@ -75,6 +204,7 @@ impl Queue {
             .collect();
         self.entries = entries;
         self.current = start.filter(|&i| i < self.entries.len());
+        self.rebuild_order();
         self.version += 1;
     }
 
@@ -82,9 +212,20 @@ impl Queue {
         if tracks.is_empty() {
             return;
         }
+        let mut added_ids = Vec::with_capacity(tracks.len());
         for t in tracks {
             let e = self.make_entry(t.into());
+            added_ids.push(e.id);
             self.entries.push(e);
+        }
+        if self.shuffle {
+            let tail_start = self.current_order_pos().map_or(0, |pos| pos + 1);
+            self.order.extend(added_ids);
+            if tail_start < self.order.len() {
+                let mut tail = std::mem::take(&mut self.order);
+                self.shuffle_slice(&mut tail[tail_start..]);
+                self.order = tail;
+            }
         }
         self.version += 1;
     }
@@ -96,6 +237,7 @@ impl Queue {
             return None;
         }
         let removed = self.entries.remove(index);
+        self.order.retain(|&id| id != removed.id);
         self.current = match self.current {
             Some(c) if c == index => None,
             Some(c) if c > index => Some(c - 1),
@@ -145,13 +287,39 @@ impl Queue {
         self.current
     }
 
-    /// The entry after the current one (no repeat / shuffle yet).
+    /// First entry index to start playback from when no current entry is set.
+    pub fn first_index(&self) -> Option<usize> {
+        if self.entries.is_empty() {
+            return None;
+        }
+        if self.shuffle {
+            self.order.first().and_then(|&id| self.index_of(id))
+        } else {
+            Some(0)
+        }
+    }
+
+    /// The entry that should auto-advance next (honors shuffle and repeat,
+    /// including `RepeatMode::One`).
     pub fn next(&self) -> Option<&QueueEntry> {
-        self.current.and_then(|i| self.entries.get(i + 1))
+        self.next_index().and_then(|i| self.entries.get(i))
+    }
+
+    pub fn next_index(&self) -> Option<usize> {
+        self.step(true, true)
+    }
+
+    /// Index for an explicit user "Next" command (skips `RepeatMode::One` so
+    /// the user can leave a repeated track).
+    pub fn next_manual_index(&self) -> Option<usize> {
+        if self.current.is_none() {
+            return self.first_index();
+        }
+        self.step(true, false)
     }
 
     pub fn previous_index(&self) -> Option<usize> {
-        self.current.and_then(|i| i.checked_sub(1))
+        self.step(false, false)
     }
 
     pub fn index_of(&self, id: EntryId) -> Option<usize> {
@@ -376,5 +544,113 @@ mod tests {
         q.remove(0);
         q.move_entry(0, 1);
         assert_eq!(q.version(), v0 + 4);
+    }
+
+    #[test]
+    fn repeat_all_wraps_forward_and_backward() {
+        let mut q = queue(&["a", "b", "c"], Some(2));
+        q.set_repeat(RepeatMode::All);
+        assert_eq!(q.next().unwrap().path, PathBuf::from("a"));
+        assert_eq!(q.next_manual_index(), Some(0));
+
+        q.set_current(Some(0));
+        assert_eq!(q.previous_index(), Some(2));
+    }
+
+    #[test]
+    fn repeat_one_loops_on_auto_next_but_skips_on_manual_next() {
+        let mut q = queue(&["a", "b", "c"], Some(1));
+        q.set_repeat(RepeatMode::One);
+        assert_eq!(q.next().unwrap().path, PathBuf::from("b"));
+        assert_eq!(q.next_index(), Some(1));
+        assert_eq!(q.next_manual_index(), Some(2));
+        assert_eq!(q.previous_index(), Some(0));
+
+        // At the end without Repeat All, manual next is a noop.
+        q.set_current(Some(2));
+        assert_eq!(q.next_index(), Some(2));
+        assert_eq!(q.next_manual_index(), None);
+    }
+
+    #[test]
+    fn shuffle_starts_at_current_and_visits_all_entries_once() {
+        let mut q = Queue::with_seed(42);
+        q.replace(paths(&["a", "b", "c", "d", "e"]), Some(2));
+        q.set_shuffle(true);
+
+        let mut visited = vec![q.current().unwrap().path.clone()];
+        while let Some(next_idx) = q.next_index() {
+            q.set_current(Some(next_idx));
+            visited.push(q.current().unwrap().path.clone());
+        }
+        assert_eq!(visited.len(), 5);
+        assert_eq!(visited[0], PathBuf::from("c"));
+
+        let mut sorted = visited.clone();
+        sorted.sort();
+        assert_eq!(sorted, paths(&["a", "b", "c", "d", "e"]));
+
+        // Walking back follows the same shuffled order in reverse.
+        let mut back = vec![q.current().unwrap().path.clone()];
+        while let Some(prev_idx) = q.previous_index() {
+            q.set_current(Some(prev_idx));
+            back.push(q.current().unwrap().path.clone());
+        }
+        back.reverse();
+        assert_eq!(back, visited);
+    }
+
+    #[test]
+    fn shuffle_append_remove_move_and_toggle_off() {
+        let mut q = Queue::with_seed(7);
+        q.replace(paths(&["a", "b", "c"]), Some(0));
+        q.set_shuffle(true);
+        let first_next = q.next_index().unwrap();
+        let next_path = q.get(first_next).unwrap().path.clone();
+
+        // Removing a different entry keeps the rest of the shuffled order intact.
+        let other = (1..3).find(|&i| i != first_next).unwrap();
+        q.remove(other);
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.next().unwrap().path, next_path);
+
+        // Appending adds new items after the current entry in shuffled mode.
+        q.append(paths(&["d", "e"]));
+        let mut remaining = Vec::new();
+        while let Some(idx) = q.next_index() {
+            q.set_current(Some(idx));
+            remaining.push(q.current().unwrap().path.clone());
+        }
+        assert_eq!(remaining.len(), 3);
+        assert!(remaining.contains(&PathBuf::from("d")));
+        assert!(remaining.contains(&PathBuf::from("e")));
+
+        // Turning shuffle off resumes linear queue order from current.
+        q.set_shuffle(false);
+        q.set_current(Some(1));
+        assert_eq!(q.next_index(), Some(2));
+        assert_eq!(q.previous_index(), Some(0));
+    }
+
+    #[test]
+    fn shuffle_with_repeat_all_wraps_cycle() {
+        let mut q = Queue::with_seed(99);
+        q.replace(paths(&["a", "b", "c"]), Some(0));
+        q.set_shuffle(true);
+        q.set_repeat(RepeatMode::All);
+
+        let first = q.current_index().unwrap();
+        let second = q.next_index().unwrap();
+        q.set_current(Some(second));
+        let third = q.next_index().unwrap();
+        q.set_current(Some(third));
+
+        assert_ne!(first, second);
+        assert_ne!(second, third);
+        assert_ne!(first, third);
+        assert_eq!(q.next_index(), Some(first));
+
+        q.set_current(Some(first));
+        assert_eq!(q.previous_index(), Some(third));
     }
 }

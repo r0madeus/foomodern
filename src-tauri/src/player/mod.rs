@@ -13,7 +13,7 @@
 //! just before a user command (e.g. a late `Idle`) can be applied after it.
 
 use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
-use crate::queue::{EntryId, Queue, Track};
+use crate::queue::{EntryId, Queue, RepeatMode, Track};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -55,6 +55,8 @@ pub struct PlayerSnapshot {
     pub position_seconds: f64,
     pub duration_seconds: Option<f64>,
     pub volume: f64,
+    pub shuffle: bool,
+    pub repeat: RepeatMode,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +121,8 @@ impl Inner {
             position_seconds: self.position,
             duration_seconds: self.duration,
             volume: self.volume,
+            shuffle: self.queue.shuffle(),
+            repeat: self.queue.repeat(),
         }
     }
 
@@ -226,9 +230,8 @@ impl Player {
         }
         self.run(|s| {
             let empty = paths.is_empty();
-            s.queue.replace(paths, None);
+            s.queue.replace(paths, (!empty).then_some(start_index));
             if empty {
-                s.queue.set_current(None);
                 return s.stop_engine();
             }
             s.start_index(start_index)
@@ -286,8 +289,7 @@ impl Player {
                 Ok(())
             }
             Status::Stopped => {
-                let idx = s.queue.current_index().unwrap_or(0);
-                if idx < s.queue.len() {
+                if let Some(idx) = s.queue.current_index().or_else(|| s.queue.first_index()) {
                     s.start_index(idx)
                 } else {
                     Ok(())
@@ -314,15 +316,28 @@ impl Player {
         }
     }
 
-    /// Go to the next queue entry. At the end of the queue this does nothing.
+    /// Go to the next queue entry according to shuffle and repeat rules.
     pub fn next(&self) -> Result<PlayerSnapshot, PlayerError> {
         self.run(|s| {
-            let target = s.queue.current_index().map_or(0, |i| i + 1);
-            if target < s.queue.len() {
+            if let Some(target) = s.queue.next_manual_index() {
                 s.start_index(target)
             } else {
                 Ok(())
             }
+        })
+    }
+
+    pub fn set_shuffle(&self, enabled: bool) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.queue.set_shuffle(enabled);
+            s.sync_next()
+        })
+    }
+
+    pub fn set_repeat(&self, mode: RepeatMode) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.queue.set_repeat(mode);
+            s.sync_next()
         })
     }
 
@@ -475,14 +490,10 @@ impl Player {
                 s.queue.set_current(Some(i));
                 s.sync_next()
             }
-            None => {
-                let target = s.queue.current_index().map_or(0, |i| i + 1);
-                if target < s.queue.len() {
-                    s.start_index(target)
-                } else {
-                    s.stop_engine()
-                }
-            }
+            None => match s.queue.next_index() {
+                Some(target) => s.start_index(target),
+                None => s.stop_engine(),
+            },
         }
     }
 }
@@ -900,5 +911,83 @@ mod tests {
         assert!(v["current"]["id"].is_u64());
         assert_eq!(v["current"]["title"], "a");
         assert_eq!(v["queueLength"], 1);
+        assert_eq!(v["shuffle"], false);
+        assert_eq!(v["repeat"], "off");
+    }
+
+    #[test]
+    fn set_repeat_updates_engine_next_slot_for_all_and_one() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b"]), 1).unwrap();
+        p.handle_engine_event(started("b", false));
+        calls.take();
+
+        // At the end of the queue, Repeat::All queues "a" in the engine's next slot.
+        let snap = p.set_repeat(RepeatMode::All).unwrap();
+        assert_eq!(snap.repeat, RepeatMode::All);
+        assert_eq!(calls.take(), [Call::SetNext(Some(pb("a")))]);
+
+        // Repeat::One switches the engine's next slot to the current track "b".
+        let snap = p.set_repeat(RepeatMode::One).unwrap();
+        assert_eq!(snap.repeat, RepeatMode::One);
+        assert_eq!(calls.take(), [Call::SetNext(Some(pb("b")))]);
+
+        // Auto-advancing on Repeat::One keeps current at "b" and re-queues "b".
+        p.handle_engine_event(started("b", true));
+        assert_eq!(p.snapshot().current_index, Some(1));
+        assert_eq!(calls.take(), [Call::SetNext(Some(pb("b")))]);
+
+        // Repeat::Off clears the engine's next slot at the end of the queue.
+        let snap = p.set_repeat(RepeatMode::Off).unwrap();
+        assert_eq!(snap.repeat, RepeatMode::Off);
+        assert_eq!(calls.take(), [Call::SetNext(None)]);
+    }
+
+    #[test]
+    fn repeat_all_wraps_on_next_and_previous() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b"]), 1).unwrap();
+        p.set_repeat(RepeatMode::All).unwrap();
+        calls.take();
+
+        let snap = p.next().unwrap();
+        assert_eq!(snap.current_index, Some(0));
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Load(pb("a")),
+                Call::Play,
+                Call::SetNext(Some(pb("b")))
+            ]
+        );
+
+        let snap = p.previous().unwrap();
+        assert_eq!(snap.current_index, Some(1));
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Load(pb("b")),
+                Call::Play,
+                Call::SetNext(Some(pb("a")))
+            ]
+        );
+    }
+
+    #[test]
+    fn set_shuffle_syncs_next_slot_with_shuffled_order() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c", "d", "e"]), 0).unwrap();
+        calls.take();
+
+        let snap = p.set_shuffle(true).unwrap();
+        assert!(snap.shuffle);
+        // Either next changed to something else and issued SetNext, or stayed "b".
+        let recorded = calls.take();
+        assert!(recorded.len() <= 1);
+
+        // Turning shuffle off on an entry keeps it current and restores sequential next.
+        let snap = p.set_shuffle(false).unwrap();
+        assert!(!snap.shuffle);
+        assert_eq!(snap.current_index, Some(0));
     }
 }

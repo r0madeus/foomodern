@@ -116,6 +116,8 @@ pub fn run() {
             commands::player_previous,
             commands::player_seek,
             commands::player_set_volume,
+            commands::player_set_shuffle,
+            commands::player_set_repeat,
             commands::player_snapshot,
             commands::library_add_folder,
             commands::library_remove_folder,
