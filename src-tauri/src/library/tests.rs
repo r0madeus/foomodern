@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 2);
+    assert_eq!(v, 3);
 }
 
 #[test]
@@ -205,6 +205,54 @@ fn reads_tags_and_groups_albums() {
     // Tags travel with the queued track so the player can show them.
     assert_eq!(queued[0].title.as_deref(), Some(t.title.as_str()));
     assert_eq!(queued[0].artist.as_deref(), Some(t.artist.as_str()));
+}
+
+#[test]
+fn same_title_and_artist_in_different_years_are_separate_albums() {
+    let e = env();
+    let png_a = [&[0x89u8, b'P', b'N', b'G'][..], b"edition 1995"].concat();
+    let png_b = [&[0x89u8, b'P', b'N', b'G'][..], b"edition 2020"].concat();
+    let track = |title, year, picture| Meta {
+        title,
+        artist: "Band",
+        album: "Edition",
+        album_artist: "Band",
+        year,
+        picture,
+        ..Default::default()
+    };
+    tagged_wav(&e.music.join("y1995/1.wav"), &track("Old", 1995, Some(&png_a)));
+    tagged_wav(&e.music.join("y2020/1.wav"), &track("New 1", 2020, Some(&png_b)));
+    tagged_wav(&e.music.join("y2020/2.wav"), &track("New 2", 2020, None));
+    tagged_wav(&e.music.join("noyear/1.wav"), &track("Undated 1", 0, None));
+    tagged_wav(&e.music.join("noyear/2.wav"), &track("Undated 2", 0, None));
+    e.scan();
+
+    let albums = e.lib.albums_page(0, 10).unwrap();
+    let summary: Vec<_> = albums.iter().map(|a| (a.year, a.track_count)).collect();
+    assert_eq!(summary, [(None, 2), (Some(1995), 1), (Some(2020), 2)]);
+
+    let cover_1995 = PathBuf::from(albums[1].cover.clone().expect("1995 cover"));
+    let cover_2020 = PathBuf::from(albums[2].cover.clone().expect("2020 cover"));
+    assert_ne!(cover_1995, cover_2020);
+    assert_eq!(
+        cover_1995.file_name().unwrap().to_string_lossy(),
+        cover_file_name("Band", "Edition", Some(1995), "png")
+    );
+    assert_eq!(
+        cover_2020.file_name().unwrap().to_string_lossy(),
+        cover_file_name("Band", "Edition", Some(2020), "png")
+    );
+    assert_eq!(std::fs::read(&cover_1995).unwrap(), png_a);
+    assert_eq!(std::fs::read(&cover_2020).unwrap(), png_b);
+
+    // Removing one year's tracks leaves other editions and their covers intact.
+    std::fs::remove_file(e.music.join("y1995/1.wav")).unwrap();
+    e.scan();
+    let remaining = e.lib.albums_page(0, 10).unwrap();
+    assert_eq!(remaining.len(), 2);
+    assert!(!cover_1995.exists());
+    assert!(cover_2020.exists());
 }
 
 #[test]
@@ -319,7 +367,7 @@ fn embedded_cover_is_written_once_and_removed_with_album() {
     assert_eq!(cover.parent().unwrap(), e.lib.covers_dir());
     assert_eq!(
         cover.file_name().unwrap().to_string_lossy(),
-        cover_file_name("A", "Covered", "png")
+        cover_file_name("A", "Covered", None, "png")
     );
     assert_eq!(std::fs::read(&cover).unwrap(), png);
     assert_eq!(std::fs::read_dir(e.lib.covers_dir()).unwrap().count(), 1);
@@ -587,7 +635,7 @@ fn playlist_titles(e: &Env, id: i64) -> Vec<String> {
 }
 
 #[test]
-fn migrates_a_v1_database_to_v2() {
+fn migrates_a_v1_database_to_latest() {
     let tmp = tempfile::tempdir().unwrap();
     let db_path = tmp.path().join("library.sqlite3");
     {
@@ -608,7 +656,7 @@ fn migrates_a_v1_database_to_v2() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 2);
+    assert_eq!(v, 3);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -618,6 +666,50 @@ fn migrates_a_v1_database_to_v2() {
     // Reopening an up-to-date database is a no-op.
     let lib = Library::open(&db_path, &tmp.path().join("covers"), Hooks::none()).unwrap();
     assert_eq!(lib.playlists().unwrap().len(), 1);
+}
+
+#[test]
+fn migrates_a_v2_database_to_v3_and_splits_album_years() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db_path = tmp.path().join("library.sqlite3");
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(super::db::SCHEMA_V1).unwrap();
+        conn.execute_batch(super::db::SCHEMA_V2).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute_batch(
+            "INSERT INTO folders(id, path) VALUES (1, '/m');
+             INSERT INTO albums(id, title, album_artist, year, cover)
+             VALUES (1, 'Gold', 'Artist', 1995, NULL);
+             INSERT INTO tracks(id, folder_id, path, mtime, size, title, artist, album_id,
+                                year, added_at)
+             VALUES (10, 1, '/m/a.flac', 1, 1, 'A', 'Artist', 1, 1995, 1),
+                    (11, 1, '/m/b.flac', 1, 1, 'B', 'Artist', 1, 2020, 1);
+             INSERT INTO playlists(id, name, created_at) VALUES (1, 'Mix', 1);
+             INSERT INTO playlist_tracks(playlist_id, position, track_id)
+             VALUES (1, 0, 10), (1, 1, 11);",
+        )
+        .unwrap();
+    }
+    let lib = Library::open(&db_path, &tmp.path().join("covers"), Hooks::none()).unwrap();
+    {
+        let conn = lib.conn();
+        let v: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 3);
+        let fk_issues = conn
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .query_map([], |_| Ok(()))
+            .unwrap()
+            .count();
+        assert_eq!(fk_issues, 0);
+    }
+    let albums = lib.albums_page(0, 10).unwrap();
+    let years: Vec<_> = albums.iter().map(|a| (a.year, a.track_count)).collect();
+    assert_eq!(years, [(Some(1995), 1), (Some(2020), 1)]);
+    assert_eq!(lib.playlists().unwrap()[0].track_count, 2);
 }
 
 #[test]
@@ -1135,6 +1227,64 @@ mod tag_editing {
         assert_eq!(albums[0].title, "Renamed Album");
         assert_eq!(albums[0].year, Some(2010));
         assert_eq!(albums[0].track_count, 2);
+    }
+
+    #[test]
+    fn editing_year_splits_and_regroups_albums() {
+        let e = env();
+        for (name, title, track) in [("a", "One", 1), ("b", "Two", 2)] {
+            tagged_wav(
+                &e.music.join(format!("{name}.wav")),
+                &Meta {
+                    title,
+                    artist: "Band",
+                    album: "Chronicle",
+                    album_artist: "Band",
+                    track,
+                    year: 1990,
+                    ..Meta::default()
+                },
+            );
+        }
+        e.scan();
+        let rows = e.tracks(SortOrder::Title);
+        write_for_tracks(
+            &e.lib,
+            &[rows[0].id],
+            &TagChanges {
+                year: Some(Some(2010)),
+                ..TagChanges::default()
+            },
+            None,
+        )
+        .unwrap();
+        let split: Vec<_> = e
+            .lib
+            .albums_page(0, 10)
+            .unwrap()
+            .into_iter()
+            .map(|a| (a.year, a.track_count))
+            .collect();
+        assert_eq!(split, [(Some(1990), 1), (Some(2010), 1)]);
+
+        write_for_tracks(
+            &e.lib,
+            &[rows[1].id],
+            &TagChanges {
+                year: Some(Some(2010)),
+                ..TagChanges::default()
+            },
+            None,
+        )
+        .unwrap();
+        let merged: Vec<_> = e
+            .lib
+            .albums_page(0, 10)
+            .unwrap()
+            .into_iter()
+            .map(|a| (a.year, a.track_count))
+            .collect();
+        assert_eq!(merged, [(Some(2010), 2)]);
     }
 
     #[test]

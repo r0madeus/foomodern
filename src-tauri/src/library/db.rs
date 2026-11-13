@@ -7,7 +7,7 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -45,7 +45,7 @@ CREATE INDEX tracks_title    ON tracks(title);
 CREATE INDEX tracks_added    ON tracks(added_at DESC);
 ";
 
-const SCHEMA_V2: &str = "
+pub(super) const SCHEMA_V2: &str = "
 CREATE TABLE playlists (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -58,6 +58,40 @@ CREATE TABLE playlist_tracks (
     PRIMARY KEY (playlist_id, position)
 );
 CREATE INDEX playlist_tracks_track ON playlist_tracks(track_id);
+";
+
+const SCHEMA_V3: &str = "
+CREATE TABLE albums_v3 (
+    id           INTEGER PRIMARY KEY,
+    title        TEXT NOT NULL COLLATE NOCASE,
+    album_artist TEXT NOT NULL COLLATE NOCASE,
+    year         INTEGER,
+    cover        TEXT
+);
+INSERT INTO albums_v3(id, title, album_artist, year, cover)
+SELECT id, title, album_artist, year, cover FROM albums;
+DROP TABLE albums;
+ALTER TABLE albums_v3 RENAME TO albums;
+CREATE UNIQUE INDEX albums_key ON albums(title, album_artist, COALESCE(year, -1));
+INSERT OR IGNORE INTO albums(title, album_artist, year, cover)
+SELECT DISTINCT a.title, a.album_artist, t.year, a.cover
+FROM tracks t
+JOIN albums a ON a.id = t.album_id
+WHERE COALESCE(t.year, -1) != COALESCE(a.year, -1);
+UPDATE tracks
+SET album_id = (
+    SELECT target.id
+    FROM albums cur
+    JOIN albums target
+      ON target.title = cur.title
+     AND target.album_artist = cur.album_artist
+     AND COALESCE(target.year, -1) = COALESCE(tracks.year, -1)
+    WHERE cur.id = tracks.album_id
+)
+WHERE album_id IS NOT NULL
+  AND COALESCE(year, -1) != (
+      SELECT COALESCE(a.year, -1) FROM albums a WHERE a.id = tracks.album_id
+  );
 ";
 
 /// Opens-time setup: pragmas and migrations.
@@ -83,6 +117,22 @@ pub fn init(conn: &Connection) -> Result<()> {
         tx.pragma_update(None, "user_version", 2)?;
         tx.commit()?;
     }
+    if version < 3 {
+        // Dropping `albums` to replace its UNIQUE constraint requires
+        // `foreign_keys = OFF` outside the transaction; FKs are re-enabled
+        // before returning.
+        conn.pragma_update(None, "foreign_keys", false)?;
+        let res = (|| -> Result<()> {
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(SCHEMA_V3)?;
+            delete_empty_albums(&tx)?;
+            tx.pragma_update(None, "user_version", 3)?;
+            tx.commit()?;
+            Ok(())
+        })();
+        conn.pragma_update(None, "foreign_keys", true)?;
+        res?;
+    }
     Ok(())
 }
 
@@ -107,9 +157,11 @@ impl SortOrder {
 
     fn order_by(self) -> &'static str {
         match self {
-            Self::Artist => "t.artist, a.title, t.disc_no, t.track_no, t.title, t.id",
+            Self::Artist => "t.artist, a.title, a.year, a.id, t.disc_no, t.track_no, t.title, t.id",
             Self::Title => "t.title, t.artist, t.id",
-            Self::Album => "a.title, a.album_artist, t.disc_no, t.track_no, t.title, t.id",
+            Self::Album => {
+                "a.title, a.album_artist, a.year, a.id, t.disc_no, t.track_no, t.title, t.id"
+            }
             Self::Added => "t.added_at DESC, t.id",
         }
     }
@@ -148,11 +200,17 @@ pub fn remove_folder(conn: &mut Connection, id: i64) -> Result<Vec<String>> {
     Ok(covers)
 }
 
-/// Deletes albums without tracks; returns their cover paths.
+/// Deletes albums without tracks; returns their cover paths (excluding any
+/// still referenced by another non-empty album).
 pub fn delete_empty_albums(conn: &Connection) -> Result<Vec<String>> {
     let mut st = conn.prepare(
-        "SELECT cover FROM albums WHERE cover IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM tracks WHERE album_id = albums.id)",
+        "SELECT DISTINCT cover FROM albums WHERE cover IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM tracks WHERE album_id = albums.id)
+         AND NOT EXISTS (
+             SELECT 1 FROM albums other
+             WHERE other.cover = albums.cover
+               AND EXISTS (SELECT 1 FROM tracks WHERE album_id = other.id)
+         )",
     )?;
     let covers = st
         .query_map([], |r| r.get::<_, String>(0))?
@@ -360,7 +418,7 @@ pub fn search_albums_page(
     let n = f.params.len();
     let count_sql = format!("SELECT COUNT(*) FROM albums a {}", f.where_sql);
     let page_sql = format!(
-        "{ALBUM_SELECT} {} ORDER BY a.album_artist, a.title, a.id LIMIT ?{} OFFSET ?{}",
+        "{ALBUM_SELECT} {} ORDER BY a.album_artist, a.title, a.year, a.id LIMIT ?{} OFFSET ?{}",
         f.where_sql,
         n + 1,
         n + 2
@@ -713,19 +771,4 @@ pub fn track_files_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, St
         }
     }
     Ok(out)
-}
-
-/// Re-derives the year of the albums that contain any of `paths` from their
-/// tracks (the scan upsert only fills a missing year, so a tag edit would
-/// otherwise never change it).
-pub fn refresh_album_years(conn: &Connection, paths: &[String]) -> Result<()> {
-    let mut st = conn.prepare_cached(
-        "UPDATE albums SET year = (SELECT MIN(year) FROM tracks
-                                   WHERE album_id = albums.id AND year IS NOT NULL)
-         WHERE id = (SELECT album_id FROM tracks WHERE path = ?1)",
-    )?;
-    for p in paths {
-        st.execute([p])?;
-    }
-    Ok(())
 }

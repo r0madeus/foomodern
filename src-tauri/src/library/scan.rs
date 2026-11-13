@@ -61,8 +61,11 @@ pub fn fnv1a(bytes: &[u8]) -> u64 {
     hash
 }
 
-pub fn cover_file_name(album_artist: &str, title: &str, ext: &str) -> String {
-    let key = format!("{album_artist}\u{1f}{title}");
+pub fn cover_file_name(album_artist: &str, title: &str, year: Option<i64>, ext: &str) -> String {
+    let key = match year {
+        Some(y) => format!("{album_artist}\u{1f}{title}\u{1f}{y}"),
+        None => format!("{album_artist}\u{1f}{title}"),
+    };
     format!("{:016x}.{ext}", fnv1a(key.as_bytes()))
 }
 
@@ -186,8 +189,8 @@ struct Scanner<'a> {
     lib: &'a Library,
     folder_id: i64,
     folder: String,
-    /// Albums (lowercased title, album artist) that already have a cover file.
-    covered: HashSet<(String, String)>,
+    /// Albums (lowercased title, album artist, year) that already have a cover file.
+    covered: HashSet<(String, String, Option<i64>)>,
     dir_cover_cache: HashMap<PathBuf, Option<PathBuf>>,
     now: i64,
     stats: ScanStats,
@@ -195,8 +198,12 @@ struct Scanner<'a> {
 }
 
 impl Scanner<'_> {
-    fn album_key(album: &str, album_artist: &str) -> (String, String) {
-        (album.to_lowercase(), album_artist.to_lowercase())
+    fn album_key(
+        album: &str,
+        album_artist: &str,
+        year: Option<i64>,
+    ) -> (String, String, Option<i64>) {
+        (album.to_lowercase(), album_artist.to_lowercase(), year)
     }
 
     /// Writes the album cover once; returns the cover path if a new file
@@ -206,6 +213,7 @@ impl Scanner<'_> {
         file: &Path,
         album: &str,
         album_artist: &str,
+        year: Option<i64>,
         picture: Option<Picture>,
     ) -> Option<String> {
         let covers_dir = self.lib.covers_dir();
@@ -214,7 +222,7 @@ impl Scanner<'_> {
                 .mime_type()
                 .and_then(|m| m.ext())
                 .unwrap_or_else(|| sniff_image_ext(pic.data()));
-            let dest = covers_dir.join(cover_file_name(album_artist, album, ext));
+            let dest = covers_dir.join(cover_file_name(album_artist, album, year, ext));
             match write_atomic(&dest, pic.data()) {
                 Ok(()) => return Some(display_path(&dest)),
                 Err(e) => log::warn!("failed to write cover {}: {e}", dest.display()),
@@ -231,7 +239,7 @@ impl Scanner<'_> {
             .and_then(|e| e.to_str())
             .map(str::to_lowercase)
             .unwrap_or_else(|| "jpg".into());
-        let dest = covers_dir.join(cover_file_name(album_artist, album, &ext));
+        let dest = covers_dir.join(cover_file_name(album_artist, album, year, &ext));
         match std::fs::copy(&src, &dest) {
             Ok(_) => Some(display_path(&dest)),
             Err(e) => {
@@ -261,9 +269,9 @@ impl Scanner<'_> {
 
         let mut cover = None;
         if !album.is_empty() {
-            let key = Self::album_key(&album, &album_artist);
+            let key = Self::album_key(&album, &album_artist, tags.year);
             if !self.covered.contains(&key) {
-                cover = self.ensure_cover(path, &album, &album_artist, tags.picture);
+                cover = self.ensure_cover(path, &album, &album_artist, tags.year, tags.picture);
                 if cover.is_some() {
                     self.covered.insert(key);
                 }
@@ -297,8 +305,7 @@ impl Scanner<'_> {
             {
                 let mut upsert_album = tx.prepare_cached(
                     "INSERT INTO albums(title, album_artist, year, cover) VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(title, album_artist) DO UPDATE SET
-                        year = COALESCE(year, excluded.year),
+                     ON CONFLICT(title, album_artist, COALESCE(year, -1)) DO UPDATE SET
                         cover = COALESCE(excluded.cover, cover)
                      RETURNING id",
                 )?;
@@ -359,21 +366,23 @@ impl Scanner<'_> {
     }
 }
 
-/// Albums (lowercased title, album artist) whose cover file still exists.
-fn load_covered(conn: &rusqlite::Connection) -> Result<HashSet<(String, String)>> {
+/// Albums (lowercased title, album artist, year) whose cover file still exists.
+fn load_covered(conn: &rusqlite::Connection) -> Result<HashSet<(String, String, Option<i64>)>> {
     let mut covered = HashSet::new();
-    let mut st =
-        conn.prepare("SELECT title, album_artist, cover FROM albums WHERE cover IS NOT NULL")?;
+    let mut st = conn.prepare(
+        "SELECT title, album_artist, year, cover FROM albums WHERE cover IS NOT NULL",
+    )?;
     for row in st.query_map([], |r| {
         Ok((
             r.get::<_, String>(0)?,
             r.get::<_, String>(1)?,
-            r.get::<_, String>(2)?,
+            r.get::<_, Option<i64>>(2)?,
+            r.get::<_, String>(3)?,
         ))
     })? {
-        let (title, artist, cover) = row?;
+        let (title, artist, year, cover) = row?;
         if Path::new(&cover).is_file() {
-            covered.insert(Scanner::album_key(&title, &artist));
+            covered.insert(Scanner::album_key(&title, &artist, year));
         }
     }
     Ok(covered)
@@ -528,12 +537,10 @@ pub fn rescan_files(lib: &Library, files: &[(String, i64)]) -> Result<usize> {
             batch.push(sc.parse(path, path_str.to_owned(), mtime, size));
         }
         updated += batch.len();
-        let touched: Vec<String> = batch.iter().map(|p| p.path.clone()).collect();
         sc.flush(&mut batch)?;
         let orphan_covers = {
             let mut conn = lib.conn();
             let tx = conn.transaction()?;
-            db::refresh_album_years(&tx, &touched)?;
             let covers = db::delete_empty_albums(&tx)?;
             tx.commit()?;
             covers

@@ -87,8 +87,6 @@ contributors and agents.
   close-to-tray on a closed window can't be brought back. Candidate fix:
   single-instance plugin that shows the window on a second launch.
 - Linux MPRIS state lags ~1–2 s (souvlaki's D-Bus loop).
-- Albums with the same title and album artist but different years are
-  grouped as one album.
 - UI text is English only.
 - Android: not yet tried on a device; ReplayGain is not applied; only the
   `Music` folder can be added; "Open files" is hidden.
