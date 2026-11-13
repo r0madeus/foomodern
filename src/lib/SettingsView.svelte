@@ -3,6 +3,7 @@
   import { getVersion } from '@tauri-apps/api/app'
   import { player, type ReplayGain } from './player.svelte'
   import { prefs } from './prefs.svelte'
+  import { appSettings } from './appSettings.svelte'
 
   const MODES: { value: ReplayGain; label: string }[] = [
     { value: 'off', label: 'Off' },
@@ -12,6 +13,7 @@
 
   let version = $state<string | null>(null)
   onMount(() => {
+    void appSettings.load()
     getVersion()
       .then((v) => (version = v))
       .catch(() => (version = null))
@@ -74,6 +76,33 @@
           role="switch"
           class="mt-1 size-4 shrink-0 accent-teal-600"
           bind:checked={prefs.showExtensions}
+        />
+      </label>
+    </section>
+
+    <section aria-labelledby="set-window" class="flex flex-col gap-3">
+      <h3 id="set-window" class="text-xs font-medium uppercase tracking-wide text-zinc-400">Window</h3>
+      <label class="flex cursor-pointer items-start justify-between gap-6">
+        <span class="min-w-0">
+          <span class="block text-sm font-medium">Keep playing in the tray when the window is closed</span>
+          <span id="tray-help" class="block text-sm text-zinc-500">
+            Closing the window hides FooModern to the system tray and playback continues. Use the
+            tray menu to show the window again or to quit.
+            {#if appSettings.loaded && !appSettings.trayAvailable}
+              <span class="mt-1 block text-amber-700 dark:text-amber-400" role="status">
+                No system tray is available here, so closing the window always quits.
+              </span>
+            {/if}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          class="mt-1 size-4 shrink-0 accent-teal-600"
+          aria-describedby="tray-help"
+          checked={appSettings.closeToTray}
+          disabled={!appSettings.loaded}
+          onchange={(e) => void appSettings.setCloseToTray(e.currentTarget.checked)}
         />
       </label>
     </section>

@@ -15,6 +15,7 @@
 
 pub mod db;
 pub mod scan;
+pub mod tags;
 
 use crate::queue::Track;
 use rusqlite::Connection;
@@ -368,6 +369,18 @@ impl Library {
             playlist,
             skipped: found.len() - ids.len(),
         })
+    }
+
+    /// Library file paths (and their folder ids) for the given track ids, in
+    /// the same order. Unknown ids are skipped.
+    pub fn track_files(&self, ids: &[i64]) -> Result<Vec<(i64, String, i64)>> {
+        db::track_files_by_ids(&self.conn(), ids)
+    }
+
+    /// Re-reads the tags of the given files into the database (after a tag
+    /// edit) and notifies the host. `files` are `(path, folder id)` pairs.
+    pub fn rescan_files(&self, files: &[(String, i64)]) -> Result<usize> {
+        scan::rescan_files(self, files)
     }
 
     /// Queues the given folders for scanning and starts the worker thread if

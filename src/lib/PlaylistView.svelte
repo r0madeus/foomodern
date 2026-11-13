@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import VirtualList from './VirtualList.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import AddToPlaylist from './AddToPlaylist.svelte'
   import Icon from './Icon.svelte'
   import type { TrackRow } from './library.svelte'
   import { playlists } from './playlists.svelte'
@@ -10,7 +11,7 @@
   let { id, onDeleted }: { id: number; onDeleted: () => void } = $props()
 
   const ROW = 40
-  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_6.5rem] items-center gap-3 px-5'
+  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_9rem] items-center gap-3 px-5'
 
   const info = $derived(playlists.byId(id))
   let tracks = $state<TrackRow[]>([])
@@ -204,6 +205,7 @@
                 {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
               </span>
               <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+                <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
                 <button
                   type="button"
                   data-action="up"

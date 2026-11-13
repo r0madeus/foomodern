@@ -680,3 +680,34 @@ pub fn track_ids_by_paths(conn: &Connection, paths: &[String]) -> Result<Vec<Opt
         .map(|p| Ok(st.query_row([p], |r| r.get(0)).optional()?))
         .collect()
 }
+
+/// Id, path and folder of each existing track, in the order of `ids`.
+/// Unknown ids are skipped.
+pub fn track_files_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String, i64)>> {
+    let mut st = conn.prepare_cached("SELECT path, folder_id FROM tracks WHERE id = ?1")?;
+    let mut out = Vec::with_capacity(ids.len());
+    for &id in ids {
+        if let Some((path, folder)) = st
+            .query_row([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))
+            .optional()?
+        {
+            out.push((id, path, folder));
+        }
+    }
+    Ok(out)
+}
+
+/// Re-derives the year of the albums that contain any of `paths` from their
+/// tracks (the scan upsert only fills a missing year, so a tag edit would
+/// otherwise never change it).
+pub fn refresh_album_years(conn: &Connection, paths: &[String]) -> Result<()> {
+    let mut st = conn.prepare_cached(
+        "UPDATE albums SET year = (SELECT MIN(year) FROM tracks
+                                   WHERE album_id = albums.id AND year IS NOT NULL)
+         WHERE id = (SELECT album_id FROM tracks WHERE path = ?1)",
+    )?;
+    for p in paths {
+        st.execute([p])?;
+    }
+    Ok(())
+}

@@ -359,6 +359,26 @@ impl Scanner<'_> {
     }
 }
 
+/// Albums (lowercased title, album artist) whose cover file still exists.
+fn load_covered(conn: &rusqlite::Connection) -> Result<HashSet<(String, String)>> {
+    let mut covered = HashSet::new();
+    let mut st =
+        conn.prepare("SELECT title, album_artist, cover FROM albums WHERE cover IS NOT NULL")?;
+    for row in st.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })? {
+        let (title, artist, cover) = row?;
+        if Path::new(&cover).is_file() {
+            covered.insert(Scanner::album_key(&title, &artist));
+        }
+    }
+    Ok(covered)
+}
+
 fn unix_secs(t: SystemTime) -> i64 {
     t.duration_since(UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
@@ -388,21 +408,7 @@ pub fn scan_folder(lib: &Library, folder_id: i64, root: &Path) -> Result<ScanSta
             let (p, v) = row?;
             existing.insert(p, v);
         }
-        let mut covered = HashSet::new();
-        let mut st =
-            conn.prepare("SELECT title, album_artist, cover FROM albums WHERE cover IS NOT NULL")?;
-        for row in st.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
-        })? {
-            let (title, artist, cover) = row?;
-            if Path::new(&cover).is_file() {
-                covered.insert(Scanner::album_key(&title, &artist));
-            }
-        }
+        let covered = load_covered(&conn)?;
         (existing, covered)
     };
 
@@ -485,4 +491,55 @@ pub fn scan_folder(lib: &Library, folder_id: i64, root: &Path) -> Result<ScanSta
     lib.bump();
     sc.emit_progress(true, true);
     Ok(sc.stats)
+}
+
+/// Re-reads the given library files (e.g. after a tag edit) through the same
+/// per-file path as the scanner, so album grouping and covers follow the new
+/// tags. Files that are not in the library are ignored. Returns the number
+/// of files updated.
+pub fn rescan_files(lib: &Library, files: &[(String, i64)]) -> Result<usize> {
+    let mut by_folder: Vec<(i64, Vec<&str>)> = Vec::new();
+    for (path, folder_id) in files {
+        match by_folder.iter_mut().find(|(id, _)| id == folder_id) {
+            Some((_, list)) => list.push(path),
+            None => by_folder.push((*folder_id, vec![path])),
+        }
+    }
+    let covered = load_covered(&lib.conn())?;
+    let now = unix_secs(SystemTime::now());
+    let mut updated = 0;
+    for (folder_id, paths) in by_folder {
+        let mut sc = Scanner {
+            lib,
+            folder_id,
+            folder: String::new(),
+            covered: covered.clone(),
+            dir_cover_cache: HashMap::new(),
+            now,
+            stats: ScanStats::default(),
+            last_progress: Instant::now(),
+        };
+        let mut batch = Vec::with_capacity(paths.len());
+        for path_str in paths {
+            let path = Path::new(path_str);
+            let meta = std::fs::metadata(path)?;
+            let mtime = meta.modified().map(unix_secs).unwrap_or(0);
+            let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
+            batch.push(sc.parse(path, path_str.to_owned(), mtime, size));
+        }
+        updated += batch.len();
+        let touched: Vec<String> = batch.iter().map(|p| p.path.clone()).collect();
+        sc.flush(&mut batch)?;
+        let orphan_covers = {
+            let mut conn = lib.conn();
+            let tx = conn.transaction()?;
+            db::refresh_album_years(&tx, &touched)?;
+            let covers = db::delete_empty_albums(&tx)?;
+            tx.commit()?;
+            covers
+        };
+        remove_cover_files(&orphan_covers);
+    }
+    lib.bump();
+    Ok(updated)
 }

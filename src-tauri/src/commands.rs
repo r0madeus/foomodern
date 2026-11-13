@@ -348,6 +348,144 @@ pub fn playlist_from_queue(
 }
 
 // ---------------------------------------------------------------------
+// App settings
+// ---------------------------------------------------------------------
+
+use crate::session::SessionStore;
+use crate::tray::TrayStatus;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    /// The user's choice: closing the window keeps the app in the tray.
+    close_to_tray: bool,
+    /// False when no tray icon could be created in this run; closing the
+    /// window then quits whatever the setting says.
+    tray_available: bool,
+}
+
+fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
+    AppSettings {
+        close_to_tray: store.close_to_tray(),
+        tray_available: tray.available(),
+    }
+}
+
+#[tauri::command]
+pub fn app_settings(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+) -> AppSettings {
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_close_to_tray(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_close_to_tray(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+// ---------------------------------------------------------------------
+// Tag editing
+// ---------------------------------------------------------------------
+
+use crate::library::tags::{self, EditableTags, TagChanges, TagFailure};
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackTags {
+    id: i64,
+    path: String,
+    #[serde(flatten)]
+    tags: EditableTags,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagsRead {
+    tracks: Vec<TrackTags>,
+    /// Value shared by all tracks per field; null when empty or mixed.
+    common: EditableTags,
+    /// Names of the fields whose values differ between the tracks.
+    mixed: Vec<&'static str>,
+    failed: Vec<TagFailure>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagsWritten {
+    updated: usize,
+    failed: Vec<TagFailure>,
+}
+
+#[tauri::command]
+pub async fn tags_read(lib: State<'_, Arc<Library>>, track_ids: Vec<i64>) -> Res<TagsRead> {
+    let lib = Arc::clone(&lib);
+    tokio::task::spawn_blocking(move || {
+        let (read, failed) = le(tags::read_for_tracks(&lib, &track_ids))?;
+        let all: Vec<EditableTags> = read.iter().map(|t| t.tags.clone()).collect();
+        let common = tags::common_tags(&all);
+        Ok(TagsRead {
+            tracks: read
+                .into_iter()
+                .map(|t| TrackTags {
+                    id: t.id,
+                    path: t.path,
+                    tags: t.tags,
+                })
+                .collect(),
+            common: common.values,
+            mixed: common.mixed,
+            failed,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn tags_write(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    track_ids: Vec<i64>,
+    changes: TagChanges,
+) -> Res<TagsWritten> {
+    let lib = Arc::clone(&lib);
+    let player = Arc::clone(&player);
+    tokio::task::spawn_blocking(move || {
+        let current = player.current_path();
+        let outcome = le(tags::write_for_tracks(
+            &lib,
+            &track_ids,
+            &changes,
+            current.as_deref(),
+        ))?;
+        // Show the edit in the player bar and queue as well.
+        for path in &outcome.updated {
+            match lib.track_meta(path) {
+                Ok(Some(meta)) => {
+                    player.update_track_meta(path, &meta.title, &meta.artist);
+                }
+                Ok(None) => {}
+                Err(e) => log::warn!("could not read back {path}: {e}"),
+            }
+        }
+        Ok(TagsWritten {
+            updated: outcome.updated.len(),
+            failed: outcome.failed,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ---------------------------------------------------------------------
 // Lyrics
 // ---------------------------------------------------------------------
 

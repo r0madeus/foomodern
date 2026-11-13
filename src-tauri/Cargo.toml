@@ -18,7 +18,7 @@ tauri-build = { version = "=2.7.4", features = [] }
 # Versions are pinned on purpose (see AGENTS.md). Check docs.rs for the
 # pinned version before writing code against these crates.
 [dependencies]
-tauri = { version = "=2.12.5", features = ["protocol-asset"] }
+tauri = { version = "=2.12.5", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-log = "=2.10.2"
 tauri-plugin-dialog = "=2.8.4"
 serde = { version = "=1.0.229", features = ["derive"] }

@@ -314,7 +314,33 @@ impl Player {
             current_index,
             position_seconds,
             replaygain: s.replaygain,
+            ..SessionState::default()
         }
+    }
+
+    /// The path of the loaded (current) queue entry, if any.
+    pub fn current_path(&self) -> Option<String> {
+        self.lock()
+            .queue
+            .current()
+            .map(|e| e.path.to_string_lossy().into_owned())
+    }
+
+    /// Refreshes the title/artist shown for queue entries playing `path`
+    /// (after its tags were edited) and publishes a new state. Returns how
+    /// many entries changed.
+    pub fn update_track_meta(&self, path: &str, title: &str, artist: &str) -> usize {
+        let key = crate::library::scan::display_path(Path::new(path));
+        let mut changed = 0;
+        let _ = self.run(|s| {
+            changed = s.queue.update_meta(
+                |p| crate::library::scan::display_path(p) == key,
+                title,
+                artist,
+            );
+            Ok(())
+        });
+        changed
     }
 
     pub fn queue_page(&self, offset: usize, limit: usize) -> Vec<TrackInfo> {
@@ -891,6 +917,46 @@ mod tests {
     }
 
     #[test]
+    fn update_track_meta_changes_matching_entries_and_publishes_state() {
+        let (p, _, events) = setup();
+        let tracks = vec![
+            Track {
+                path: pb("/music/a.mp3"),
+                title: Some("Old".into()),
+                artist: Some("Old Artist".into()),
+            },
+            Track::from(pb("/music/b.mp3")),
+            Track {
+                path: pb("/music/a.mp3"),
+                title: Some("Old".into()),
+                artist: None,
+            },
+        ];
+        p.replace_queue(tracks, 1).unwrap();
+        let before = p.snapshot().queue_version;
+        events.lock().unwrap().clear();
+
+        assert_eq!(p.update_track_meta("/music/a.mp3", "New", "New Artist"), 2);
+        let page = p.queue_page(0, 3);
+        assert_eq!(
+            page.iter()
+                .map(|t| (t.title.as_str(), t.artist.as_str()))
+                .collect::<Vec<_>>(),
+            [("New", "New Artist"), ("b", ""), ("New", "New Artist")]
+        );
+        assert!(p.snapshot().queue_version > before);
+        assert!(matches!(
+            events.lock().unwrap().last(),
+            Some(PlayerEvent::State(_))
+        ));
+        assert_eq!(p.current_path().as_deref(), Some("/music/b.mp3"));
+
+        // Nothing matches: nothing changes.
+        assert_eq!(p.update_track_meta("/music/zzz.mp3", "X", "Y"), 0);
+        assert_eq!(p.update_track_meta("/music/a.mp3", "New", "New Artist"), 0);
+    }
+
+    #[test]
     fn concurrent_updates_never_leave_a_stale_snapshot_last() {
         // A user command and the engine-event thread build snapshots under
         // the lock but deliver them after releasing it. The observer must
@@ -1218,6 +1284,7 @@ mod tests {
             current_index: Some(1),
             position_seconds: 42.5,
             replaygain: ReplayGain::Track,
+            ..SessionState::default()
         };
         p.restore_session(saved.clone());
 
@@ -1280,6 +1347,7 @@ mod tests {
             current_index: Some(0),
             position_seconds: 30.0,
             replaygain: ReplayGain::Album,
+            ..SessionState::default()
         });
         calls.take();
 

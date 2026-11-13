@@ -3,6 +3,7 @@
   import Cover from './Cover.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import { tagEditor } from './tags.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import { player, formatTime } from './player.svelte'
 
@@ -46,6 +47,13 @@
             Play
           </button>
           <AddToPlaylist {albumId} label="Add album to playlist" text />
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 outline-none hover:bg-zinc-200/70 focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            onclick={() => tagEditor.open(data!.tracks.map((t) => t.id), 'Edit album tags')}
+          >
+            Edit album tags…
+          </button>
         </div>
       </div>
     </div>
@@ -70,7 +78,7 @@
             </span>
           </button>
           <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-            <AddToPlaylist trackIds={[t.id]} label="Add “{t.title}” to playlist" />
+            <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
           </span>
         </li>
       {/each}

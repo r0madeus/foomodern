@@ -6,6 +6,7 @@ pub mod media_keys;
 pub mod player;
 pub mod queue;
 pub mod session;
+pub mod tray;
 
 use audio::mpv::{MpvEngine, MpvOptions};
 use library::{Hooks, Library};
@@ -138,8 +139,12 @@ pub fn run() {
                 e
             })?);
             app.manage(lyrics);
+
+            app.manage(tray::TrayStatus::default());
+            tray::install(app.handle());
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::queue_replace,
             commands::queue_append,
@@ -179,6 +184,10 @@ pub fn run() {
             commands::playlist_move,
             commands::playlist_play,
             commands::playlist_from_queue,
+            commands::app_settings,
+            commands::app_set_close_to_tray,
+            commands::tags_read,
+            commands::tags_write,
             commands::lyrics_for_track,
             commands::lyrics_attach_file,
         ])

@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
   import { playlists, type PlaylistInfo } from './playlists.svelte'
+  import { tagEditor } from './tags.svelte'
 
   // A button that opens a menu of playlists. Give it `trackIds` (library
   // track ids) or an `albumId`. The menu is moved to <body> and positioned
@@ -12,6 +13,7 @@
     albumId = null,
     label = 'Add to playlist',
     text = false,
+    editTags = false,
     class: className = '',
   }: {
     trackIds?: number[]
@@ -19,6 +21,8 @@
     label?: string
     /** Show the label next to the icon (header buttons). */
     text?: boolean
+    /** Also offer "Edit tags…" for `trackIds`. */
+    editTags?: boolean
     class?: string
   } = $props()
 
@@ -64,6 +68,11 @@
     close(true)
     if (albumId !== null) await playlists.addAlbum(p, albumId)
     else await playlists.addTracks(p, trackIds)
+  }
+
+  function editTagsOfTracks() {
+    close()
+    tagEditor.open(trackIds, trackIds.length === 1 ? 'Edit tags' : `Edit tags of ${trackIds.length} tracks`)
   }
 
   async function startCreate() {
@@ -194,6 +203,9 @@
         </div>
       </form>
     {:else}
+      <p class="px-3 pt-1 pb-0.5 text-xs font-medium uppercase tracking-wide text-zinc-400" aria-hidden="true">
+        Add to playlist
+      </p>
       <div class="min-h-0 overflow-y-auto">
         {#each playlists.list as p (p.id)}
           <button
@@ -217,6 +229,16 @@
       >
         <Icon name="plus" class="size-4" /> New playlist…
       </button>
+      {#if editTags && trackIds.length > 0}
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-left outline-none hover:bg-zinc-100 focus-visible:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:focus-visible:bg-zinc-800"
+          onclick={editTagsOfTracks}
+        >
+          Edit tags…
+        </button>
+      {/if}
     {/if}
   </div>
 {/if}

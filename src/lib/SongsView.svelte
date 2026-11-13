@@ -111,7 +111,7 @@
                 {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
               </span>
               <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-                <AddToPlaylist trackIds={[t.id]} label="Add “{t.title}” to playlist" />
+                <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
               </span>
             </div>
           {:else}

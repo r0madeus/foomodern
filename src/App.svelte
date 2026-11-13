@@ -10,6 +10,7 @@
   import SettingsView from './lib/SettingsView.svelte'
   import PlaylistView from './lib/PlaylistView.svelte'
   import LyricsPanel from './lib/LyricsPanel.svelte'
+  import TagEditor from './lib/TagEditor.svelte'
   import { player } from './lib/player.svelte'
   import { library } from './lib/library.svelte'
   import { lyrics } from './lib/lyrics.svelte'
@@ -247,3 +248,5 @@
 
   <PlayerBar />
 </div>
+
+<TagEditor />
