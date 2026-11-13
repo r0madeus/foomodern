@@ -1,6 +1,6 @@
 [package]
 name = "foomodern"
-version = "0.1.0"
+version = "0.2.0"
 description = "A fast, modern music player"
 authors = ["r0madeus"]
 license = ""

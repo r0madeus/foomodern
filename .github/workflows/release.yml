@@ -49,6 +49,36 @@ jobs:
       - run: npm run check
       - run: npm run build
 
+      - name: Sync version from release tag
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $env:GITHUB_REF_NAME
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:INPUT_TAG)) {
+            $env:INPUT_TAG.Trim()
+          } else {
+            ''
+          }
+          if ([string]::IsNullOrWhiteSpace($tag)) { return }
+          $ver = $tag -replace '^v', ''
+          if ($ver -match '^\d+\.\d+$') { $ver = "$ver.0" }
+          if ($ver -notmatch '^\d+\.\d+\.\d+') { return }
+
+          $conf = Get-Content 'src-tauri/tauri.conf.json' -Raw
+          $conf = [regex]::Replace($conf, '"version"\s*:\s*"[^"]+"', "`"version`": `"$ver`"", 1)
+          Set-Content -Path 'src-tauri/tauri.conf.json' -Value $conf -NoNewline -Encoding utf8NoBOM
+
+          $cargo = Get-Content 'src-tauri/Cargo.toml' -Raw
+          $cargo = [regex]::Replace($cargo, '(?m)^version = "[^"]+"', "version = `"$ver`"", 1)
+          Set-Content -Path 'src-tauri/Cargo.toml' -Value $cargo -NoNewline -Encoding utf8NoBOM
+
+          $pkg = Get-Content 'package.json' -Raw
+          $pkg = [regex]::Replace($pkg, '"version"\s*:\s*"[^"]+"', "`"version`": `"$ver`"", 1)
+          Set-Content -Path 'package.json' -Value $pkg -NoNewline -Encoding utf8NoBOM
+
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
