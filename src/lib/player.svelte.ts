@@ -71,6 +71,11 @@ class PlayerStore {
     await this.#run('player_snapshot')
   }
 
+  /** Apply a snapshot returned by a command issued outside this store (e.g. library play). */
+  applySnapshot = (snapshot: PlayerSnapshot) => {
+    this.#apply(snapshot)
+    this.error = null
+  }
   openFiles = (paths: string[]) => this.#run('queue_replace', { paths, startIndex: 0 })
   appendFiles = (paths: string[]) => this.#run('queue_append', { paths })
   playIndex = (index: number) => this.#run('player_play_index', { index })
