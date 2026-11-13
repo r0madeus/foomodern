@@ -105,14 +105,15 @@ impl Queue {
         if !self.shuffle {
             return;
         }
-        self.order = self.entries.iter().map(|e| e.id).collect();
-        self.shuffle_slice(&mut self.order);
+        let mut order: Vec<EntryId> = self.entries.iter().map(|e| e.id).collect();
+        self.shuffle_slice(&mut order);
         // Keep the active entry at the front so shuffled playback continues from it.
         if let Some(cur_id) = self.current().map(|e| e.id)
-            && let Some(pos) = self.order.iter().position(|&id| id == cur_id)
+            && let Some(pos) = order.iter().position(|&id| id == cur_id)
         {
-            self.order.swap(0, pos);
+            order.swap(0, pos);
         }
+        self.order = order;
     }
 
     fn current_order_pos(&self) -> Option<usize> {

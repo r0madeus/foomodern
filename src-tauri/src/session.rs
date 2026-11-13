@@ -59,12 +59,12 @@ impl SessionState {
             default_volume()
         };
         self.current_index = self.current_index.filter(|&i| i < self.queue.len());
-        self.position_seconds =
-            if self.current_index.is_some() && self.position_seconds.is_finite() {
-                self.position_seconds.max(0.0)
-            } else {
-                0.0
-            };
+        self.position_seconds = if self.current_index.is_some() && self.position_seconds.is_finite()
+        {
+            self.position_seconds.max(0.0)
+        } else {
+            0.0
+        };
         self
     }
 }
@@ -181,7 +181,10 @@ mod tests {
     #[test]
     fn missing_or_corrupt_file_falls_back_to_default() {
         let dir = TempDir::new().unwrap();
-        assert_eq!(load(&dir.path().join("missing.json")), SessionState::default());
+        assert_eq!(
+            load(&dir.path().join("missing.json")),
+            SessionState::default()
+        );
 
         let bad = dir.path().join("bad.json");
         std::fs::write(&bad, "{not valid json").unwrap();

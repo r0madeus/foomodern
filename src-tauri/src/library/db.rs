@@ -275,7 +275,9 @@ pub fn search_tracks_page(
         n + 1,
         n + 2
     );
-    query_page(conn, &count_sql, &page_sql, f.params, offset, limit, track_row)
+    query_page(
+        conn, &count_sql, &page_sql, f.params, offset, limit, track_row,
+    )
 }
 
 /// Row → queue track (path, title, artist) for the three-column selects below.
@@ -341,7 +343,9 @@ pub fn search_albums_page(
         n + 1,
         n + 2
     );
-    query_page(conn, &count_sql, &page_sql, f.params, offset, limit, album_row)
+    query_page(
+        conn, &count_sql, &page_sql, f.params, offset, limit, album_row,
+    )
 }
 
 const ALBUM_TRACK_ORDER: &str = "t.disc_no, t.track_no, t.title, t.id";
