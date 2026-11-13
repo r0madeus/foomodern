@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import VirtualList from './VirtualList.svelte'
   import EmptyLibrary from './EmptyLibrary.svelte'
   import SearchInput from './SearchInput.svelte'
@@ -10,7 +11,7 @@
 
   const ROW = 48
   const SORTS: { value: Sort; label: string }[] = [
-    { value: 'artist', label: 'Artist' },
+    { value: 'artist', label: 'Artist' }, // labels are t() keys
     { value: 'title', label: 'Title' },
     { value: 'album', label: 'Album' },
     { value: 'added', label: 'Recently added' },
@@ -43,34 +44,34 @@
     <div class="flex items-center justify-between gap-3 px-5 pb-2">
       <div class="flex items-center gap-3">
         <label class="flex items-center gap-2 text-sm text-zinc-500">
-          Sort by
+          {t("Sort by")}
           <select
             class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             bind:value={library.sort}
           >
             {#each SORTS as s (s.value)}
-              <option value={s.value}>{s.label}</option>
+              <option value={s.value}>{t(s.label)}</option>
             {/each}
           </select>
         </label>
         {#if q !== '' && rows.total !== null}
-          <span class="text-xs text-zinc-500">{rows.total} matching</span>
+          <span class="text-xs text-zinc-500">{t('{n} matching', { n: rows.total })}</span>
         {/if}
       </div>
-      <SearchInput placeholder="Search songs, artists, albums…" />
+      <SearchInput placeholder={t("Search songs, artists, albums…")} />
     </div>
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
-      <span class="text-right">#</span><span>Title</span><span>Artist</span><span>Album</span><span class="text-right">Time</span><span></span>
+      <span class="text-right">#</span><span>{t("Title")}</span><span>{t("Artist")}</span><span>{t("Album")}</span><span class="text-right">{t("Time")}</span><span></span>
     </div>
     {#if q !== '' && rows.total === 0}
       <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p class="text-sm text-zinc-500">No songs match “{q}”.</p>
+        <p class="text-sm text-zinc-500">{t('No songs match “{q}”.', { q })}</p>
         <button
           type="button"
           class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
           onclick={() => library.setQuery('')}
         >
-          Clear search
+          {t("Clear search")}
         </button>
       </div>
     {:else}
@@ -82,16 +83,16 @@
           onRangeChange={(s, e) => rows.ensureRange(s, e)}
         >
         {#snippet row(i)}
-          {@const t = rows.get(i)}
-          {#if t}
+          {@const track = rows.get(i)}
+          {#if track}
             <div
               role="button"
               tabindex="0"
-              title={t.path}
+              title={track.path}
               class={[
                 COLS,
                 'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
-                t.path === currentPath
+                track.path === currentPath
                   ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
@@ -99,21 +100,21 @@
               onkeydown={(e) => e.key === 'Enter' && library.playAll(i)}
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
-                {#if t.path === currentPath && player.snapshot.status === 'playing'}
+                {#if track.path === currentPath && player.snapshot.status === 'playing'}
                   <span class="text-teal-600 dark:text-teal-400">▶</span>
                 {:else}{i + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">
-                <Cover cover={t.cover} title={t.title} class="size-9 shrink-0 rounded text-[10px]" />
-                <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
+                <Cover cover={track.cover} title={track.title} class="size-9 shrink-0 rounded text-[10px]" />
+                <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
               </span>
-              <span class="truncate text-zinc-500">{t.artist}</span>
-              <span class="truncate text-zinc-500">{t.album}</span>
+              <span class="truncate text-zinc-500">{track.artist}</span>
+              <span class="truncate text-zinc-500">{track.album}</span>
               <span class="text-right text-xs tabular-nums text-zinc-500">
-                {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
+                {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
               <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-                <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
+                <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
               </span>
             </div>
           {:else}

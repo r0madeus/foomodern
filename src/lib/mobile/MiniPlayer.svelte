@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
   import { player } from '../player.svelte'
@@ -20,14 +21,14 @@
     style:background={tintFrom(nowCover.color).surface}
   >
     <div class="flex h-14 items-center gap-3 pr-1 pl-2">
-      <button class="flex min-w-0 flex-1 items-center gap-3 text-left" onclick={onOpen} aria-label="Open player">
+      <button class="flex min-w-0 flex-1 items-center gap-3 text-left" onclick={onOpen} aria-label={t("Open player")}>
         <Cover cover={nowCover.cover} title={snap.current.title} class="size-10 shrink-0 rounded text-xs" />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm font-semibold text-zinc-50">{snap.current.title}</span>
-          <span class="block truncate text-xs text-zinc-400">{snap.current.artist || 'Unknown artist'}</span>
+          <span class="block truncate text-xs text-zinc-400">{snap.current.artist || t('Unknown artist')}</span>
         </span>
       </button>
-      <button class="rounded-full p-3 text-zinc-50 active:bg-white/10" aria-label={snap.status === 'playing' ? 'Pause' : 'Play'} onclick={player.togglePause}>
+      <button class="rounded-full p-3 text-zinc-50 active:bg-white/10" aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')} onclick={player.togglePause}>
         <Icon name={snap.status === 'playing' ? 'pause' : 'play'} class="size-7" />
       </button>
     </div>

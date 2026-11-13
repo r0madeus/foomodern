@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import VirtualList from './VirtualList.svelte'
   import ExtBadge from './ExtBadge.svelte'
@@ -96,7 +97,7 @@
 </script>
 
 {#if !info}
-  <div class="flex h-full items-center justify-center text-sm text-zinc-500">Playlist not found.</div>
+  <div class="flex h-full items-center justify-center text-sm text-zinc-500">{t("Playlist not found.")}</div>
 {:else}
   <div class="flex h-full flex-col">
     <div class="flex flex-wrap items-center justify-between gap-3 px-5 pb-3">
@@ -111,7 +112,7 @@
             <input
               bind:this={nameInput}
               bind:value={draft}
-              aria-label="Playlist name"
+              aria-label={t("Playlist name")}
               class="w-72 max-w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
               onkeydown={(e) => e.key === 'Escape' && (renaming = false)}
               onblur={() => renaming && void commitRename()}
@@ -121,78 +122,77 @@
           <h2 class="truncate text-lg font-semibold tracking-tight">{info.name}</h2>
         {/if}
         <p class="text-xs text-zinc-500">
-          {info.trackCount.toLocaleString()}
-          {info.trackCount === 1 ? 'track' : 'tracks'}
+          {count(info.trackCount, '{n} track', '{n} tracks')}
         </p>
       </div>
       <div class="flex items-center gap-2">
         {#if confirmingDelete}
-          <span class="text-sm text-zinc-600 dark:text-zinc-300" role="alert">Delete this playlist?</span>
+          <span class="text-sm text-zinc-600 dark:text-zinc-300" role="alert">{t("Delete this playlist?")}</span>
           <button
             class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
             onclick={remove}
           >
-            Delete
+            {t("Delete")}
           </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
             onclick={() => (confirmingDelete = false)}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         {:else}
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
             onclick={startRename}
           >
-            Rename
+            {t("Rename")}
           </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title="Save as an M3U file, e.g. to open on another device"
+            title={t("Save as an M3U file, e.g. to open on another device")}
             onclick={() => void playlists.exportM3u(info)}
           >
-            Export…
+            {t("Export…")}
           </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
             onclick={() => (confirmingDelete = true)}
           >
-            Delete
+            {t("Delete")}
           </button>
           <button
             class="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
             disabled={info.trackCount === 0}
             onclick={() => playlists.play(id, 0)}
           >
-            <Icon name="play" class="size-4" /> Play
+            <Icon name="play" class="size-4" /> {t("Play")}
           </button>
         {/if}
       </div>
     </div>
 
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
-      <span class="text-right">#</span><span>Title</span><span>Artist</span><span>Album</span><span class="text-right">Time</span><span></span>
+      <span class="text-right">#</span><span>{t("Title")}</span><span>{t("Artist")}</span><span>{t("Album")}</span><span class="text-right">{t("Time")}</span><span></span>
     </div>
 
     {#if info.trackCount === 0}
       <div class="flex flex-1 items-center justify-center px-8 text-center text-sm text-zinc-500">
-        This playlist is empty. Use the “…” button on a song or album to add tracks.
+        {t("This playlist is empty. Use the “…” button on a song or album to add tracks.")}
       </div>
     {:else}
       <VirtualList class="min-h-0 flex-1" count={visible.length} rowHeight={ROW}>
         {#snippet row(i)}
-          {@const t = visible[i]}
-          {#if t}
+          {@const track = visible[i]}
+          {#if track}
             <div
               role="button"
               tabindex="0"
               data-pl-row={i}
-              title={`${t.path}\nDouble-click or Enter to play. Alt+Up/Down moves, Delete removes.`}
+              title={t('{path}\nDouble-click or Enter to play. Alt+Up/Down moves, Delete removes.', { path: track.path })}
               class={[
                 COLS,
                 'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
-                t.path === currentPath
+                track.path === currentPath
                   ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
@@ -200,27 +200,27 @@
               onkeydown={(e) => onRowKey(e, i)}
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
-                {#if t.path === currentPath && player.snapshot.status === 'playing'}
+                {#if track.path === currentPath && player.snapshot.status === 'playing'}
                   <span class="text-teal-600 dark:text-teal-400">▶</span>
                 {:else}{i + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">
-                <Cover cover={t.cover} title={t.title} class="size-9 shrink-0 rounded text-[10px]" />
-                <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
+                <Cover cover={track.cover} title={track.title} class="size-9 shrink-0 rounded text-[10px]" />
+                <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
               </span>
-              <span class="truncate text-zinc-500">{t.artist}</span>
-              <span class="truncate text-zinc-500">{t.album}</span>
+              <span class="truncate text-zinc-500">{track.artist}</span>
+              <span class="truncate text-zinc-500">{track.album}</span>
               <span class="text-right text-xs tabular-nums text-zinc-500">
-                {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
+                {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
               <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-                <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
+                <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
                 <button
                   type="button"
                   data-action="up"
                   class={btn}
                   disabled={i === 0}
-                  aria-label={`Move “${t.title}” up`}
+                  aria-label={t('Move “{title}” up', { title: track.title })}
                   onclick={() => moveRow(i, i - 1, 'up')}
                   ondblclick={(e) => e.stopPropagation()}
                   onkeydown={(e) => e.stopPropagation()}
@@ -232,7 +232,7 @@
                   data-action="down"
                   class={btn}
                   disabled={i === visible.length - 1}
-                  aria-label={`Move “${t.title}” down`}
+                  aria-label={t('Move “{title}” down', { title: track.title })}
                   onclick={() => moveRow(i, i + 1, 'down')}
                   ondblclick={(e) => e.stopPropagation()}
                   onkeydown={(e) => e.stopPropagation()}
@@ -242,7 +242,7 @@
                 <button
                   type="button"
                   class={btn}
-                  aria-label={`Remove “${t.title}” from playlist`}
+                  aria-label={t('Remove “{title}” from playlist', { title: track.title })}
                   onclick={() => playlists.removeAt(id, [i])}
                   ondblclick={(e) => e.stopPropagation()}
                   onkeydown={(e) => e.stopPropagation()}

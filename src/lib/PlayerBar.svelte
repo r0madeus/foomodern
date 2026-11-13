@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import Cover from './Cover.svelte'
   import { nowCover } from './nowCover.svelte'
@@ -18,7 +19,7 @@
   const hasTrack = $derived(snap.current !== null)
   const progress = $derived(duration ? Math.min(100, (shown / duration) * 100) : 0)
   const repeatLabel = $derived(
-    snap.repeat === 'one' ? 'Repeat: One' : snap.repeat === 'all' ? 'Repeat: All' : 'Repeat: Off',
+    t(snap.repeat === 'one' ? 'Repeat: One' : snap.repeat === 'all' ? 'Repeat: All' : 'Repeat: Off'),
   )
 
   function commitSeek() {
@@ -45,7 +46,7 @@
         class="group flex max-w-full items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
         onclick={onToggleNowPlaying}
         aria-pressed={nowPlaying}
-        title={nowPlaying ? 'Close now playing' : 'Open now playing'}
+        title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
       >
         <span class="relative shrink-0">
           <Cover cover={nowCover.cover} title={snap.current.title} class="size-12 rounded-md text-sm shadow" />
@@ -63,7 +64,7 @@
         </span>
       </button>
     {:else}
-      <p class="text-sm text-zinc-400">Nothing playing</p>
+      <p class="text-sm text-zinc-400">{t("Nothing playing")}</p>
     {/if}
   </div>
 
@@ -78,8 +79,8 @@
         ]}
         onclick={player.toggleShuffle}
         aria-pressed={snap.shuffle}
-        aria-label={snap.shuffle ? 'Shuffle on' : 'Shuffle off'}
-        title={snap.shuffle ? 'Shuffle: On' : 'Shuffle: Off'}
+        aria-label={t(snap.shuffle ? 'Shuffle on' : 'Shuffle off')}
+        title={t(snap.shuffle ? 'Shuffle: On' : 'Shuffle: Off')}
       >
         <Icon name="shuffle" class="size-4" />
       </button>
@@ -87,7 +88,7 @@
         class="rounded-full p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
         onclick={player.previous}
         disabled={!hasTrack}
-        aria-label="Previous"
+        aria-label={t("Previous")}
       >
         <Icon name="prev" />
       </button>
@@ -95,7 +96,7 @@
         class="rounded-full bg-teal-600 p-3 text-white shadow-sm hover:bg-teal-500 disabled:opacity-40"
         onclick={player.togglePause}
         disabled={!hasTrack}
-        aria-label={snap.status === 'playing' ? 'Pause' : 'Play'}
+        aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
       >
         <Icon name={snap.status === 'playing' ? 'pause' : 'play'} />
       </button>
@@ -103,7 +104,7 @@
         class="rounded-full p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
         onclick={player.next}
         disabled={!hasTrack}
-        aria-label="Next"
+        aria-label={t("Next")}
       >
         <Icon name="next" />
       </button>
@@ -133,7 +134,7 @@
         step="0.1"
         value={shown}
         disabled={!duration}
-        aria-label="Seek"
+        aria-label={t("Seek")}
         oninput={(e) => (dragging = e.currentTarget.valueAsNumber)}
         onchange={commitSeek}
       />
@@ -151,15 +152,15 @@
       ]}
       onclick={() => lyrics.toggle()}
       aria-pressed={lyrics.open}
-      aria-label="Lyrics"
-      title="Lyrics"
+      aria-label={t("Lyrics")}
+      title={t("Lyrics")}
     >
       <Icon name="lyrics" />
     </button>
     <button
       class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
       onclick={toggleMute}
-      aria-label={snap.volume > 0 ? 'Mute' : 'Unmute'}
+      aria-label={t(snap.volume > 0 ? 'Mute' : 'Unmute')}
     >
       <Icon name={snap.volume > 0 ? 'volume' : 'mute'} />
     </button>
@@ -171,7 +172,7 @@
       max="100"
       step="1"
       value={snap.volume}
-      aria-label="Volume"
+      aria-label={t("Volume")}
       oninput={(e) => player.setVolume(e.currentTarget.valueAsNumber)}
     />
   </div>

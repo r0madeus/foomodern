@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, t } from './i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
@@ -46,7 +47,7 @@
 
 <div class="h-full overflow-y-auto px-5 pb-6">
   <button class="mb-4 rounded-lg px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800" onclick={onBack}>
-    ← Albums
+    {t("← Albums")}
   </button>
   {#if data}
     <div
@@ -55,58 +56,57 @@
     >
       <Cover cover={data.album.cover} title={data.album.title} class="size-48 shrink-0 rounded-lg text-6xl shadow-2xl shadow-black/40" />
       <div class="min-w-0">
-        <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">Album</p>
+        <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">{t("Album")}</p>
         <h2 class="mt-1 truncate text-4xl font-bold tracking-tight">{data.album.title}</h2>
         <p class="mt-2 truncate font-medium text-white/90">{data.album.albumArtist}</p>
         <p class="mt-1 text-sm text-white/60">
-          {data.album.year ? `${data.album.year} · ` : ''}{data.album.trackCount}
-          {data.album.trackCount === 1 ? 'track' : 'tracks'}
+          {data.album.year ? `${data.album.year} · ` : ''}{count(data.album.trackCount, '{n} track', '{n} tracks')}
         </p>
         <div class="mt-4 flex flex-wrap items-center gap-2">
           <button
             class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400"
             onclick={() => library.playAlbum(albumId, 0)}
           >
-            <Icon name="play" class="size-5" /> Play
+            <Icon name="play" class="size-5" /> {t("Play")}
           </button>
           <AddToPlaylist {albumId} label="Add to playlist" text class="whitespace-nowrap text-white! hover:bg-white/10!" />
           <button
             type="button"
             class="rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-white/90 outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60"
-            onclick={() => tagEditor.open(data!.tracks.map((t) => t.id), 'Edit album tags')}
+            onclick={() => tagEditor.open(data!.tracks.map((track) => track.id), t('Edit album tags'))}
           >
-            Edit tags…
+            {t("Edit tags…")}
           </button>
         </div>
       </div>
     </div>
     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
-      {#each data.tracks as t, i (t.id)}
+      {#each data.tracks as track, i (track.id)}
         <li class="group flex items-center gap-1">
           <button
             class={[
               'flex h-10 min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm',
-              t.path === currentPath
+              track.path === currentPath
                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             onclick={() => library.playAlbum(albumId, i)}
           >
-            <span class="w-8 text-right text-xs tabular-nums text-zinc-400">{t.trackNo ?? i + 1}</span>
+            <span class="w-8 text-right text-xs tabular-nums text-zinc-400">{track.trackNo ?? i + 1}</span>
             <span class="flex min-w-0 flex-1 items-center">
-              <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
+              <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
             </span>
             <span class="text-xs tabular-nums text-zinc-500">
-              {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
+              {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
             </span>
           </button>
           <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-            <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
+            <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
           </span>
         </li>
       {/each}
     </ol>
   {:else}
-    <p class="text-zinc-500">Loading…</p>
+    <p class="text-zinc-500">{t("Loading…")}</p>
   {/if}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import type { Snippet } from 'svelte'
   import Icon from '../Icon.svelte'
 
@@ -8,7 +9,7 @@
 
 {#if onBack}
   <header class="flex h-14 shrink-0 items-center gap-1 px-1">
-    <button class="rounded-full p-3 text-zinc-100 active:bg-white/10" aria-label="Back" onclick={onBack}>
+    <button class="rounded-full p-3 text-zinc-100 active:bg-white/10" aria-label={t("Back")} onclick={onBack}>
       <Icon name="back" class="size-6" />
     </button>
     <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{title}</h1>

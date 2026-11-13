@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n, t } from './lib/i18n.svelte'
   import { onMount, untrack } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import PlayerBar from './lib/PlayerBar.svelte'
@@ -33,7 +34,7 @@
   type NavView = 'songs' | 'albums' | 'queue' | 'folders'
   const NAV: NavView[] = ['songs', 'albums', 'queue', 'folders']
   const VIEWS: View[] = [...NAV, 'settings']
-  const LABELS: Record<NavView, string> = { songs: 'Songs', albums: 'Albums', queue: 'Queue', folders: 'Folders' }
+  const LABELS: Record<NavView, string> = { songs: 'Songs', albums: 'Albums', queue: 'Queue', folders: 'Folders' } // English keys, shown through t()
   const ICONS: Record<NavView, 'music' | 'album' | 'queue' | 'folder'> = { songs: 'music', albums: 'album', queue: 'queue', folders: 'folder' }
   const KEY = 'foomodern.view'
 
@@ -59,6 +60,9 @@
   })
   $effect(() => {
     document.documentElement.classList.toggle('dark', mobile)
+  })
+  $effect(() => {
+    document.documentElement.lang = i18n.lang
   })
 
   let playlistId = $state<number | null>(null)
@@ -148,7 +152,7 @@
   <div class="flex min-h-0 flex-1">
     <aside class="flex w-52 shrink-0 flex-col gap-4 border-r border-zinc-200 px-3 py-4 dark:border-zinc-800">
       <h1 class="px-2 text-lg font-semibold tracking-tight">FooModern</h1>
-      <nav aria-label="Library" class="flex flex-col gap-0.5">
+      <nav aria-label={t("Library")} class="flex flex-col gap-0.5">
         {#each NAV as v (v)}
           <button
             class={[
@@ -162,7 +166,7 @@
           >
             <span class="flex items-center gap-2.5">
               <Icon name={ICONS[v]} class="size-[18px] opacity-80" />
-              {LABELS[v]}
+              {t(LABELS[v])}
             </span>
             {#if counts[v]}
               <span class="text-xs tabular-nums text-zinc-400">{counts[v]?.toLocaleString()}</span>
@@ -173,12 +177,12 @@
 
       <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-col gap-0.5">
         <div class="flex items-center justify-between px-2">
-          <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">Playlists</h2>
+          <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
           <span class="flex items-center gap-0.5">
             <button
               class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              aria-label="Import playlist (M3U)"
-              title="Import playlist (M3U)"
+              aria-label={t("Import playlist (M3U)")}
+              title={t("Import playlist (M3U)")}
               onclick={async () => {
                 const made = await playlists.importM3u()
                 if (made) openPlaylist(made.id)
@@ -188,8 +192,8 @@
             </button>
             <button
               class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              aria-label="New playlist"
-              title="New playlist"
+              aria-label={t("New playlist")}
+              title={t("New playlist")}
               onclick={() => (creatingPlaylist = !creatingPlaylist)}
             >
               <Icon name="plus" class="size-4" />
@@ -206,8 +210,8 @@
           >
             <input
               class="w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
-              placeholder="Playlist name"
-              aria-label="New playlist name"
+              placeholder={t("Playlist name")}
+              aria-label={t("New playlist name")}
               bind:value={newPlaylistName}
               onkeydown={(e) => e.key === 'Escape' && (creatingPlaylist = false)}
               {@attach (el) => el.focus()}
@@ -232,7 +236,7 @@
             </button>
           {:else}
             {#if !creatingPlaylist}
-              <p class="px-2 text-xs text-zinc-400">No playlists yet.</p>
+              <p class="px-2 text-xs text-zinc-400">{t("No playlists yet.")}</p>
             {/if}
           {/each}
         </div>
@@ -242,7 +246,7 @@
         {#if library.scanning}
           <p class="flex items-center gap-2 px-2 text-xs text-teal-700 dark:text-teal-400" role="status">
             <span class="size-2 animate-pulse rounded-full bg-teal-500"></span>
-            Scanning{library.scan ? ` · ${library.scan.scanned.toLocaleString()}` : '…'}
+            {library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
           </p>
         {/if}
         <button
@@ -255,7 +259,7 @@
           aria-current={view === 'settings' ? 'page' : undefined}
           onclick={() => go('settings')}
         >
-          Settings
+          {t("Settings")}
         </button>
       </div>
     </aside>

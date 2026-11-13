@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { onMount } from 'svelte'
   import Icon from '../Icon.svelte'
@@ -98,7 +99,7 @@
   <main class="relative min-h-0 flex-1">
     {#if tab === 'home'}
       <div class="flex h-full flex-col">
-        <PageHeader title="Albums" />
+        <PageHeader title={t('Albums')} />
         {#if library.stats.albums === 0}
           <EmptyLibrary />
         {:else}
@@ -115,7 +116,7 @@
 
     {#if page !== null}
       <div class="absolute inset-0 flex flex-col bg-zinc-950">
-        <PageHeader title={page === 'folders' ? 'Music folders' : 'Settings'} onBack={popLayer} />
+        <PageHeader title={t(page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
         <div class="min-h-0 flex-1 overflow-y-auto">
           {#if page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
         </div>
@@ -138,14 +139,14 @@
   <div class="shrink-0 bg-gradient-to-t from-black via-black/95 to-black/0 pt-1" style:padding-bottom="var(--inset-bottom)">
     <MiniPlayer onOpen={openPlayer} />
     <nav aria-label="Main" class="grid grid-cols-4">
-      {#each TABS as t (t.id)}
+      {#each TABS as entry (entry.id)}
         <button
-          class={['flex flex-col items-center gap-1 pt-2 pb-2.5 text-[11px]', tab === t.id ? 'text-white' : 'text-zinc-400']}
-          aria-current={tab === t.id ? 'page' : undefined}
-          onclick={() => selectTab(t.id)}
+          class={['flex flex-col items-center gap-1 pt-2 pb-2.5 text-[11px]', tab === entry.id ? 'text-white' : 'text-zinc-400']}
+          aria-current={tab === entry.id ? 'page' : undefined}
+          onclick={() => selectTab(entry.id)}
         >
-          <Icon name={t.icon} class="size-6" />
-          {t.label}
+          <Icon name={entry.icon} class="size-6" />
+          {t(entry.label)}
         </button>
       {/each}
     </nav>

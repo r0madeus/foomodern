@@ -1,3 +1,4 @@
+import { t } from './i18n.svelte'
 // Tag editor state on the UI side. Rust reads and writes the tags
 // (AGENTS.md rule 1); this module only remembers which tracks to edit.
 
@@ -40,7 +41,7 @@ class TagEditorState {
   /** The tracks being edited; null when the dialog is closed. */
   request = $state<{ trackIds: number[]; heading: string } | null>(null)
 
-  open(trackIds: number[], heading = 'Edit tags'): void {
+  open(trackIds: number[], heading = t('Edit tags')): void {
     if (trackIds.length === 0) return
     this.request = { trackIds: [...trackIds], heading }
   }

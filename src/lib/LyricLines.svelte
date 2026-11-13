@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import { untrack } from 'svelte'
   import { lyrics, findActiveIndex } from './lyrics.svelte'
   import { player } from './player.svelte'
@@ -73,15 +74,15 @@
     bind:this={box}
     class="relative h-full overflow-y-auto overscroll-contain"
     role="region"
-    aria-label="Lyrics"
+    aria-label={t("Lyrics")}
     {@attach watchManualScroll}
   >
     {#if !res && lyrics.loading}
-      <p class="py-6 text-base font-semibold" style:color={dim}>Looking for lyrics…</p>
+      <p class="py-6 text-base font-semibold" style:color={dim}>{t("Looking for lyrics…")}</p>
     {:else if !res || res.kind === 'notFound'}
-      <p class="py-6 text-base font-semibold" style:color={dim}>No lyrics for this song.</p>
+      <p class="py-6 text-base font-semibold" style:color={dim}>{t("No lyrics for this song.")}</p>
     {:else if res.kind === 'instrumental'}
-      <p class="py-6 text-base font-semibold" style:color={dim}>♪ Instrumental</p>
+      <p class="py-6 text-base font-semibold" style:color={dim}>{t("♪ Instrumental")}</p>
     {:else if res.kind === 'plain'}
       <div class={['pb-8 font-bold', big ? 'space-y-4 text-[26px] leading-snug' : 'space-y-3 text-[22px] leading-snug']}>
         {#each res.lines as line, i (i)}
@@ -116,7 +117,7 @@
       class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg"
       onclick={resume}
     >
-      Back to current line
+      {t("Back to current line")}
     </button>
   {/if}
 </div>

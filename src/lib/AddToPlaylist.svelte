@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
   import { playlists, type PlaylistInfo } from './playlists.svelte'
@@ -72,7 +73,7 @@
 
   function editTagsOfTracks() {
     close()
-    tagEditor.open(trackIds, trackIds.length === 1 ? 'Edit tags' : `Edit tags of ${trackIds.length} tracks`)
+    tagEditor.open(trackIds, trackIds.length === 1 ? t('Edit tags') : t('Edit tags of {n} tracks', { n: trackIds.length }))
   }
 
   async function startCreate() {
@@ -88,7 +89,7 @@
     close(true)
     if (!made) return
     if (albumId !== null) await playlists.addAlbum(made, albumId)
-    else playlists.flash(`Added ${trackIds.length.toLocaleString()} ${trackIds.length === 1 ? 'track' : 'tracks'} to new playlist “${made.name}”`)
+    else playlists.flash(t('Added {count} to new playlist “{name}”', { count: count(trackIds.length, '{n} track', '{n} tracks'), name: made.name }))
   }
 
   function onMenuKey(e: KeyboardEvent) {
@@ -144,8 +145,8 @@
     'outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
     className,
   ]}
-  aria-label={text ? undefined : label}
-  title={label}
+  aria-label={text ? undefined : t(label)}
+  title={t(label)}
   aria-haspopup="menu"
   aria-expanded={open}
   onclick={(e) => {
@@ -157,7 +158,7 @@
   onkeydown={stop}
 >
   <Icon name={text ? 'plus' : 'more'} class="size-4" />
-  {#if text}{label}{/if}
+  {#if text}{t(label)}{/if}
 </button>
 
 {#if open}
@@ -165,7 +166,7 @@
     use:portal
     bind:this={menu}
     role="menu"
-    aria-label={label}
+    aria-label={t(label)}
     tabindex="-1"
     onkeydown={onMenuKey}
     class="fixed z-50 flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 text-sm text-zinc-800 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -185,26 +186,26 @@
       >
         <input
           class="rounded-md border border-zinc-200 bg-white px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950"
-          placeholder="Playlist name"
-          aria-label="New playlist name"
+          placeholder={t("Playlist name")}
+          aria-label={t("New playlist name")}
           bind:value={name}
         />
         <div class="flex justify-end gap-2">
           <button type="button" class="rounded-md px-2 py-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" onclick={() => close(true)}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="submit"
             class="rounded-md bg-teal-600 px-2 py-1 font-medium text-white hover:bg-teal-500 disabled:opacity-50"
             disabled={name.trim() === ''}
           >
-            Create
+            {t("Create")}
           </button>
         </div>
       </form>
     {:else}
       <p class="px-3 pt-1 pb-0.5 text-xs font-medium uppercase tracking-wide text-zinc-400" aria-hidden="true">
-        Add to playlist
+        {t("Add to playlist")}
       </p>
       <div class="min-h-0 overflow-y-auto">
         {#each playlists.list as p (p.id)}
@@ -218,7 +219,7 @@
             <span class="text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
           </button>
         {:else}
-          <p class="px-3 py-1.5 text-xs text-zinc-500">No playlists yet.</p>
+          <p class="px-3 py-1.5 text-xs text-zinc-500">{t("No playlists yet.")}</p>
         {/each}
       </div>
       <button
@@ -227,7 +228,7 @@
         class="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-left text-teal-700 outline-none hover:bg-zinc-100 focus-visible:bg-zinc-100 dark:border-zinc-800 dark:text-teal-300 dark:hover:bg-zinc-800 dark:focus-visible:bg-zinc-800"
         onclick={startCreate}
       >
-        <Icon name="plus" class="size-4" /> New playlist…
+        <Icon name="plus" class="size-4" /> {t("New playlist…")}
       </button>
       {#if editTags && trackIds.length > 0}
         <button
@@ -236,7 +237,7 @@
           class="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-left outline-none hover:bg-zinc-100 focus-visible:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:focus-visible:bg-zinc-800"
           onclick={editTagsOfTracks}
         >
-          Edit tags…
+          {t("Edit tags…")}
         </button>
       {/if}
     {/if}

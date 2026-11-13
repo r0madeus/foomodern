@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import { player } from './player.svelte'
 
@@ -33,7 +34,7 @@
       <button
         class="invisible rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 group-hover:visible dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
         onclick={() => player.removeIndex(i)}
-        aria-label="Remove from queue"
+        aria-label={t("Remove from queue")}
       >
         <Icon name="close" class="size-4" />
       </button>
