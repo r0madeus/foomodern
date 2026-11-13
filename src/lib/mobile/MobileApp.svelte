@@ -16,6 +16,8 @@
   import MiniPlayer from './MiniPlayer.svelte'
   import NowPlaying from './NowPlaying.svelte'
   import QueueSheet from './QueueSheet.svelte'
+  import UpdateBanner from '../UpdateBanner.svelte'
+  import { updates } from '../updates.svelte'
   import { pushLayer, popLayer, clearLayers } from './layers'
   import { player } from '../player.svelte'
   import { library } from '../library.svelte'
@@ -84,6 +86,9 @@
 </script>
 
 <div class="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-50" style:padding-top="var(--inset-top)">
+  {#if updates.available}
+    <div class="mx-3 mt-2 shrink-0"><UpdateBanner /></div>
+  {/if}
   {#if player.error}
     <button class="mx-3 mt-2 shrink-0 rounded-lg bg-red-950/80 px-3 py-2 text-left text-sm text-red-200" onclick={() => (player.error = null)}>
       {player.error}

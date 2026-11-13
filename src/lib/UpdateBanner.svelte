@@ -1,0 +1,19 @@
+<script lang="ts">
+  import Icon from './Icon.svelte'
+  import { updates } from './updates.svelte'
+</script>
+
+{#if updates.available}
+  <div
+    role="status"
+    class="flex items-center gap-3 rounded-lg bg-teal-600 px-3 py-2 text-sm text-white shadow-sm dark:bg-teal-700"
+  >
+    <span class="min-w-0 flex-1">FooModern {updates.available.version} is available.</span>
+    <button class="shrink-0 rounded-md bg-white/15 px-2.5 py-1 font-medium hover:bg-white/25" onclick={() => void updates.open()}>
+      Download
+    </button>
+    <button class="-mr-1 shrink-0 rounded-md p-1 hover:bg-white/15" aria-label="Dismiss" onclick={() => updates.dismiss()}>
+      <Icon name="close" class="size-4" />
+    </button>
+  </div>
+{/if}

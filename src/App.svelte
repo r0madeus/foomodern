@@ -18,6 +18,8 @@
   import { appSettings } from './lib/appSettings.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
   import NowPlayingView from './lib/NowPlayingView.svelte'
+  import UpdateBanner from './lib/UpdateBanner.svelte'
+  import { updates } from './lib/updates.svelte'
   import { nowCover } from './lib/nowCover.svelte'
 
   const AUDIO_EXTENSIONS = [
@@ -106,6 +108,7 @@
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
     void appSettings.load()
+    updates.autoCheck()
   })
 
   // The full-screen player (desktop "now playing", or the phone UI) shows
@@ -245,6 +248,9 @@
     </aside>
 
     <div class="relative flex min-w-0 flex-1 flex-col pt-4">
+      {#if updates.available}
+        <div class="mx-5 mb-2"><UpdateBanner /></div>
+      {/if}
       {#if player.error}
         <p class="mx-5 mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300">
           {player.error}

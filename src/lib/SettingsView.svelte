@@ -3,7 +3,9 @@
   import { getVersion } from '@tauri-apps/api/app'
   import { player, type ReplayGain } from './player.svelte'
   import { prefs } from './prefs.svelte'
+  import { invoke } from '@tauri-apps/api/core'
   import { appSettings } from './appSettings.svelte'
+  import { updates } from './updates.svelte'
 
   const MODES: { value: ReplayGain; label: string }[] = [
     { value: 'off', label: 'Off' },
@@ -12,8 +14,25 @@
   ]
 
   let version = $state<string | null>(null)
+  let logDir = $state<string | null>(null)
+  let copied = $state(false)
+
+  async function copyLogDir() {
+    if (!logDir) return
+    try {
+      await navigator.clipboard.writeText(logDir)
+      copied = true
+      setTimeout(() => (copied = false), 1500)
+    } catch {
+      // clipboard unavailable: the path is still selectable
+    }
+  }
+
   onMount(() => {
     void appSettings.load()
+    invoke<string>('app_log_dir')
+      .then((d) => (logDir = d))
+      .catch(() => (logDir = null))
     getVersion()
       .then((v) => (version = v))
       .catch(() => (version = null))
@@ -111,10 +130,36 @@
 
     <section aria-labelledby="set-about" class="flex flex-col gap-3">
       <h3 id="set-about" class="text-xs font-medium uppercase tracking-wide text-zinc-400">About</h3>
-      <p class="text-sm">
-        <span class="font-medium">FooModern</span>
-        <span class="text-zinc-500">{version ? ` · version ${version}` : ''}</span>
-      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <p class="text-sm">
+          <span class="font-medium">FooModern</span>
+          <span class="text-zinc-500">{version ? ` · version ${version}` : ''}</span>
+        </p>
+        <button
+          class="rounded-lg px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
+          disabled={updates.checking}
+          onclick={() => void updates.check(true)}
+        >
+          {updates.checking ? 'Checking…' : 'Check for updates'}
+        </button>
+        <span class="text-sm text-zinc-500" role="status">
+          {#if updates.status === 'upToDate'}You have the latest version.
+          {:else if updates.status === 'failed'}Could not reach GitHub.
+          {:else if updates.status === 'found' && updates.available}Version {updates.available.version} is available.{/if}
+        </span>
+      </div>
+      {#if logDir}
+        <div class="text-sm">
+          <p class="font-medium">Log files</p>
+          <p class="mt-0.5 text-zinc-500">Attach these when reporting a problem.</p>
+          <div class="mt-1.5 flex items-center gap-2">
+            <code class="min-w-0 flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-xs select-all dark:bg-zinc-800" title={logDir}>{logDir}</code>
+            <button class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-zinc-200/70 dark:hover:bg-zinc-800" onclick={copyLogDir}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      {/if}
     </section>
   </div>
 </div>

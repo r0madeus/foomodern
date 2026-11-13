@@ -139,6 +139,37 @@ pub fn library_track_cover(lib: State<'_, Arc<Library>>, path: String) -> Res<Op
     le(lib.track_cover(&path))
 }
 
+/// The latest GitHub release if it is newer than this build.
+#[tauri::command]
+pub async fn app_check_update(app: tauri::AppHandle) -> Res<Option<crate::update::UpdateInfo>> {
+    let current = app.package_info().version.to_string();
+    crate::update::check(&current)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Opens a release page of this project in the browser.
+#[tauri::command]
+pub fn app_open_release(app: tauri::AppHandle, url: String) -> Res<()> {
+    use tauri_plugin_opener::OpenerExt;
+    if !url.starts_with(crate::update::RELEASES_PREFIX) {
+        return Err("not a FooModern release page".into());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Folder holding the log files (shown in Settings for bug reports).
+#[tauri::command]
+pub fn app_log_dir(app: tauri::AppHandle) -> Res<String> {
+    use tauri::Manager;
+    app.path()
+        .app_log_dir()
+        .map(|p| p.display().to_string())
+        .map_err(|e| e.to_string())
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct WindowInsets {
     top: f64,
