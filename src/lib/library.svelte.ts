@@ -1,0 +1,188 @@
+// Library state on the UI side. Rust owns the library (AGENTS.md rule 1);
+// this module mirrors stats/folders and caches pages of rows.
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { open } from '@tauri-apps/plugin-dialog'
+import { player, type PlayerSnapshot } from './player.svelte'
+
+export type Sort = 'artist' | 'title' | 'album' | 'added'
+
+export interface FolderInfo {
+  id: number
+  path: string
+}
+
+export interface TrackRow {
+  id: number
+  title: string
+  artist: string
+  album: string
+  albumId: number | null
+  trackNo: number | null
+  discNo: number | null
+  year: number | null
+  durationMs: number | null
+  path: string
+}
+
+export interface AlbumRow {
+  id: number
+  title: string
+  albumArtist: string
+  year: number | null
+  trackCount: number
+  cover: string | null
+}
+
+export interface LibraryStats {
+  tracks: number
+  albums: number
+  version: number
+  scanning: boolean
+}
+
+interface ScanPayload {
+  folder: string
+  scanned: number
+  done: boolean
+}
+
+export const PAGE_SIZE = 200
+
+/**
+ * Lazily fetched rows. `get(i)` returns the row or `undefined` (render a
+ * skeleton) and starts fetching the page that holds it. Create a new
+ * instance when the data set changes (new version or sort).
+ */
+export class PagedRows<T> {
+  /** Bumped whenever a page arrives so readers of `get` re-run. */
+  #revision = $state(0)
+  #pages = new Map<number, T[]>()
+  #inflight = new Map<number, Promise<void>>()
+  #fetcher: (offset: number, limit: number) => Promise<T[]>
+  #dead = false
+
+  constructor(fetcher: (offset: number, limit: number) => Promise<T[]>) {
+    this.#fetcher = fetcher
+  }
+
+  get(index: number): T | undefined {
+    void this.#revision
+    const page = Math.floor(index / PAGE_SIZE)
+    const rows = this.#pages.get(page)
+    if (rows) return rows[index - page * PAGE_SIZE]
+    void this.#load(page)
+    return undefined
+  }
+
+  /** Prefetch the pages covering [start, end). */
+  ensureRange(start: number, end: number): void {
+    if (end <= start) return
+    for (let p = Math.floor(start / PAGE_SIZE); p <= Math.floor((end - 1) / PAGE_SIZE); p++) {
+      if (!this.#pages.has(p)) void this.#load(p)
+    }
+  }
+
+  dispose(): void {
+    this.#dead = true
+  }
+
+  #load(page: number): Promise<void> {
+    const existing = this.#inflight.get(page)
+    if (existing) return existing
+    const job = this.#fetcher(page * PAGE_SIZE, PAGE_SIZE)
+      .then((rows) => {
+        if (this.#dead) return
+        this.#pages.set(page, rows)
+        this.#revision++
+      })
+      .catch((e) => {
+        player.error = String(e)
+      })
+      .finally(() => this.#inflight.delete(page))
+    this.#inflight.set(page, job)
+    return job
+  }
+}
+
+class LibraryStore {
+  stats = $state<LibraryStats>({ tracks: 0, albums: 0, version: 0, scanning: false })
+  folders = $state<FolderInfo[]>([])
+  scan = $state<{ folder: string; scanned: number } | null>(null)
+  sort = $state<Sort>('artist')
+
+  scanning = $derived(this.stats.scanning || this.scan !== null)
+
+  async init(): Promise<void> {
+    await listen<ScanPayload>('library://scan', (e) => {
+      const { folder, scanned, done } = e.payload
+      this.scan = done ? null : { folder, scanned }
+      if (done) void this.refresh()
+    })
+    await listen<number>('library://changed', () => void this.refresh())
+    await this.refresh()
+  }
+
+  async refresh(): Promise<void> {
+    try {
+      const [stats, folders] = await Promise.all([
+        invoke<LibraryStats>('library_stats'),
+        invoke<FolderInfo[]>('library_folders'),
+      ])
+      this.stats = stats
+      this.folders = folders
+    } catch (e) {
+      player.error = String(e)
+    }
+  }
+
+  async addFolder(): Promise<void> {
+    try {
+      const path = await open({ directory: true, multiple: false })
+      if (!path) return
+      this.folders = await invoke<FolderInfo[]>('library_add_folder', { path })
+    } catch (e) {
+      player.error = String(e)
+    }
+  }
+
+  async removeFolder(id: number): Promise<void> {
+    try {
+      this.folders = await invoke<FolderInfo[]>('library_remove_folder', { id })
+    } catch (e) {
+      player.error = String(e)
+    }
+  }
+
+  async rescan(): Promise<void> {
+    try {
+      await invoke('library_rescan')
+    } catch (e) {
+      player.error = String(e)
+    }
+  }
+
+  async playAlbum(albumId: number, startIndex: number): Promise<void> {
+    await this.#play('library_play_album', { albumId, startIndex })
+  }
+
+  async playAll(startIndex: number): Promise<void> {
+    await this.#play('library_play_all', { sort: this.sort, startIndex })
+  }
+
+  tracksPage = (sort: Sort) => (offset: number, limit: number) =>
+    invoke<TrackRow[]>('library_tracks_page', { offset, limit, sort })
+
+  albumsPage = (offset: number, limit: number) =>
+    invoke<AlbumRow[]>('library_albums_page', { offset, limit })
+
+  async #play(command: string, args: Record<string, unknown>): Promise<void> {
+    try {
+      player.applySnapshot(await invoke<PlayerSnapshot>(command, args))
+    } catch (e) {
+      player.error = String(e)
+    }
+  }
+}
+
+export const library = new LibraryStore()

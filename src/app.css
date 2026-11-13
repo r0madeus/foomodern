@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  user-select: none;
+}
+
+/* Range inputs used for seek and volume. --progress is set inline. */
+input.seek {
+  appearance: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--color-teal-600) var(--progress, 0%),
+    var(--color-zinc-300) var(--progress, 0%)
+  );
+}
+input.seek:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (prefers-color-scheme: dark) {
+  input.seek {
+    background: linear-gradient(
+      to right,
+      var(--color-teal-500) var(--progress, 0%),
+      var(--color-zinc-700) var(--progress, 0%)
+    );
+  }
+}
+input.seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: white;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.2), 0 1px 2px rgb(0 0 0 / 0.3);
+}
