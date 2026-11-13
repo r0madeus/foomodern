@@ -59,7 +59,7 @@
           {t('{n} matching', { n: rows.total })}
         {/if}
       </div>
-      <SearchInput placeholder={t("Search albums, artists, songs…")} />
+      <SearchInput placeholder={t("Filter albums, artists, songs…")} />
     </div>
     {#if q !== '' && rows.total === 0}
       <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">

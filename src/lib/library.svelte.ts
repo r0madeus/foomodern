@@ -233,6 +233,14 @@ class LibraryStore {
     })
   }
 
+  async playQuery(query: string, startIndex: number): Promise<void> {
+    await this.#play('library_play_all', {
+      sort: this.sort,
+      startIndex,
+      query: query === '' ? null : query,
+    })
+  }
+
   tracksPage = (sort: Sort, query: string) => (offset: number, limit: number) =>
     invoke<Page<TrackRow>>('library_tracks_page', {
       offset,

@@ -58,7 +58,7 @@
           <span class="text-xs text-zinc-500">{t('{n} matching', { n: rows.total })}</span>
         {/if}
       </div>
-      <SearchInput placeholder={t("Search songs, artists, albums…")} />
+      <SearchInput placeholder={t("Filter songs, artists, albums…")} />
     </div>
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
       <span class="text-right">#</span><span>{t("Title")}</span><span>{t("Artist")}</span><span>{t("Album")}</span><span class="text-right">{t("Time")}</span><span></span>

@@ -3,6 +3,7 @@
 // `online://downloads` events and sends commands back.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import type { AlbumRow, TrackRow } from './library.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
 
 export interface OnlineStatus {
@@ -69,6 +70,7 @@ export interface DownloadJob {
 class OnlineStore {
   status = $state<OnlineStatus | null>(null)
   query = $state('')
+  searchedQuery = $state('')
   searching = $state(false)
   searchError = $state<string | null>(null)
   results = $state<SearchResults | null>(null)
@@ -139,6 +141,7 @@ class OnlineStore {
       return
     }
     const seq = ++this.#searchSeq
+    this.searchedQuery = q
     this.searching = true
     this.searchError = null
     this.closeAlbum()
@@ -161,6 +164,7 @@ class OnlineStore {
   clearSearch(): void {
     this.#searchSeq++
     this.query = ''
+    this.searchedQuery = ''
     this.searching = false
     this.searchError = null
     this.results = null
@@ -259,3 +263,37 @@ class OnlineStore {
 }
 
 export const online = new OnlineStore()
+
+function normMatch(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+export function isAlbumInLibrary(
+  album: { title: string; artist: string },
+  localAlbums: AlbumRow[],
+): boolean {
+  const title = normMatch(album.title)
+  const artist = normMatch(album.artist)
+  if (!title) return false
+  return localAlbums.some((a) => {
+    if (normMatch(a.title) !== title) return false
+    if (!artist) return true
+    const localArtist = normMatch(a.albumArtist)
+    return !localArtist || localArtist.includes(artist) || artist.includes(localArtist)
+  })
+}
+
+export function isTrackInLibrary(
+  track: { title: string; artist: string },
+  localTracks: TrackRow[],
+): boolean {
+  const title = normMatch(track.title)
+  const artist = normMatch(track.artist)
+  if (!title) return false
+  return localTracks.some((t) => {
+    if (normMatch(t.title) !== title) return false
+    if (!artist) return true
+    const localArtist = normMatch(t.artist)
+    return !localArtist || localArtist.includes(artist) || artist.includes(localArtist)
+  })
+}

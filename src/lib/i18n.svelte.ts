@@ -329,4 +329,23 @@ const TR: Record<string, string> = {
   Unpin: 'Sabitlemeyi kaldır',
   'Pin “{title}”': '“{title}” öğesini sabitle',
   'Unpin “{title}”': '“{title}” sabitlemesini kaldır',
+
+  // Unified search & filters
+  'Filter…': 'Filtrele…',
+  'Filter library': 'Kütüphaneyi filtrele',
+  'Filter songs, artists, albums…': 'Şarkı, sanatçı, albüm filtrele…',
+  'Filter albums, artists, songs…': 'Albüm, sanatçı, şarkı filtrele…',
+  'Search your library & online (Enter for online)…':
+    'Kütüphanede ve internette ara (çevrimiçi için Enter)…',
+  'Search library and online': 'Kütüphanede ve internette ara',
+  'Online search': 'İnternette ara',
+  'Type to search your local library immediately, or press Enter to search, stream, and download online.':
+    'Kütüphanende anında aramak için yaz; internette arama, dinleme ve indirme için Enter’a bas.',
+  'In your library': 'Kütüphanende',
+  'No matches in your library.': 'Kütüphanende eşleşme yok.',
+  Online: 'Çevrimiçi',
+  'Searching online…': 'İnternette aranıyor…',
+  'No online results for “{q}”.': '“{q}” için çevrimiçi sonuç yok.',
+  'In library': 'Kütüphanede',
+  'Press Enter to search online for “{q}”.': '“{q}” için internette aramak üzere Enter’a bas.',
 }

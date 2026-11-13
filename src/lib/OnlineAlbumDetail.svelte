@@ -3,8 +3,15 @@
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
   import { count, t } from './i18n.svelte'
+  import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import type { Rgb } from './nowCover.svelte'
-  import { online, type OnlineAlbum, type OnlineTrack } from './online.svelte'
+  import {
+    isAlbumInLibrary,
+    isTrackInLibrary,
+    online,
+    type OnlineAlbum,
+    type OnlineTrack,
+  } from './online.svelte'
   import { formatTime, player } from './player.svelte'
   import { tintFrom } from './tint'
 
@@ -14,6 +21,34 @@
   const tracks = $derived(online.albumDetail?.tracks ?? [])
   const ytdlpAvailable = $derived(online.status?.ytdlpAvailable ?? false)
   const albumJob = $derived(online.jobFor('album', activeAlbum.title, activeAlbum.artist))
+
+  let localAlbums = $state<AlbumRow[]>([])
+  let localTracks = $state<TrackRow[]>([])
+  $effect(() => {
+    void library.stats.version
+    const title = activeAlbum.title.trim()
+    if (!title) {
+      localAlbums = []
+      localTracks = []
+      return
+    }
+    let stale = false
+    Promise.all([
+      library.albumsPage(title)(0, 20),
+      library.tracksPage('title', title)(0, 200),
+    ])
+      .then(([albs, trs]) => {
+        if (stale) return
+        localAlbums = albs.items
+        localTracks = trs.items
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  })
+
+  const albumInLibrary = $derived(isAlbumInLibrary(activeAlbum, localAlbums))
 
   // Tint the Spotify-style album hero using the locally cached cover image.
   let color = $state<Rgb | null>(null)
@@ -109,6 +144,12 @@
             {t('Download album')}
           {/if}
         </button>
+
+        {#if albumInLibrary && albumJob?.state !== 'done'}
+          <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white/90">
+            {t('In library')}
+          </span>
+        {/if}
       </div>
     </div>
   </div>
@@ -132,6 +173,7 @@
     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
       {#each tracks as track, i (track.id)}
         {@const job = trackJob(track)}
+        {@const inLib = isTrackInLibrary(track, localTracks)}
         {@const isCurrent =
           online.playingId === track.id ||
           (player.snapshot.current?.title === track.title &&
@@ -160,6 +202,10 @@
             </div>
             {#if online.playingId === track.id}
               <span class="text-xs text-teal-600 dark:text-teal-400">{t('Loading…')}</span>
+            {:else if inLib && job?.state !== 'done'}
+              <span class="rounded-full bg-zinc-200/80 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                {t('In library')}
+              </span>
             {/if}
             <span class="text-xs tabular-nums text-zinc-500">
               {formatTime(track.durationSeconds)}

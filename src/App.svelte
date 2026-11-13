@@ -1,6 +1,6 @@
 <script lang="ts">
   import { count, i18n, t } from './lib/i18n.svelte'
-  import { onMount, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import Cover from './lib/Cover.svelte'
   import PlayerBar from './lib/PlayerBar.svelte'
@@ -182,7 +182,22 @@
     if (append) await player.appendFiles(picked)
     else await player.openFiles(picked)
   }
+
+  async function onGlobalKey(e: KeyboardEvent) {
+    if (mobile) return
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault()
+      online.closeAlbum()
+      go('search')
+      await tick()
+      const input = document.getElementById('global-search-input') as HTMLInputElement | null
+      input?.focus()
+      input?.select()
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onGlobalKey} />
 
 {#if mobile}
   <MobileApp />
@@ -403,7 +418,10 @@
         {:else if view === 'albums'}
           <AlbumsView {selectedAlbumId} onSelectAlbum={(id) => (selectedAlbumId = id)} />
         {:else if view === 'search'}
-          <SearchView onOpenSettings={() => go('settings')} />
+          <SearchView
+            onOpenSettings={() => go('settings')}
+            onOpenLocalAlbum={(id) => openAlbum(id)}
+          />
         {:else if view === 'queue'}
           <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
         {:else if view === 'playlist' && playlistId !== null}

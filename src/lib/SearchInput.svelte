@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { library } from './library.svelte'
 
-  let { placeholder = 'Search…' }: { placeholder?: string } = $props()
+  let { placeholder = 'Filter…' }: { placeholder?: string } = $props()
 </script>
 
 <div class="relative w-64 max-w-full">
@@ -16,7 +16,7 @@
     class="w-full rounded-md border border-zinc-200 bg-white py-1 pr-7 pl-8 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-teal-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     value={library.query}
     placeholder={t(placeholder)}
-    aria-label={t("Search library")}
+    aria-label={t("Filter library")}
     oninput={(e) => library.setQuery(e.currentTarget.value)}
     onkeydown={(e) => {
       if (e.key === 'Escape' && library.query !== '') {
