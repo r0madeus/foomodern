@@ -8,7 +8,6 @@
   import SongsView from './lib/SongsView.svelte'
   import AlbumsView from './lib/AlbumsView.svelte'
   import QueueView from './lib/QueueView.svelte'
-  import FoldersView from './lib/FoldersView.svelte'
   import SearchView from './lib/SearchView.svelte'
   import SettingsView from './lib/SettingsView.svelte'
   import PlaylistView from './lib/PlaylistView.svelte'
@@ -32,23 +31,21 @@
     'wma', 'aif', 'aiff', 'dsf', 'dff', 'mka', 'mpc', 'tta', 'alac',
   ]
 
-  type View = 'songs' | 'albums' | 'search' | 'queue' | 'folders' | 'settings' | 'playlist'
+  type View = 'songs' | 'albums' | 'search' | 'queue' | 'settings' | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
   // section, Queue is toggled from the bottom bar, and Settings sits at the bottom.
-  type NavView = 'songs' | 'albums' | 'search' | 'folders'
-  const NAV: NavView[] = ['songs', 'albums', 'search', 'folders']
+  type NavView = 'songs' | 'albums' | 'search'
+  const NAV: NavView[] = ['songs', 'albums', 'search']
   const VIEWS: View[] = [...NAV, 'queue', 'settings']
   const LABELS: Record<NavView, string> = {
     songs: 'Songs',
     albums: 'Albums',
     search: 'Search',
-    folders: 'Folders',
   } // English keys, shown through t()
-  const ICONS: Record<NavView, 'music' | 'album' | 'search' | 'folder'> = {
+  const ICONS: Record<NavView, 'music' | 'album' | 'search'> = {
     songs: 'music',
     albums: 'album',
     search: 'search',
-    folders: 'folder',
   }
   const KEY = 'foomodern.view'
 
@@ -144,7 +141,6 @@
     songs: library.stats.tracks,
     albums: library.stats.albums,
     search: null,
-    folders: library.folders.length,
   })
 
   onMount(() => {
@@ -412,10 +408,8 @@
           <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
         {:else if view === 'playlist' && playlistId !== null}
           <PlaylistView id={playlistId} onDeleted={() => go('songs')} />
-        {:else if view === 'settings'}
-          <SettingsView />
         {:else}
-          <div class="h-full overflow-y-auto"><FoldersView /></div>
+          <SettingsView />
         {/if}
       </main>
       {#if playlists.notice}

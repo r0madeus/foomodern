@@ -7,6 +7,7 @@
   import { prefs } from './prefs.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { appSettings } from './appSettings.svelte'
+  import FoldersView from './FoldersView.svelte'
   import { online } from './online.svelte'
   import { updates } from './updates.svelte'
 
@@ -147,6 +148,9 @@
           bind:checked={prefs.showExtensions}
         />
       </label>
+      <div class="mt-1 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/70">
+        <FoldersView embedded />
+      </div>
     </section>
 
     {#if appSettings.platform === 'android'}

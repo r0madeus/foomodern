@@ -1,12 +1,18 @@
 <script lang="ts">
-  import { t } from './i18n.svelte'
+  import { count, t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import { library } from './library.svelte'
+
+  let { embedded = false }: { embedded?: boolean } = $props()
 </script>
 
-<div class="mx-auto max-w-2xl px-5 pb-6">
-  <div class="mb-4 flex items-center justify-between gap-3">
-    <h2 class="text-lg font-semibold tracking-tight">{t("Music folders")}</h2>
+<div class={embedded ? '' : 'mx-auto max-w-2xl px-5 pb-6'}>
+  <div class="mb-3 flex items-center justify-between gap-3">
+    {#if embedded}
+      <p class="text-sm font-medium">{t("Music folders")}</p>
+    {:else}
+      <h2 class="text-lg font-semibold tracking-tight">{t("Music folders")}</h2>
+    {/if}
     <div class="flex gap-2">
       <button
         class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -51,7 +57,7 @@
       {/each}
     </ul>
   {/if}
-  <p class="mt-4 text-xs text-zinc-400">
-    {library.stats.tracks.toLocaleString()} tracks · {library.stats.albums.toLocaleString()} albums
+  <p class="mt-3 text-xs text-zinc-400">
+    {count(library.stats.tracks, '{n} track', '{n} tracks')} · {count(library.stats.albums, '{n} album', '{n} albums')}
   </p>
 </div>
