@@ -14,6 +14,22 @@
   ]
 
   let version = $state<string | null>(null)
+  // Android: "all files access", needed to write tags and to read or write
+  // .lrc files next to songs. Re-checked when the app comes back from the
+  // system settings screen.
+  let fileAccess = $state<boolean | null>(null)
+  function checkFileAccess() {
+    invoke<boolean>('app_file_access')
+      .then((g) => (fileAccess = g))
+      .catch(() => (fileAccess = null))
+  }
+  $effect(() => {
+    if (appSettings.platform !== 'android') return
+    checkFileAccess()
+    const onVisible = () => document.visibilityState === 'visible' && checkFileAccess()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  })
   let logDir = $state<string | null>(null)
   let copied = $state(false)
 
@@ -98,6 +114,30 @@
         />
       </label>
     </section>
+
+    {#if appSettings.platform === 'android'}
+      <section aria-labelledby="set-storage" class="flex flex-col gap-3">
+        <h3 id="set-storage" class="text-xs font-medium uppercase tracking-wide text-zinc-400">Storage</h3>
+        <div class="flex items-start justify-between gap-4">
+          <span class="min-w-0 text-sm">
+            <span class="block font-medium">Access to all files</span>
+            <span class="block text-zinc-500">
+              Needed to edit tags and to attach .lrc lyrics next to your songs. Playing music works without it.
+            </span>
+          </span>
+          {#if fileAccess}
+            <span class="shrink-0 text-sm font-medium text-teal-600 dark:text-teal-400">Allowed</span>
+          {:else}
+            <button
+              class="shrink-0 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500"
+              onclick={() => void invoke('app_request_file_access').catch((e) => (player.error = String(e)))}
+            >
+              Allow
+            </button>
+          {/if}
+        </div>
+      </section>
+    {/if}
 
     {#if appSettings.platform !== 'android'}
     <section aria-labelledby="set-window" class="flex flex-col gap-3">

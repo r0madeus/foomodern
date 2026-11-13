@@ -224,39 +224,108 @@ pub async fn library_cover_color(app: tauri::AppHandle, cover: String) -> Res<Op
     .map_err(|e| e.to_string())?
 }
 
-/// Android has no folder picker for plain file paths: ask for read access to
-/// the music library and return the shared Music folder to add.
+// ---------------------------------------------------------------------
+// Android-only helpers (system pickers, permissions). On desktop they
+// report "not available"; the UI only calls them on Android.
+
+#[cfg(target_os = "android")]
+async fn android<T: serde::de::DeserializeOwned>(
+    app: &tauri::AppHandle,
+    command: &str,
+    payload: serde_json::Value,
+) -> Res<T> {
+    use tauri::Manager;
+    let handle = app
+        .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+        .0
+        .clone();
+    handle
+        .run_mobile_plugin_async(command, payload)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "android"))]
+async fn android<T>(app: &tauri::AppHandle, command: &str, payload: serde_json::Value) -> Res<T> {
+    let _ = (app, command, payload);
+    Err("only available on Android".into())
+}
+
+#[derive(serde::Deserialize)]
+struct PickedPath {
+    path: Option<String>,
+}
+
+/// Asks for read access to music, then lets the user pick a folder;
+/// `None` when cancelled.
 #[tauri::command]
-pub async fn library_android_music_folder(app: tauri::AppHandle) -> Res<String> {
-    #[cfg(target_os = "android")]
-    {
-        use tauri::Manager;
-        #[derive(serde::Deserialize)]
-        struct Access {
-            granted: bool,
-        }
-        let handle = app
-            .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
-            .0
-            .clone();
-        let access: Access = handle
-            .run_mobile_plugin_async("requestAudioAccess", ())
-            .await
-            .map_err(|e| e.to_string())?;
-        if !access.granted {
-            return Err("Permission to read music was denied.".into());
-        }
-        const MUSIC: &str = "/storage/emulated/0/Music";
-        if !std::path::Path::new(MUSIC).is_dir() {
-            return Err(format!("{MUSIC} does not exist."));
-        }
-        Ok(MUSIC.into())
+pub async fn library_android_pick_folder(app: tauri::AppHandle) -> Res<Option<String>> {
+    #[derive(serde::Deserialize)]
+    struct Access {
+        granted: bool,
     }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = app;
-        Err("only available on Android".into())
+    let access: Access = android(&app, "requestAudioAccess", serde_json::json!({})).await?;
+    if !access.granted {
+        return Err("Permission to read music was denied.".into());
     }
+    let picked: PickedPath = android(&app, "pickFolder", serde_json::json!({})).await?;
+    Ok(picked.path)
+}
+
+/// Lets the user pick one file on device storage; its path, or `None`.
+#[tauri::command]
+pub async fn android_pick_file(app: tauri::AppHandle) -> Res<Option<String>> {
+    let picked: PickedPath = android(&app, "pickFile", serde_json::json!({})).await?;
+    Ok(picked.path)
+}
+
+/// Whether the app may write files on shared storage (always on desktop).
+#[tauri::command]
+pub async fn app_file_access(app: tauri::AppHandle) -> Res<bool> {
+    if !cfg!(target_os = "android") {
+        return Ok(true);
+    }
+    #[derive(serde::Deserialize)]
+    struct Granted {
+        granted: bool,
+    }
+    let g: Granted = android(&app, "fileAccessStatus", serde_json::json!({})).await?;
+    Ok(g.granted)
+}
+
+/// Opens Android's "all files access" screen for this app.
+#[tauri::command]
+pub async fn app_request_file_access(app: tauri::AppHandle) -> Res<()> {
+    let _: serde_json::Value = android(&app, "requestFileAccess", serde_json::json!({})).await?;
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct TextFile {
+    name: Option<String>,
+    text: Option<String>,
+}
+
+/// Android: pick a text file anywhere (system picker) and read it.
+#[tauri::command]
+pub async fn android_open_text(app: tauri::AppHandle) -> Res<TextFile> {
+    android(&app, "openTextFile", serde_json::json!({})).await
+}
+
+/// Android: ask where to save `text` and write it; false when cancelled.
+#[tauri::command]
+pub async fn android_save_text(app: tauri::AppHandle, name: String, text: String) -> Res<bool> {
+    #[derive(serde::Deserialize)]
+    struct Saved {
+        saved: bool,
+    }
+    let s: Saved = android(
+        &app,
+        "saveTextFile",
+        serde_json::json!({ "name": name, "text": text }),
+    )
+    .await?;
+    Ok(s.saved)
 }
 
 #[tauri::command]

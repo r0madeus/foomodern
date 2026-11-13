@@ -167,12 +167,26 @@
       <div class="overflow-hidden rounded-xl" style:background={tint.surface}>
         <div class="flex items-center justify-between px-4 pt-4 pb-1">
           <h3 class="text-base font-bold">Lyrics</h3>
-          {#if hasLyrics}
-            <button class="rounded-full bg-black/25 p-2.5 active:bg-black/40" aria-label="Full-screen lyrics" onclick={onLyrics}>
-              <Icon name="expand" class="size-4" />
-            </button>
-          {/if}
+          <div class="flex items-center gap-2">
+            {#if snap.current}
+              <button
+                class="rounded-full bg-black/25 p-2.5 active:bg-black/40"
+                aria-label="Load .lrc file"
+                onclick={() => snap.current && void lyrics.pickAndAttach(snap.current.path)}
+              >
+                <Icon name="upload" class="size-4" />
+              </button>
+            {/if}
+            {#if hasLyrics}
+              <button class="rounded-full bg-black/25 p-2.5 active:bg-black/40" aria-label="Full-screen lyrics" onclick={onLyrics}>
+                <Icon name="expand" class="size-4" />
+              </button>
+            {/if}
+          </div>
         </div>
+        {#if lyrics.error}
+          <p class="px-4 pb-1 text-sm text-red-200">{lyrics.error}</p>
+        {/if}
         <LyricLines dim={tint.dim} class={hasLyrics ? 'h-[420px] px-4' : 'px-4'} />
       </div>
     </section>

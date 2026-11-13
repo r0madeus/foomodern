@@ -12,6 +12,7 @@ pub mod android;
 mod android_events;
 #[cfg(not(target_os = "android"))]
 pub mod mpv;
+pub mod replaygain;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

@@ -1,6 +1,8 @@
 // Lyrics state for the currently playing track (AGENTS.md rule 1: Rust handles
 // local .lrc lookup, LRCLIB requests and disk caching).
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
+import { appSettings } from './appSettings.svelte'
 
 export type LyricsSource = 'localLrc' | 'lrclib'
 
@@ -104,6 +106,27 @@ class LyricsStore {
     } finally {
       if (seq === this.#requestSeq) this.loading = false
     }
+  }
+
+  /** Lets the user pick a .lrc file for the track at `path` and attaches it. */
+  async pickAndAttach(path: string): Promise<void> {
+    if (this.loading) return
+    let picked: string | null = null
+    try {
+      picked =
+        appSettings.platform === 'android'
+          ? await invoke<string | null>('android_pick_file')
+          : ((await open({
+              multiple: false,
+              directory: false,
+              filters: [{ name: 'Lyrics', extensions: ['lrc', 'txt'] }],
+            })) as string | null)
+    } catch (e) {
+      this.error = String(e)
+      return
+    }
+    if (!picked) return
+    await this.attachFile(path, picked)
   }
 
   async attachFile(path: string, lrcPath: string): Promise<void> {

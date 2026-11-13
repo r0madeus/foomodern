@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { open } from '@tauri-apps/plugin-dialog'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
   import { lyrics, type LyricsSource } from './lyrics.svelte'
@@ -27,14 +26,7 @@
 
   async function attachLocal() {
     if (!current || lyrics.loading) return
-    const targetPath = current.path
-    const picked = await open({
-      multiple: false,
-      directory: false,
-      filters: [{ name: 'Lyrics', extensions: ['lrc', 'txt'] }],
-    })
-    if (!picked || typeof picked !== 'string' || current?.path !== targetPath) return
-    await lyrics.attachFile(targetPath, picked)
+    await lyrics.pickAndAttach(current.path)
   }
 
   const iconButton =
