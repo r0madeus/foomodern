@@ -101,6 +101,8 @@ pub struct PlaylistInfo {
     pub id: i64,
     pub name: String,
     pub track_count: u32,
+    pub cover: Option<String>,
+    pub album_covers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -337,7 +339,69 @@ impl Library {
     }
 
     pub fn delete_playlist(&self, id: i64) -> Result<()> {
-        db::delete_playlist(&self.conn(), id)
+        let old = db::delete_playlist(&self.conn(), id)?;
+        self.remove_playlist_cover_if_cached(old);
+        Ok(())
+    }
+
+    pub fn set_playlist_cover_file(&self, id: i64, image_path: &Path) -> Result<()> {
+        let img = image::ImageReader::open(image_path)?
+            .with_guessed_format()?
+            .decode()
+            .map_err(|e| LibraryError::Other(format!("invalid image: {e}")))?;
+        let rgb = img
+            .resize_to_fill(600, 600, image::imageops::FilterType::Triangle)
+            .into_rgb8();
+        let mut buf = Vec::new();
+        rgb.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Jpeg)
+            .map_err(|e| LibraryError::Other(format!("failed to encode cover: {e}")))?;
+
+        let dir = self.covers_dir().join("playlists");
+        std::fs::create_dir_all(&dir)?;
+        let hash = scan::fnv1a(&buf);
+        let dest = dir.join(format!("{id}_{hash:016x}.jpg"));
+        scan::write_atomic(&dest, &buf)?;
+        let dest_str = scan::display_path(&dest);
+
+        match db::set_playlist_cover(&self.conn(), id, Some(&dest_str)) {
+            Ok(old) => {
+                if old.as_deref() != Some(dest_str.as_str()) {
+                    self.remove_playlist_cover_if_cached(old);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&dest);
+                Err(e)
+            }
+        }
+    }
+
+    pub fn set_playlist_cover_preset(&self, id: i64, preset: &str) -> Result<()> {
+        if !preset.starts_with("preset:") || preset.len() > 64 {
+            return Err(LibraryError::Other("invalid cover preset".into()));
+        }
+        let old = db::set_playlist_cover(&self.conn(), id, Some(preset))?;
+        self.remove_playlist_cover_if_cached(old);
+        Ok(())
+    }
+
+    pub fn clear_playlist_cover(&self, id: i64) -> Result<()> {
+        let old = db::set_playlist_cover(&self.conn(), id, None)?;
+        self.remove_playlist_cover_if_cached(old);
+        Ok(())
+    }
+
+    fn remove_playlist_cover_if_cached(&self, old: Option<String>) {
+        let Some(old) = old else { return };
+        if old.starts_with("preset:") {
+            return;
+        }
+        let dir = self.covers_dir().join("playlists");
+        let path = Path::new(&old);
+        if path.starts_with(&dir) {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     pub fn playlist_tracks(&self, id: i64, offset: u64, limit: u64) -> Result<Vec<TrackRow>> {

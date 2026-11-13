@@ -1,16 +1,26 @@
 <script lang="ts">
+  import { invoke } from '@tauri-apps/api/core'
   import { count, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import VirtualList from './VirtualList.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import Cover from './Cover.svelte'
+  import PlaylistCover from './PlaylistCover.svelte'
+  import PlaylistCoverModal from './PlaylistCoverModal.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import type { TrackRow } from './library.svelte'
+  import type { Rgb } from './nowCover.svelte'
   import { pinned } from './pinned.svelte'
   import { playlists } from './playlists.svelte'
   import { player, formatTime } from './player.svelte'
+  import {
+    fallbackPalette,
+    heroImageForPlaylist,
+    parseCoverPreset,
+  } from './playlistCover'
+  import { tintFrom } from './tint'
 
   let { id, onDeleted }: { id: number; onDeleted: () => void } = $props()
 
@@ -45,12 +55,46 @@
   let renaming = $state(false)
   let draft = $state('')
   let confirmingDelete = $state(false)
+  let editingCover = $state(false)
   let nameInput = $state<HTMLInputElement | null>(null)
+  let heroColor = $state<Rgb | null>(null)
+
+  const heroImage = $derived(info ? heroImageForPlaylist(info.cover, info.albumCovers) : null)
+
+  $effect(() => {
+    const target = heroImage
+    if (!target) {
+      heroColor = null
+      return
+    }
+    let stale = false
+    invoke<Rgb | null>('library_cover_color', { cover: target })
+      .then((c) => {
+        if (!stale) heroColor = c
+      })
+      .catch(() => {
+        if (!stale) heroColor = null
+      })
+    return () => {
+      stale = true
+    }
+  })
+
+  const heroBg = $derived.by(() => {
+    if (!info) return ''
+    if (heroImage) {
+      const tint = tintFrom(heroColor)
+      return `linear-gradient(135deg, ${tint.top} 0%, ${tint.surface} 100%)`
+    }
+    const preset = parseCoverPreset(info.cover)?.palette ?? fallbackPalette(info.name)
+    return `linear-gradient(135deg, ${preset.heroTop} 0%, ${preset.heroSurface} 100%)`
+  })
 
   $effect(() => {
     void id
     renaming = false
     confirmingDelete = false
+    editingCover = false
   })
 
   async function startRename() {
@@ -102,10 +146,34 @@
   <div class="flex h-full items-center justify-center text-sm text-zinc-500">{t("Playlist not found.")}</div>
 {:else}
   <div class="flex h-full flex-col">
-    <div class="flex flex-wrap items-center justify-between gap-3 px-5 pb-3">
-      <div class="min-w-0">
+    <div
+      class="mx-5 mb-5 flex flex-wrap items-end gap-6 rounded-2xl p-6 text-white"
+      style:background={heroBg}
+    >
+      <button
+        type="button"
+        aria-label={t('Change cover')}
+        class="group relative shrink-0 overflow-hidden rounded-xl shadow-2xl shadow-black/40 outline-none focus-visible:ring-2 focus-visible:ring-white"
+        onclick={() => (editingCover = true)}
+      >
+        <PlaylistCover
+          cover={info.cover}
+          albumCovers={info.albumCovers}
+          name={info.name}
+          class="size-40 rounded-xl sm:size-44"
+          iconClass="size-16"
+        />
+        <span class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/55 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+          <Icon name="upload" class="size-6" />
+          {t('Change cover')}
+        </span>
+      </button>
+
+      <div class="min-w-0 flex-1">
+        <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">{t('Playlist')}</p>
         {#if renaming}
           <form
+            class="mt-1"
             onsubmit={(e) => {
               e.preventDefault()
               void commitRename()
@@ -114,76 +182,90 @@
             <input
               bind:this={nameInput}
               bind:value={draft}
-              aria-label={t("Playlist name")}
-              class="w-72 max-w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
+              aria-label={t('Playlist name')}
+              class="w-80 max-w-full rounded-lg border border-white/25 bg-black/35 px-3 py-1.5 text-2xl font-bold tracking-tight text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
               onkeydown={(e) => e.key === 'Escape' && (renaming = false)}
               onblur={() => renaming && void commitRename()}
             />
           </form>
         {:else}
-          <h2 class="truncate text-lg font-semibold tracking-tight">{info.name}</h2>
+          <h2 class="mt-1 truncate text-4xl font-bold tracking-tight">{info.name}</h2>
         {/if}
-        <p class="text-xs text-zinc-500">
+        <p class="mt-2 text-sm text-white/70">
           {count(info.trackCount, '{n} track', '{n} tracks')}
         </p>
-      </div>
-      <div class="flex items-center gap-2">
-        {#if confirmingDelete}
-          <span class="text-sm text-zinc-600 dark:text-zinc-300" role="alert">{t("Delete this playlist?")}</span>
-          <button
-            class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
-            onclick={remove}
-          >
-            {t("Delete")}
-          </button>
-          <button
-            class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            onclick={() => (confirmingDelete = false)}
-          >
-            {t("Cancel")}
-          </button>
-        {:else}
-          <button
-            type="button"
-            aria-pressed={pinned.isPinned('playlist', id)}
-            class={[
-              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition',
-              pinned.isPinned('playlist', id)
-                ? 'bg-teal-50 font-medium text-teal-700 hover:bg-teal-100 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950'
-                : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
-            ]}
-            onclick={() => void pinned.toggle('playlist', id)}
-          >
-            <Icon name="pin" class="size-4" />
-            {pinned.isPinned('playlist', id) ? t('Pinned') : t('Pin')}
-          </button>
-          <button
-            class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            onclick={startRename}
-          >
-            {t("Rename")}
-          </button>
-          <button
-            class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title={t("Save as an M3U file, e.g. to open on another device")}
-            onclick={() => void playlists.exportM3u(info)}
-          >
-            {t("Export…")}
-          </button>
-          <button
-            class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-            onclick={() => (confirmingDelete = true)}
-          >
-            {t("Delete")}
-          </button>
-          <button
-            class="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-            disabled={info.trackCount === 0}
-            onclick={() => playlists.play(id, 0)}
-          >
-            <Icon name="play" class="size-4" /> {t("Play")}
-          </button>
-        {/if}
+
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          {#if confirmingDelete}
+            <span class="text-sm text-white/90" role="alert">{t('Delete this playlist?')}</span>
+            <button
+              type="button"
+              class="rounded-full bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-500"
+              onclick={remove}
+            >
+              {t('Delete')}
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-white/10 px-3.5 py-1.5 text-sm text-white hover:bg-white/20"
+              onclick={() => (confirmingDelete = false)}
+            >
+              {t('Cancel')}
+            </button>
+          {:else}
+            <button
+              type="button"
+              disabled={info.trackCount === 0}
+              class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+              onclick={() => playlists.play(id, 0)}
+            >
+              <Icon name="play" class="size-5" /> {t('Play')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={pinned.isPinned('playlist', id)}
+              class={[
+                'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition',
+                pinned.isPinned('playlist', id)
+                  ? 'bg-teal-400/20 font-medium text-teal-200 hover:bg-teal-400/30'
+                  : 'bg-white/10 text-white/90 hover:bg-white/20',
+              ]}
+              onclick={() => void pinned.toggle('playlist', id)}
+            >
+              <Icon name="pin" class="size-4" />
+              {pinned.isPinned('playlist', id) ? t('Pinned') : t('Pin')}
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-white/10 px-3.5 py-1.5 text-sm text-white/90 transition hover:bg-white/20"
+              onclick={() => (editingCover = true)}
+            >
+              {t('Cover')}
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-white/10 px-3.5 py-1.5 text-sm text-white/90 transition hover:bg-white/20"
+              onclick={startRename}
+            >
+              {t('Rename')}
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-white/10 px-3.5 py-1.5 text-sm text-white/90 transition hover:bg-white/20"
+              title={t('Save as an M3U file, e.g. to open on another device')}
+              onclick={() => void playlists.exportM3u(info)}
+            >
+              {t('Export…')}
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-red-500/20 px-3.5 py-1.5 text-sm text-red-200 transition hover:bg-red-500/30"
+              onclick={() => (confirmingDelete = true)}
+            >
+              {t('Delete')}
+            </button>
+          {/if}
+        </div>
       </div>
     </div>
 
@@ -275,4 +357,8 @@
       </VirtualList>
     {/if}
   </div>
+
+  {#if editingCover}
+    <PlaylistCoverModal playlist={info} onClose={() => (editingCover = false)} />
+  {/if}
 {/if}

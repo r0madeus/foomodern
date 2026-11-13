@@ -9,7 +9,7 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -104,6 +104,10 @@ CREATE TABLE favorites (
 CREATE INDEX favorites_added ON favorites(added_at DESC);
 ";
 
+const SCHEMA_V5: &str = "
+ALTER TABLE playlists ADD COLUMN cover TEXT;
+";
+
 /// Opens-time setup: pragmas and migrations.
 pub fn init(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -147,6 +151,12 @@ pub fn init(conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         tx.execute_batch(SCHEMA_V4)?;
         tx.pragma_update(None, "user_version", 4)?;
+        tx.commit()?;
+    }
+    if version < 5 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V5)?;
+        tx.pragma_update(None, "user_version", 5)?;
         tx.commit()?;
     }
     Ok(())
@@ -542,27 +552,48 @@ fn ensure_playlist(conn: &Connection, id: i64) -> Result<()> {
     }
 }
 
+fn playlist_album_covers(conn: &Connection, id: i64) -> Result<Vec<String>> {
+    let mut st = conn.prepare_cached(
+        "SELECT a.cover
+         FROM playlist_tracks pt
+         JOIN tracks t ON t.id = pt.track_id
+         JOIN albums a ON a.id = t.album_id
+         WHERE pt.playlist_id = ?1 AND a.cover IS NOT NULL AND a.cover != ''
+         GROUP BY a.id
+         ORDER BY MIN(pt.position)
+         LIMIT 4",
+    )?;
+    let rows = st.query_map([id], |r| r.get::<_, String>(0))?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
 pub fn playlist_info(conn: &Connection, id: i64) -> Result<PlaylistInfo> {
-    conn.query_row(
-        "SELECT p.id, p.name,
-                (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id)
-         FROM playlists p WHERE p.id = ?1",
-        [id],
-        |r| {
-            Ok(PlaylistInfo {
-                id: r.get(0)?,
-                name: r.get(1)?,
-                track_count: r.get::<_, i64>(2)?.try_into().unwrap_or(u32::MAX),
-            })
-        },
-    )
-    .optional()?
-    .ok_or_else(|| playlist_not_found(id))
+    let mut info = conn
+        .query_row(
+            "SELECT p.id, p.name,
+                    (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id),
+                    p.cover
+             FROM playlists p WHERE p.id = ?1",
+            [id],
+            |r| {
+                Ok(PlaylistInfo {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    track_count: r.get::<_, i64>(2)?.try_into().unwrap_or(u32::MAX),
+                    cover: r.get(3)?,
+                    album_covers: Vec::new(),
+                })
+            },
+        )
+        .optional()?
+        .ok_or_else(|| playlist_not_found(id))?;
+    info.album_covers = playlist_album_covers(conn, info.id)?;
+    Ok(info)
 }
 
 pub fn playlists(conn: &Connection) -> Result<Vec<PlaylistInfo>> {
     let mut st = conn.prepare(
-        "SELECT p.id, p.name, COUNT(pt.track_id)
+        "SELECT p.id, p.name, COUNT(pt.track_id), p.cover
          FROM playlists p LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
          GROUP BY p.id ORDER BY p.name COLLATE NOCASE, p.id",
     )?;
@@ -571,9 +602,15 @@ pub fn playlists(conn: &Connection) -> Result<Vec<PlaylistInfo>> {
             id: r.get(0)?,
             name: r.get(1)?,
             track_count: r.get::<_, i64>(2)?.try_into().unwrap_or(u32::MAX),
+            cover: r.get(3)?,
+            album_covers: Vec::new(),
         })
     })?;
-    Ok(rows.collect::<std::result::Result<_, _>>()?)
+    let mut out: Vec<PlaylistInfo> = rows.collect::<std::result::Result<_, _>>()?;
+    for item in &mut out {
+        item.album_covers = playlist_album_covers(conn, item.id)?;
+    }
+    Ok(out)
 }
 
 /// Appends the tracks that exist in the library; unknown ids are skipped.
@@ -629,12 +666,35 @@ pub fn rename_playlist(conn: &Connection, id: i64, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn delete_playlist(conn: &Connection, id: i64) -> Result<()> {
+pub fn set_playlist_cover(
+    conn: &Connection,
+    id: i64,
+    cover: Option<&str>,
+) -> Result<Option<String>> {
+    let old: Option<String> = conn
+        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| r.get(0))
+        .optional()?
+        .flatten();
+    let n = conn.execute(
+        "UPDATE playlists SET cover = ?2 WHERE id = ?1",
+        rusqlite::params![id, cover],
+    )?;
+    if n == 0 {
+        return Err(playlist_not_found(id));
+    }
+    Ok(old)
+}
+
+pub fn delete_playlist(conn: &Connection, id: i64) -> Result<Option<String>> {
+    let old: Option<String> = conn
+        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| r.get(0))
+        .optional()?
+        .flatten();
     let n = conn.execute("DELETE FROM playlists WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(playlist_not_found(id));
     }
-    Ok(())
+    Ok(old)
 }
 
 pub fn playlist_tracks(

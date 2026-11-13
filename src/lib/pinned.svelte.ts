@@ -11,6 +11,7 @@ export interface PinnedEntry {
   title: string
   subtitle: string
   cover: string | null
+  albumCovers: string[]
   trackCount: number
 }
 

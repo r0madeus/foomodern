@@ -355,4 +355,15 @@ const TR: Record<string, string> = {
   'Remove “{title}” from favorites': '“{title}” parçasını favorilerden kaldır',
   'No favorite tracks yet. Click the star on any song to save it here.':
     'Henüz favori şarkı yok. Buraya eklemek için herhangi bir şarkının yıldızına tıkla.',
+
+  // Playlist covers
+  'Change cover': 'Kapağı değiştir',
+  Cover: 'Kapak',
+  'Playlist cover': 'Çalma listesi kapağı',
+  'Choose photo…': 'Fotoğraf seç…',
+  'Choose playlist cover': 'Çalma listesi kapağını seç',
+  'Use automatic cover': 'Otomatik kapak kullan',
+  Gradient: 'Gradyan',
+  Icon: 'İkon',
+  'Apply gradient & icon': 'Gradyan ve ikonu uygula',
 }

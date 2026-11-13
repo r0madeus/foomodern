@@ -12,6 +12,8 @@ export interface PlaylistInfo {
   id: number
   name: string
   trackCount: number
+  cover: string | null
+  albumCovers: string[]
 }
 
 interface SavedPlaylist {
@@ -80,6 +82,25 @@ class PlaylistStore {
 
   async delete(id: number): Promise<boolean> {
     return (await this.#try(() => invoke('playlist_delete', { id }))) !== null
+  }
+
+  async setCoverFile(id: number): Promise<boolean> {
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      title: t('Choose playlist cover'),
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    })
+    if (typeof picked !== 'string') return false
+    return (await this.#try(() => invoke('playlist_set_cover_file', { id, path: picked }))) !== null
+  }
+
+  async setCoverPreset(id: number, preset: string): Promise<boolean> {
+    return (await this.#try(() => invoke('playlist_set_cover_preset', { id, preset }))) !== null
+  }
+
+  async clearCover(id: number): Promise<boolean> {
+    return (await this.#try(() => invoke('playlist_clear_cover', { id }))) !== null
   }
 
   async addTracks(playlist: PlaylistInfo, trackIds: number[]): Promise<void> {

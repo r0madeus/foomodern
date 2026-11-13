@@ -462,6 +462,37 @@ pub fn playlist_delete(app: AppHandle, lib: State<'_, Arc<Library>>, id: i64) ->
 }
 
 #[tauri::command]
+pub fn playlist_set_cover_file(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    path: String,
+) -> Res<()> {
+    le(lib.set_playlist_cover_file(id, std::path::Path::new(&path)))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_set_cover_preset(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    preset: String,
+) -> Res<()> {
+    le(lib.set_playlist_cover_preset(id, &preset))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_clear_cover(app: AppHandle, lib: State<'_, Arc<Library>>, id: i64) -> Res<()> {
+    le(lib.clear_playlist_cover(id))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn playlist_tracks(
     lib: State<'_, Arc<Library>>,
     id: i64,
@@ -943,6 +974,7 @@ pub struct PinnedEntry {
     pub title: String,
     pub subtitle: String,
     pub cover: Option<String>,
+    pub album_covers: Vec<String>,
     pub track_count: u32,
 }
 
@@ -960,6 +992,7 @@ fn resolve_pinned(store: &SessionStore, lib: &Library) -> Res<Vec<PinnedEntry>> 
                         title: detail.album.title,
                         subtitle: detail.album.album_artist,
                         cover: detail.album.cover,
+                        album_covers: Vec::new(),
                         track_count: detail.album.track_count,
                     });
                 }
@@ -975,7 +1008,8 @@ fn resolve_pinned(store: &SessionStore, lib: &Library) -> Res<Vec<PinnedEntry>> 
                         id: p.id,
                         title: p.name.clone(),
                         subtitle: String::new(),
-                        cover: None,
+                        cover: p.cover.clone(),
+                        album_covers: p.album_covers.clone(),
                         track_count: p.track_count,
                     });
                 }

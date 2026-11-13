@@ -3,6 +3,7 @@
   import { onMount, tick, untrack } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import Cover from './lib/Cover.svelte'
+  import PlaylistCover from './lib/PlaylistCover.svelte'
   import PlayerBar from './lib/PlayerBar.svelte'
   import Icon from './lib/Icon.svelte'
   import SongsView from './lib/SongsView.svelte'
@@ -270,9 +271,13 @@
                       class="size-8 shrink-0 rounded text-xs"
                     />
                   {:else}
-                    <span class="flex size-8 shrink-0 items-center justify-center rounded bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      <Icon name="music" class="size-4" />
-                    </span>
+                    <PlaylistCover
+                      cover={entry.cover}
+                      albumCovers={entry.albumCovers}
+                      name={entry.title}
+                      class="size-8 shrink-0 rounded"
+                      iconClass="size-4"
+                    />
                   {/if}
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm leading-tight">{entry.title}</span>
@@ -373,7 +378,7 @@
             <div class="group flex items-center gap-0.5">
               <button
                 class={[
-                  'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+                  'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
                   active
                     ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                     : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
@@ -381,8 +386,15 @@
                 aria-current={active ? 'page' : undefined}
                 onclick={() => openPlaylist(p.id)}
               >
-                <span class="truncate">{p.name}</span>
-                <span class="text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
+                <PlaylistCover
+                  cover={p.cover}
+                  albumCovers={p.albumCovers}
+                  name={p.name}
+                  class="size-6 shrink-0 rounded"
+                  iconClass="size-3.5"
+                />
+                <span class="min-w-0 flex-1 truncate">{p.name}</span>
+                <span class="shrink-0 text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
               </button>
               <button
                 type="button"

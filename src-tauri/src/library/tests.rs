@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 4);
+    assert_eq!(v, 5);
 }
 
 #[test]
@@ -656,7 +656,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 4);
+    assert_eq!(v, 5);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -697,7 +697,7 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -1419,4 +1419,35 @@ fn favorites_toggle_paging_and_cascade() {
 
     e.lib.remove_folder(e.lib.folders().unwrap()[0].id).unwrap();
     assert_eq!(e.lib.favorites().unwrap().len(), 0);
+}
+
+#[test]
+fn playlist_cover_file_preset_and_cleanup() {
+    let e = env();
+    let pl = e.lib.create_playlist("Mix", &[]).unwrap();
+    assert_eq!(pl.cover, None);
+    assert!(pl.album_covers.is_empty());
+
+    let src = e.tmp.path().join("cover.png");
+    let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([20, 140, 200, 255]));
+    img.save(&src).unwrap();
+
+    e.lib.set_playlist_cover_file(pl.id, &src).unwrap();
+    let custom_path = e.lib.playlists().unwrap()[0].cover.clone().unwrap();
+    assert!(std::path::Path::new(&custom_path).exists());
+
+    e.lib
+        .set_playlist_cover_preset(pl.id, "preset:teal:star")
+        .unwrap();
+    assert_eq!(
+        e.lib.playlists().unwrap()[0].cover.as_deref(),
+        Some("preset:teal:star")
+    );
+    assert!(
+        !std::path::Path::new(&custom_path).exists(),
+        "old custom cover file should be removed when replaced"
+    );
+
+    e.lib.clear_playlist_cover(pl.id).unwrap();
+    assert_eq!(e.lib.playlists().unwrap()[0].cover, None);
 }
