@@ -4,10 +4,11 @@
   import SearchInput from './SearchInput.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import Cover from './Cover.svelte'
   import { library, PagedRows, type Sort } from './library.svelte'
   import { player, formatTime } from './player.svelte'
 
-  const ROW = 40
+  const ROW = 48
   const SORTS: { value: Sort; label: string }[] = [
     { value: 'artist', label: 'Artist' },
     { value: 'title', label: 'Title' },
@@ -102,7 +103,8 @@
                   <span class="text-teal-600 dark:text-teal-400">▶</span>
                 {:else}{i + 1}{/if}
               </span>
-              <span class="flex min-w-0 items-center">
+              <span class="flex min-w-0 items-center gap-3">
+                <Cover cover={t.cover} title={t.title} class="size-9 shrink-0 rounded text-[10px]" />
                 <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
               </span>
               <span class="truncate text-zinc-500">{t.artist}</span>

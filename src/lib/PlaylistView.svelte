@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import VirtualList from './VirtualList.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import Cover from './Cover.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Icon from './Icon.svelte'
   import type { TrackRow } from './library.svelte'
@@ -10,7 +11,7 @@
 
   let { id, onDeleted }: { id: number; onDeleted: () => void } = $props()
 
-  const ROW = 40
+  const ROW = 48
   const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_9rem] items-center gap-3 px-5'
 
   const info = $derived(playlists.byId(id))
@@ -196,7 +197,8 @@
                   <span class="text-teal-600 dark:text-teal-400">▶</span>
                 {:else}{i + 1}{/if}
               </span>
-              <span class="flex min-w-0 items-center">
+              <span class="flex min-w-0 items-center gap-3">
+                <Cover cover={t.cover} title={t.title} class="size-9 shrink-0 rounded text-[10px]" />
                 <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
               </span>
               <span class="truncate text-zinc-500">{t.artist}</span>

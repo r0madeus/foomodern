@@ -1,7 +1,11 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
+  import Cover from './Cover.svelte'
+  import { nowCover } from './nowCover.svelte'
   import { lyrics } from './lyrics.svelte'
   import { player, formatTime } from './player.svelte'
+
+  let { nowPlaying = false, onToggleNowPlaying }: { nowPlaying?: boolean; onToggleNowPlaying?: () => void } = $props()
 
   // While the user drags the seek bar we show the drag value and only send
   // one seek command when they let go.
@@ -37,12 +41,27 @@
 >
   <div class="min-w-0">
     {#if snap.current}
-      <p class="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={snap.current.path}>
-        {snap.current.title}
-      </p>
-      <p class="truncate text-xs text-zinc-500">
-        {snap.current.artist ? `${snap.current.artist} · ` : ''}{(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
-      </p>
+      <button
+        class="group flex max-w-full items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+        onclick={onToggleNowPlaying}
+        aria-pressed={nowPlaying}
+        title={nowPlaying ? 'Close now playing' : 'Open now playing'}
+      >
+        <span class="relative shrink-0">
+          <Cover cover={nowCover.cover} title={snap.current.title} class="size-12 rounded-md text-sm shadow" />
+          <span class="absolute inset-0 flex items-center justify-center rounded-md bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <Icon name={nowPlaying ? 'down' : 'up'} class="size-6" />
+          </span>
+        </span>
+        <span class="min-w-0">
+          <span class="block truncate text-sm font-medium text-zinc-900 group-hover:underline dark:text-zinc-100">
+            {snap.current.title}
+          </span>
+          <span class="block truncate text-xs text-zinc-500">
+            {snap.current.artist ? `${snap.current.artist} · ` : ''}{(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
+          </span>
+        </span>
+      </button>
     {:else}
       <p class="text-sm text-zinc-400">Nothing playing</p>
     {/if}

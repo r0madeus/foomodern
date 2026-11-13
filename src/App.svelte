@@ -17,6 +17,8 @@
   import { playlists } from './lib/playlists.svelte'
   import { appSettings } from './lib/appSettings.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
+  import NowPlayingView from './lib/NowPlayingView.svelte'
+  import { nowCover } from './lib/nowCover.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -30,6 +32,7 @@
   const NAV: NavView[] = ['songs', 'albums', 'queue', 'folders']
   const VIEWS: View[] = [...NAV, 'settings']
   const LABELS: Record<NavView, string> = { songs: 'Songs', albums: 'Albums', queue: 'Queue', folders: 'Folders' }
+  const ICONS: Record<NavView, 'music' | 'album' | 'queue' | 'folder'> = { songs: 'music', albums: 'album', queue: 'queue', folders: 'folder' }
   const KEY = 'foomodern.view'
 
   function loadView(): View {
@@ -62,6 +65,7 @@
 
   function go(next: View) {
     view = next
+    nowPlaying = false
     try {
       // A playlist is not remembered across launches (ids can disappear).
       if (next !== 'playlist') localStorage.setItem(KEY, next)
@@ -104,13 +108,22 @@
     void appSettings.load()
   })
 
+  // The full-screen player (desktop "now playing", or the phone UI) shows
+  // lyrics inline, so they are loaded there even with the panel closed.
+  let nowPlaying = $state(false)
   $effect(() => {
-    const isOpen = lyrics.open
+    const inline = mobile || nowPlaying
+    lyrics.always = inline
+    const wanted = lyrics.open || inline
     const path = player.snapshot.current?.path ?? null
     const dur = untrack(() => player.snapshot.durationSeconds)
     untrack(() => {
-      if (isOpen || path === null) void lyrics.load(path, dur)
+      if (wanted || path === null) void lyrics.load(path, dur)
     })
+  })
+
+  $effect(() => {
+    void nowCover.update(player.snapshot.current?.path ?? null)
   })
 
   async function pickFiles(append: boolean) {
@@ -144,7 +157,10 @@
             aria-current={view === v ? 'page' : undefined}
             onclick={() => go(v)}
           >
-            {LABELS[v]}
+            <span class="flex items-center gap-2.5">
+              <Icon name={ICONS[v]} class="size-[18px] opacity-80" />
+              {LABELS[v]}
+            </span>
             {#if counts[v]}
               <span class="text-xs tabular-nums text-zinc-400">{counts[v]?.toLocaleString()}</span>
             {/if}
@@ -257,14 +273,17 @@
           {playlists.notice}
         </p>
       {/if}
+      {#if nowPlaying}
+        <NowPlayingView onClose={() => (nowPlaying = false)} />
+      {/if}
     </div>
 
-    {#if lyrics.open}
+    {#if lyrics.open && !nowPlaying}
       <LyricsPanel />
     {/if}
   </div>
 
-  <PlayerBar />
+  <PlayerBar {nowPlaying} onToggleNowPlaying={() => (nowPlaying = !nowPlaying)} />
 </div>
 {/if}
 

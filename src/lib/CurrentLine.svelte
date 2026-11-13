@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade } from 'svelte/transition'
-  import { lyrics, findActiveIndex } from '../lyrics.svelte'
-  import { player } from '../player.svelte'
+  import { lyrics, findActiveIndex } from './lyrics.svelte'
+  import { player } from './player.svelte'
 
   // The one lyric line being sung, under the cover. Before the first line
   // and during instrumental breaks the next sung line is previewed, faded.

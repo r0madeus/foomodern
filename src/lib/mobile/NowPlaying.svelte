@@ -2,12 +2,12 @@
   import { fly } from 'svelte/transition'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
-  import CurrentLine from './CurrentLine.svelte'
-  import LyricLines from './LyricLines.svelte'
+  import CurrentLine from '../CurrentLine.svelte'
+  import LyricLines from '../LyricLines.svelte'
   import { player, formatTime } from '../player.svelte'
   import { lyrics } from '../lyrics.svelte'
-  import { nowCover } from './nowCover.svelte'
-  import { tintFrom } from './tint'
+  import { nowCover } from '../nowCover.svelte'
+  import { tintFrom } from '../tint'
 
   // Full-screen player tinted with the cover's colour. Scrolling down shows
   // the lyrics card; swipe down at the top (or back) closes it.

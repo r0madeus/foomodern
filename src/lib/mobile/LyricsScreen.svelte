@@ -1,10 +1,10 @@
 <script lang="ts">
   import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
-  import LyricLines from './LyricLines.svelte'
+  import LyricLines from '../LyricLines.svelte'
   import { player, formatTime } from '../player.svelte'
-  import { nowCover } from './nowCover.svelte'
-  import { tintFrom } from './tint'
+  import { nowCover } from '../nowCover.svelte'
+  import { tintFrom } from '../tint'
 
   // Full-screen lyrics on the cover's tint, with a compact seek bar.
   let { onClose }: { onClose: () => void } = $props()

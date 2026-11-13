@@ -2,8 +2,8 @@
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
   import { player } from '../player.svelte'
-  import { nowCover } from './nowCover.svelte'
-  import { tintFrom } from './tint'
+  import { nowCover } from '../nowCover.svelte'
+  import { tintFrom } from '../tint'
 
   // Floating bar above the tabs; tapping it opens the full player.
   let { onOpen }: { onOpen: () => void } = $props()

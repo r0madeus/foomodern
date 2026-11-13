@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { onMount, untrack } from 'svelte'
+  import { onMount } from 'svelte'
   import Icon from '../Icon.svelte'
   import EmptyLibrary from '../EmptyLibrary.svelte'
   import FoldersView from '../FoldersView.svelte'
@@ -17,7 +17,6 @@
   import NowPlaying from './NowPlaying.svelte'
   import QueueSheet from './QueueSheet.svelte'
   import { pushLayer, popLayer, clearLayers } from './layers'
-  import { nowCover } from './nowCover.svelte'
   import { player } from '../player.svelte'
   import { library } from '../library.svelte'
   import { lyrics } from '../lyrics.svelte'
@@ -59,17 +58,6 @@
   const openQueue = () => open(() => (queueOpen = true), () => (queueOpen = false))
   const openLyrics = () => open(() => (lyricsOpen = true), () => (lyricsOpen = false))
 
-  // The phone player shows lyrics inline, so they load for every track.
-  lyrics.always = true
-  $effect(() => {
-    const path = player.snapshot.current?.path ?? null
-    const duration = untrack(() => player.snapshot.durationSeconds)
-    untrack(() => void lyrics.load(path, duration))
-  })
-
-  $effect(() => {
-    void nowCover.update(player.snapshot.current?.path ?? null)
-  })
 
   // A deleted playlist closes its page.
   $effect(() => {

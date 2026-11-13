@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
-  import { lyrics, findActiveIndex } from '../lyrics.svelte'
-  import { player } from '../player.svelte'
+  import { lyrics, findActiveIndex } from './lyrics.svelte'
+  import { player } from './player.svelte'
 
   // Lyrics on a tinted surface: the playing line is white, played lines are
   // faded, upcoming lines use the tint. Follows playback until the user
