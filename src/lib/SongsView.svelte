@@ -115,5 +115,6 @@
         {/snippet}
       </VirtualList>
     {/key}
+    {/if}
   </div>
 {/if}
