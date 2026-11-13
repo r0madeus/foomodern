@@ -500,8 +500,8 @@
             {#if job.state === 'downloading' || job.state === 'queued'}
               <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <div
-                  class="h-full bg-teal-500 transition-[width] duration-300"
-                  style:width="{jobPercent(job)}%"
+                  class="h-full w-full origin-left bg-teal-500 transition-transform duration-300 ease-out"
+                  style:transform="scaleX({jobPercent(job) / 100})"
                 ></div>
               </div>
             {/if}

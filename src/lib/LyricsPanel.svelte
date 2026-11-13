@@ -1,8 +1,11 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
+  import { fly } from 'svelte/transition'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
   import { lyrics, type LyricsSource } from './lyrics.svelte'
+  import { motionDuration } from './motion'
   import { player } from './player.svelte'
   import { nowCover } from './nowCover.svelte'
   import { tintFrom } from './tint'
@@ -36,9 +39,10 @@
 
 <aside
   aria-label={t("Lyrics")}
-  class="flex w-80 shrink-0 flex-col text-white transition-[background] duration-700 lg:w-96"
-  style:background={tint.surface}
+  transition:fly={{ x: 24, duration: motionDuration(180) }}
+  class="relative isolate flex w-80 shrink-0 flex-col overflow-hidden text-white lg:w-96"
 >
+  <TintedBackdrop background={tint.surface} />
   <header class="flex items-start justify-between gap-2 px-5 pt-4 pb-2">
     <div class="min-w-0">
       <div class="flex items-center gap-2">

@@ -2,7 +2,10 @@
   import { t } from '../i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { onMount } from 'svelte'
+  import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
+  import { motionDuration } from '../motion'
+  import MobileSheet from './MobileSheet.svelte'
   import EmptyLibrary from '../EmptyLibrary.svelte'
   import FoldersView from '../FoldersView.svelte'
   import SettingsView from '../SettingsView.svelte'
@@ -23,7 +26,7 @@
   import QueueSheet from './QueueSheet.svelte'
   import UpdateBanner from '../UpdateBanner.svelte'
   import { updates } from '../updates.svelte'
-  import { pushLayer, popLayer, clearLayers } from './layers'
+  import { pushLayer, popLayer, clearLayers, replaceTopLayers } from './layers'
   import { artists } from '../artists.svelte'
   import { player } from '../player.svelte'
   import { library } from '../library.svelte'
@@ -86,10 +89,18 @@
 
   $effect(() => {
     artists.registerNavigator((name) => {
-      if (lyricsOpen) lyricsOpen = false
-      if (queueOpen) queueOpen = false
-      if (playerOpen) playerOpen = false
-      openArtist(name)
+      const overlayCount = Number(playerOpen) + Number(queueOpen) + Number(lyricsOpen)
+      if (overlayCount === 0) {
+        openArtist(name)
+        return
+      }
+      lyricsOpen = false
+      queueOpen = false
+      playerOpen = false
+      sheets = [...sheets, { type: 'artist', name }]
+      replaceTopLayers(overlayCount, () => {
+        sheets = sheets.slice(0, -1)
+      })
     })
   })
 
@@ -128,55 +139,65 @@
     </button>
   {/if}
 
-  <main class="relative min-h-0 flex-1">
-    {#if tab === 'home'}
-      <div class="flex h-full flex-col">
-        <PageHeader title={t('Albums')} />
-        {#if library.stats.albums === 0}
-          <EmptyLibrary />
+  <main class="relative min-h-0 flex-1 overflow-hidden">
+    {#key tab}
+      <div class="animate-view-enter h-full">
+        {#if tab === 'home'}
+          <div class="flex h-full flex-col">
+            <PageHeader title={t('Albums')} />
+            {#if library.stats.albums === 0}
+              <EmptyLibrary />
+            {:else}
+              <AlbumGrid onOpen={openAlbum} />
+            {/if}
+          </div>
+        {:else if tab === 'songs'}
+          <SongsTab />
+        {:else if tab === 'search'}
+          <SearchTab onOpenAlbum={openAlbum} />
         {:else}
-          <AlbumGrid onOpen={openAlbum} />
+          <LibraryTab
+            onOpenPlaylist={openPlaylist}
+            onOpenFavorites={openFavorites}
+            onOpenArtists={openArtists}
+            onOpenStats={openStats}
+            onOpenPage={openPage}
+          />
         {/if}
       </div>
-    {:else if tab === 'songs'}
-      <SongsTab />
-    {:else if tab === 'search'}
-      <SearchTab onOpenAlbum={openAlbum} />
-    {:else}
-      <LibraryTab
-        onOpenPlaylist={openPlaylist}
-        {onOpenFavorites}
-        {onOpenArtists}
-        {onOpenStats}
-        onOpenPage={openPage}
-      />
-    {/if}
+    {/key}
 
     {#each sheets as sheet, i (`${i}:${sheet.type}`)}
-      {#if sheet.type === 'page'}
-        <div class="absolute inset-0 flex flex-col bg-zinc-950">
-          <PageHeader title={t(sheet.page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
-          <div class="min-h-0 flex-1 overflow-y-auto">
-            {#if sheet.page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
+      <MobileSheet onBack={popLayer}>
+        {#if sheet.type === 'page'}
+          <div class="absolute inset-0 flex flex-col bg-zinc-950">
+            <PageHeader title={t(sheet.page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
+            <div class="min-h-0 flex-1 overflow-y-auto">
+              {#if sheet.page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
+            </div>
           </div>
-        </div>
-      {:else if sheet.type === 'favorites'}
-        <FavoritesPage onBack={popLayer} />
-      {:else if sheet.type === 'artists'}
-        <ArtistsPage onBack={popLayer} onOpenArtist={openArtist} />
-      {:else if sheet.type === 'stats'}
-        <StatsPage onBack={popLayer} onOpenAlbum={openAlbum} />
-      {:else if sheet.type === 'playlist'}
-        <PlaylistPage id={sheet.id} onBack={popLayer} />
-      {:else if sheet.type === 'artist'}
-        <ArtistPage name={sheet.name} onBack={popLayer} onOpenAlbum={openAlbum} />
-      {:else if sheet.type === 'album'}
-        <AlbumPage albumId={sheet.id} onBack={popLayer} />
-      {/if}
+        {:else if sheet.type === 'favorites'}
+          <FavoritesPage onBack={popLayer} />
+        {:else if sheet.type === 'artists'}
+          <ArtistsPage onBack={popLayer} onOpenArtist={openArtist} />
+        {:else if sheet.type === 'stats'}
+          <StatsPage onBack={popLayer} onOpenAlbum={openAlbum} />
+        {:else if sheet.type === 'playlist'}
+          <PlaylistPage id={sheet.id} onBack={popLayer} />
+        {:else if sheet.type === 'artist'}
+          <ArtistPage name={sheet.name} onBack={popLayer} onOpenAlbum={openAlbum} />
+        {:else if sheet.type === 'album'}
+          <AlbumPage albumId={sheet.id} onBack={popLayer} />
+        {/if}
+      </MobileSheet>
     {/each}
 
     {#if playlists.notice}
-      <p role="status" class="pointer-events-none absolute inset-x-4 bottom-3 z-30 rounded-lg bg-zinc-100 px-3 py-2.5 text-sm text-zinc-900 shadow-lg">
+      <p
+        role="status"
+        transition:fly={{ y: 12, duration: motionDuration(180) }}
+        class="pointer-events-none absolute inset-x-4 bottom-3 z-30 rounded-lg bg-zinc-100 px-3 py-2.5 text-sm text-zinc-900 shadow-lg"
+      >
         {playlists.notice}
       </p>
     {/if}

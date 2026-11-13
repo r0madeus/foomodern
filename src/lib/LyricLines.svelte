@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
   import { untrack } from 'svelte'
+  import { fly } from 'svelte/transition'
   import { lyrics, findActiveIndex } from './lyrics.svelte'
+  import { motionDuration } from './motion'
   import { player } from './player.svelte'
 
   // Lyrics on a tinted surface: the playing line is white, played lines are
@@ -101,7 +103,11 @@
           {@const blank = line.text.trim() === ''}
           <button
             data-i={i}
-            class={['block w-full text-left transition-[color,opacity] duration-300', blank && 'text-base']}
+            class={[
+              'block w-full origin-left text-left transition-[color,opacity,transform] duration-300',
+              i === active && !blank && 'scale-[1.02]',
+              blank && 'text-base',
+            ]}
             style:color={i === active ? '#fff' : i < active ? 'rgb(255 255 255 / 0.5)' : dim}
             onclick={() => {
               follow = true
@@ -117,6 +123,7 @@
   {#if !follow && res?.kind === 'synced'}
     <button
       type="button"
+      transition:fly={{ y: 12, duration: motionDuration(180) }}
       class="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg hover:bg-zinc-100"
       onclick={resume}
     >

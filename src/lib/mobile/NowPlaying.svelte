@@ -7,6 +7,8 @@
   import Icon from '../Icon.svelte'
   import CurrentLine from '../CurrentLine.svelte'
   import LyricLines from '../LyricLines.svelte'
+  import TintedBackdrop from '../TintedBackdrop.svelte'
+  import { motionDuration, viewportHeight } from '../motion'
   import { player, formatTime } from '../player.svelte'
   import { lyrics } from '../lyrics.svelte'
   import { nowCover } from '../nowCover.svelte'
@@ -46,7 +48,10 @@
     pull = Math.max(0.001, dy)
   }
   function onTouchEnd() {
-    if (pull > 120) onClose()
+    if (pull > 120) {
+      onClose()
+      return
+    }
     pull = 0
   }
   function commitSeek() {
@@ -56,11 +61,10 @@
 </script>
 
 <div
-  class="fixed inset-0 z-40 text-white"
-  style:background="linear-gradient(to bottom, {tint.top} 0%, #09090b 92%)"
+  class="fixed inset-0 z-40 isolate overflow-hidden text-white"
   style:transform={pull > 0 ? `translateY(${pull}px)` : undefined}
-  style:transition={pull > 0 ? 'none' : 'transform 200ms ease-out, background 600ms ease'}
-  transition:fly={{ y: 600, duration: 260, opacity: 1 }}
+  style:transition={pull > 0 ? 'none' : 'transform 200ms ease-out'}
+  transition:fly={{ y: viewportHeight(), duration: motionDuration(260), opacity: 1 }}
   ontouchstart={onTouchStart}
   ontouchmove={onTouchMove}
   ontouchend={onTouchEnd}
@@ -69,6 +73,7 @@
   aria-modal="true"
   aria-label={t("Now playing")}
 >
+  <TintedBackdrop background="linear-gradient(to bottom, {tint.top} 0%, #09090b 92%)" duration={600} />
   <div bind:this={scroller} class="h-full overflow-y-auto overscroll-contain">
     <section
       class="flex flex-col px-6"

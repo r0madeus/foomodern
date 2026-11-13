@@ -2,7 +2,9 @@
   import { count, t } from './i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
+  import Equalizer from './Equalizer.svelte'
   import Icon from './Icon.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import ExtBadge from './ExtBadge.svelte'
@@ -54,9 +56,9 @@
   </button>
   {#if data}
     <div
-      class="mb-6 flex items-end gap-6 rounded-2xl p-6 text-white transition-[background] duration-700"
-      style:background="linear-gradient(135deg, {tint.top}, {tint.surface})"
+      class="relative isolate mb-6 flex items-end gap-6 overflow-hidden rounded-2xl p-6 text-white"
     >
+      <TintedBackdrop background="linear-gradient(135deg, {tint.top}, {tint.surface})" />
       <Cover cover={data.album.cover} title={data.album.title} class="size-48 shrink-0 rounded-lg text-6xl shadow-2xl shadow-black/40" />
       <div class="min-w-0">
         <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">{t("Album")}</p>
@@ -111,7 +113,13 @@
             ]}
             onclick={() => library.playAlbum(albumId, i)}
           >
-            <span class="w-8 text-right text-xs tabular-nums text-zinc-400">{track.trackNo ?? i + 1}</span>
+            <span class="w-8 text-right text-xs tabular-nums text-zinc-400">
+              {#if track.path === currentPath && player.snapshot.status === 'playing'}
+                <Equalizer class="text-teal-600 dark:text-teal-400" />
+              {:else}
+                {track.trackNo ?? i + 1}
+              {/if}
+            </span>
             <span class="flex min-w-0 flex-1 items-center">
               <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
             </span>

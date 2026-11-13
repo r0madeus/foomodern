@@ -1,10 +1,13 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
+  import { fly } from 'svelte/transition'
   import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
+  import { motionDuration } from './motion'
   import { player } from './player.svelte'
   import { lyrics } from './lyrics.svelte'
   import { nowCover } from './nowCover.svelte'
@@ -25,9 +28,10 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
 <div
-  class="absolute inset-0 flex flex-col text-white transition-[background] duration-700"
-  style:background="linear-gradient(160deg, {tint.top} 0%, {tint.surface} 45%, #09090b 100%)"
+  transition:fly={{ y: 24, duration: motionDuration(220) }}
+  class="absolute inset-0 isolate flex flex-col overflow-hidden text-white"
 >
+  <TintedBackdrop background="linear-gradient(160deg, {tint.top} 0%, {tint.surface} 45%, #09090b 100%)" />
   <header class="flex shrink-0 items-center gap-2 px-6 pt-4">
     <button class="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" aria-label={t("Close now playing")} title={t("Close (Esc)")} onclick={onClose}>
       <Icon name="down" class="size-6" />

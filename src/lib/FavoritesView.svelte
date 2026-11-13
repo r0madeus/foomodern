@@ -1,6 +1,7 @@
 <script lang="ts">
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Cover from './Cover.svelte'
+  import Equalizer from './Equalizer.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
@@ -99,7 +100,7 @@
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                <span class="text-teal-600 dark:text-teal-400">▶</span>
+                <Equalizer class="text-teal-600 dark:text-teal-400" />
               {:else}{i + 1}{/if}
             </span>
             <span class="flex min-w-0 items-center gap-3">

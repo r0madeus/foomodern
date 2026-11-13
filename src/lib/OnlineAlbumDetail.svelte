@@ -3,6 +3,7 @@
   import { appSettings } from './appSettings.svelte'
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
   import { count, t } from './i18n.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import type { Rgb } from './nowCover.svelte'
@@ -89,9 +90,9 @@
   </button>
 
   <div
-    class="mb-6 flex flex-col gap-4 rounded-2xl p-4 text-white transition-[background] duration-700 sm:flex-row sm:items-end sm:gap-6 sm:p-6"
-    style:background="linear-gradient(135deg, {tint.top}, {tint.surface})"
+    class="relative isolate mb-6 flex flex-col gap-4 overflow-hidden rounded-2xl p-4 text-white sm:flex-row sm:items-end sm:gap-6 sm:p-6"
   >
+    <TintedBackdrop background="linear-gradient(135deg, {tint.top}, {tint.surface})" />
     <Cover
       cover={activeAlbum.cover ?? activeAlbum.coverUrl}
       title={activeAlbum.title}

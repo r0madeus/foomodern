@@ -1,5 +1,6 @@
 <script lang="ts">
   import ArtistLinks from './ArtistLinks.svelte'
+  import Equalizer from './Equalizer.svelte'
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import { player } from './player.svelte'
@@ -23,7 +24,7 @@
     >
       <span class="w-8 shrink-0 text-right text-xs tabular-nums text-zinc-400">
         {#if i === current && status === 'playing'}
-          <span class="text-teal-600 dark:text-teal-400">▶</span>
+          <Equalizer class="text-teal-600 dark:text-teal-400" />
         {:else}
           {i + 1}
         {/if}

@@ -3,6 +3,8 @@
   import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
   import LyricLines from '../LyricLines.svelte'
+  import TintedBackdrop from '../TintedBackdrop.svelte'
+  import { motionDuration, viewportHeight } from '../motion'
   import { player, formatTime } from '../player.svelte'
   import { nowCover } from '../nowCover.svelte'
   import { tintFrom } from '../tint'
@@ -19,15 +21,15 @@
 </script>
 
 <div
-  class="fixed inset-0 z-50 flex flex-col text-white"
-  style:background={tint.surface}
+  class="fixed inset-0 z-50 isolate flex flex-col overflow-hidden text-white"
   style:padding-top="var(--inset-top)"
   style:padding-bottom="calc(var(--inset-bottom) + 12px)"
-  transition:fly={{ y: 600, duration: 240, opacity: 1 }}
+  transition:fly={{ y: viewportHeight(), duration: motionDuration(240), opacity: 1 }}
   role="dialog"
   aria-modal="true"
   aria-label={t("Lyrics")}
 >
+  <TintedBackdrop background={tint.surface} duration={600} />
   <header class="flex h-16 shrink-0 items-center gap-1 px-2">
     <button class="rounded-full p-3 active:bg-white/10" aria-label={t("Close lyrics")} onclick={onClose}>
       <Icon name="down" class="size-7" />

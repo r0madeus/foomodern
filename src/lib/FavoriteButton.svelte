@@ -29,8 +29,19 @@
       : t('Add “{title}” to favorites', { title }),
   )
 
+  let popping = $state(false)
+  let popTimer: ReturnType<typeof setTimeout> | undefined
+
   function toggle(e: MouseEvent) {
     e.stopPropagation()
+    if (!active) {
+      popping = false
+      clearTimeout(popTimer)
+      queueMicrotask(() => {
+        popping = true
+        popTimer = setTimeout(() => (popping = false), 300)
+      })
+    }
     if (trackId !== null) void favorites.toggle(trackId)
     else if (path) void favorites.toggleByPath(path)
   }
@@ -42,7 +53,7 @@
   aria-label={label}
   title={label}
   class={[
-    'shrink-0 rounded p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-teal-500',
+    'shrink-0 rounded p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-teal-500 active:scale-90',
     active
       ? light
         ? 'text-teal-300 opacity-100 hover:bg-white/10'
@@ -58,5 +69,5 @@
   ondblclick={(e) => e.stopPropagation()}
   onkeydown={(e) => e.stopPropagation()}
 >
-  <Icon name={active ? 'star' : 'starOutline'} class={size} />
+  <Icon name={active ? 'star' : 'starOutline'} class={popping ? `${size} animate-star-pop` : size} />
 </button>

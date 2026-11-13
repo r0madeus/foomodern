@@ -1,5 +1,5 @@
-<script lang="ts">
-  type Name =
+<script module lang="ts">
+  export type Name =
     | 'play'
     | 'pause'
     | 'prev'
@@ -36,6 +36,10 @@
     | 'chart'
     | 'history'
     | 'artist'
+    | 'image'
+</script>
+
+<script lang="ts">
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
@@ -79,6 +83,8 @@
       'M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18Zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12Z',
     artist:
       'M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-8 1.67-8 5v2h16v-2c0-3.33-4.67-5-8-5Z',
+    image:
+      'M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5Z',
   }
 </script>
 

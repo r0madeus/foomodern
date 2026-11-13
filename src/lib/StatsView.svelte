@@ -555,23 +555,27 @@
               {t('Hours of the day')}
             </p>
             <div class="flex h-36 items-end gap-1 pt-4">
-              {#each stats.byHour as bucket (bucket.label)}
-                {@const hPct = bucket.listenedMs > 0 ? Math.max(6, Math.round((bucket.listenedMs / maxHourMs) * 100)) : 3}
-                <div
-                  class="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                  title={`${bucket.label}:00 · ${formatDurationLong(bucket.listenedMs)} (${count(bucket.playCount, '{n} play', '{n} plays')})`}
-                >
+              {#key stats}
+                {#each stats.byHour as bucket, idx (bucket.label)}
+                  {@const hPct = bucket.listenedMs > 0 ? Math.max(6, Math.round((bucket.listenedMs / maxHourMs) * 100)) : 3}
                   <div
-                    class={[
-                      'w-full rounded-t transition-all',
-                      bucket.listenedMs > 0
-                        ? 'bg-teal-500/80 group-hover:bg-teal-400'
-                        : 'bg-zinc-200/70 dark:bg-zinc-800/80',
-                    ]}
-                    style:height="{hPct}%"
-                  ></div>
-                </div>
-              {/each}
+                    class="group flex h-full flex-1 flex-col items-center justify-end gap-1"
+                    title={`${bucket.label}:00 · ${formatDurationLong(bucket.listenedMs)} (${count(bucket.playCount, '{n} play', '{n} plays')})`}
+                  >
+                    <div class="animate-bar-y h-full w-full" style:animation-delay="{idx * 14}ms">
+                      <div
+                        class={[
+                          'h-full w-full origin-bottom rounded-t transition-[transform,background-color] duration-500 ease-out',
+                          bucket.listenedMs > 0
+                            ? 'bg-teal-500/80 group-hover:bg-teal-400'
+                            : 'bg-zinc-200/70 dark:bg-zinc-800/80',
+                        ]}
+                        style:transform="scaleY({hPct / 100})"
+                      ></div>
+                    </div>
+                  </div>
+                {/each}
+              {/key}
             </div>
             <div class="mt-1.5 flex justify-between text-[10px] tabular-nums text-zinc-400">
               <span>00:00</span>
@@ -588,23 +592,27 @@
               {t('Days of the week')}
             </p>
             <div class="flex flex-col gap-2">
-              {#each stats.byWeekday as bucket, idx (bucket.label)}
-                {@const wPct = bucket.listenedMs > 0 ? Math.max(3, Math.round((bucket.listenedMs / maxWdayMs) * 100)) : 0}
-                <div class="flex items-center gap-3 text-xs">
-                  <span class="w-8 shrink-0 font-medium text-zinc-500">
-                    {t(WEEKDAYS_SHORT[idx])}
-                  </span>
-                  <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                    <div
-                      class="h-full rounded-full bg-teal-500/85 transition-all"
-                      style:width="{wPct}%"
-                    ></div>
+              {#key stats}
+                {#each stats.byWeekday as bucket, idx (bucket.label)}
+                  {@const wPct = bucket.listenedMs > 0 ? Math.max(3, Math.round((bucket.listenedMs / maxWdayMs) * 100)) : 0}
+                  <div class="flex items-center gap-3 text-xs">
+                    <span class="w-8 shrink-0 font-medium text-zinc-500">
+                      {t(WEEKDAYS_SHORT[idx])}
+                    </span>
+                    <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div class="animate-bar-x h-full w-full" style:animation-delay="{idx * 35}ms">
+                        <div
+                          class="h-full w-full origin-left rounded-r-full bg-teal-500/85 transition-transform duration-500 ease-out"
+                          style:transform="scaleX({wPct / 100})"
+                        ></div>
+                      </div>
+                    </div>
+                    <span class="w-20 shrink-0 text-right tabular-nums text-zinc-500">
+                      {bucket.listenedMs > 0 ? formatDurationLong(bucket.listenedMs) : '—'}
+                    </span>
                   </div>
-                  <span class="w-20 shrink-0 text-right tabular-nums text-zinc-500">
-                    {bucket.listenedMs > 0 ? formatDurationLong(bucket.listenedMs) : '—'}
-                  </span>
-                </div>
-              {/each}
+                {/each}
+              {/key}
             </div>
           </div>
         </div>
@@ -615,21 +623,25 @@
               {t('Monthly trend')}
             </p>
             <div class="flex h-32 items-end gap-2 pt-4">
-              {#each stats.byMonth as bucket (bucket.label)}
-                {@const mPct = Math.max(8, Math.round((bucket.listenedMs / maxMonthMs) * 100))}
-                <div
-                  class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-                  title={`${bucket.label} · ${formatDurationLong(bucket.listenedMs)} (${count(bucket.playCount, '{n} play', '{n} plays')})`}
-                >
+              {#key stats}
+                {#each stats.byMonth as bucket, idx (bucket.label)}
+                  {@const mPct = Math.max(8, Math.round((bucket.listenedMs / maxMonthMs) * 100))}
                   <div
-                    class="w-full max-w-10 rounded-t bg-emerald-500/80 transition-all hover:bg-emerald-400"
-                    style:height="{mPct}%"
-                  ></div>
-                  <span class="w-full truncate text-center text-[10px] tabular-nums text-zinc-400">
-                    {bucket.label.slice(2)}
-                  </span>
-                </div>
-              {/each}
+                    class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
+                    title={`${bucket.label} · ${formatDurationLong(bucket.listenedMs)} (${count(bucket.playCount, '{n} play', '{n} plays')})`}
+                  >
+                    <div class="animate-bar-y min-h-0 w-full max-w-10 flex-1" style:animation-delay="{idx * 24}ms">
+                      <div
+                        class="h-full w-full origin-bottom rounded-t bg-emerald-500/80 transition-[transform,background-color] duration-500 ease-out hover:bg-emerald-400"
+                        style:transform="scaleY({mPct / 100})"
+                      ></div>
+                    </div>
+                    <span class="w-full truncate text-center text-[10px] tabular-nums text-zinc-400">
+                      {bucket.label.slice(2)}
+                    </span>
+                  </div>
+                {/each}
+              {/key}
             </div>
           </div>
         {/if}

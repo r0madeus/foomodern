@@ -19,18 +19,27 @@
     return h
   })
   let failed = $state(false)
+  let loaded = $state(false)
+  let imgEl = $state<HTMLImageElement | null>(null)
   $effect(() => {
     void cover
     failed = false
+    loaded = Boolean(imgEl?.complete && imgEl.naturalWidth > 0)
   })
 </script>
 
 {#if cover && !failed}
   <img
+    bind:this={imgEl}
     src={cover.startsWith('http://') || cover.startsWith('https://') ? cover : convertFileSrc(cover)}
     alt="Cover of {title}"
     loading="lazy"
-    class={['bg-zinc-200 object-cover dark:bg-zinc-800', className]}
+    class={[
+      'bg-zinc-200 object-cover transition-opacity duration-200 dark:bg-zinc-800',
+      loaded ? 'opacity-100' : 'opacity-0',
+      className,
+    ]}
+    onload={() => (loaded = true)}
     onerror={() => (failed = true)}
   />
 {:else}

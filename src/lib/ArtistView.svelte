@@ -2,10 +2,12 @@
   import { invoke } from '@tauri-apps/api/core'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Cover from './Cover.svelte'
+  import Equalizer from './Equalizer.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import OnlineAlbumDetail from './OnlineAlbumDetail.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
   import { artists, type ArtistOnlineInfo, type ArtistProfile } from './artists.svelte'
   import { history } from './history.svelte'
   import { count, i18n, t } from './i18n.svelte'
@@ -141,9 +143,9 @@
 
     {#if profile}
       <div
-        class="mb-6 flex flex-wrap items-end gap-6 rounded-2xl p-6 text-white transition-[background] duration-700"
-        style:background="linear-gradient(135deg, {tint.top}, {tint.surface})"
+        class="relative isolate mb-6 flex flex-wrap items-end gap-6 overflow-hidden rounded-2xl p-6 text-white"
       >
+        <TintedBackdrop background="linear-gradient(135deg, {tint.top}, {tint.surface})" />
         <Cover
           cover={portrait}
           title={profile.name}
@@ -225,7 +227,7 @@
                     >
                       <span class="text-right text-xs tabular-nums text-zinc-400">
                         {#if active && player.snapshot.status === 'playing'}
-                          <span class="text-teal-600 dark:text-teal-400">▶</span>
+                          <Equalizer class="text-teal-600 dark:text-teal-400" />
                         {:else}
                           {i + 1}
                         {/if}
@@ -353,7 +355,7 @@
                 >
                   <span class="text-right text-xs tabular-nums text-zinc-400">
                     {#if active && player.snapshot.status === 'playing'}
-                      <span class="text-teal-600 dark:text-teal-400">▶</span>
+                      <Equalizer class="text-teal-600 dark:text-teal-400" />
                     {:else}
                       {i + 1}
                     {/if}

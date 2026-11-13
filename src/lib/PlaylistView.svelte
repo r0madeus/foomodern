@@ -5,6 +5,8 @@
   import VirtualList from './VirtualList.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import Cover from './Cover.svelte'
+  import Equalizer from './Equalizer.svelte'
+  import TintedBackdrop from './TintedBackdrop.svelte'
   import PlaylistCover from './PlaylistCover.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import PlaylistCoverModal from './PlaylistCoverModal.svelte'
@@ -148,9 +150,9 @@
 {:else}
   <div class="flex h-full flex-col">
     <div
-      class="mx-5 mb-5 flex flex-wrap items-end gap-6 rounded-2xl p-6 text-white"
-      style:background={heroBg}
+      class="relative isolate mx-5 mb-5 flex flex-wrap items-end gap-6 overflow-hidden rounded-2xl p-6 text-white"
     >
+      <TintedBackdrop background={heroBg} />
       <button
         type="button"
         aria-label={t('Change cover')}
@@ -300,7 +302,7 @@
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
                 {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                  <span class="text-teal-600 dark:text-teal-400">▶</span>
+                  <Equalizer class="text-teal-600 dark:text-teal-400" />
                 {:else}{i + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">

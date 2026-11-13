@@ -1,7 +1,9 @@
 <script lang="ts">
   import { count, i18n, t } from './lib/i18n.svelte'
   import { onMount, tick, untrack } from 'svelte'
+  import { fly } from 'svelte/transition'
   import { open } from '@tauri-apps/plugin-dialog'
+  import { motionDuration } from './lib/motion'
   import Cover from './lib/Cover.svelte'
   import PlaylistCover from './lib/PlaylistCover.svelte'
   import PlayerBar from './lib/PlayerBar.svelte'
@@ -479,36 +481,41 @@
         </p>
       {/if}
       <main class="min-h-0 flex-1">
-        {#if view === 'songs'}
-          <SongsView />
-        {:else if view === 'albums'}
-          <AlbumsView {selectedAlbumId} onSelectAlbum={(id) => (selectedAlbumId = id)} />
-        {:else if view === 'artists'}
-          <ArtistsView
-            {selectedArtist}
-            onSelectArtist={(name) => (selectedArtist = name)}
-            onOpenAlbum={(id) => openAlbum(id)}
-          />
-        {:else if view === 'search'}
-          <SearchView
-            onOpenSettings={() => go('settings')}
-            onOpenLocalAlbum={(id) => openAlbum(id)}
-          />
-        {:else if view === 'stats'}
-          <StatsView onOpenAlbum={(id) => openAlbum(id)} />
-        {:else if view === 'favorites'}
-          <FavoritesView />
-        {:else if view === 'queue'}
-          <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
-        {:else if view === 'playlist' && playlistId !== null}
-          <PlaylistView id={playlistId} onDeleted={() => go('songs')} />
-        {:else}
-          <SettingsView />
-        {/if}
+        {#key view === 'playlist' ? `${view}:${playlistId}` : view}
+          <div class="animate-view-enter h-full">
+            {#if view === 'songs'}
+              <SongsView />
+            {:else if view === 'albums'}
+              <AlbumsView {selectedAlbumId} onSelectAlbum={(id) => (selectedAlbumId = id)} />
+            {:else if view === 'artists'}
+              <ArtistsView
+                {selectedArtist}
+                onSelectArtist={(name) => (selectedArtist = name)}
+                onOpenAlbum={(id) => openAlbum(id)}
+              />
+            {:else if view === 'search'}
+              <SearchView
+                onOpenSettings={() => go('settings')}
+                onOpenLocalAlbum={(id) => openAlbum(id)}
+              />
+            {:else if view === 'stats'}
+              <StatsView onOpenAlbum={(id) => openAlbum(id)} />
+            {:else if view === 'favorites'}
+              <FavoritesView />
+            {:else if view === 'queue'}
+              <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
+            {:else if view === 'playlist' && playlistId !== null}
+              <PlaylistView id={playlistId} onDeleted={() => go('songs')} />
+            {:else}
+              <SettingsView />
+            {/if}
+          </div>
+        {/key}
       </main>
       {#if playlists.notice}
         <p
           role="status"
+          transition:fly={{ y: 10, duration: motionDuration(180) }}
           class="pointer-events-none absolute right-6 bottom-24 z-40 max-w-sm rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
         >
           {playlists.notice}

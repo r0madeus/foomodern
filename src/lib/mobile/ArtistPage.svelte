@@ -3,7 +3,10 @@
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
   import OnlineAlbumDetail from '../OnlineAlbumDetail.svelte'
+  import TintedBackdrop from '../TintedBackdrop.svelte'
+  import MobileSheet from './MobileSheet.svelte'
   import TrackItem from './TrackItem.svelte'
+  import { popLayer, pushLayer } from './layers'
   import { artists, type ArtistOnlineInfo, type ArtistProfile } from '../artists.svelte'
   import { history } from '../history.svelte'
   import { count, i18n, t } from '../i18n.svelte'
@@ -117,47 +120,38 @@
   function openOnlineAlbum(album: OnlineAlbum) {
     selectedOnlineAlbum = album
     void online.openAlbum(album)
+    pushLayer(() => {
+      selectedOnlineAlbum = null
+      online.closeAlbum()
+    })
   }
 </script>
 
-{#if selectedOnlineAlbum}
-  <div class="absolute inset-0 flex flex-col bg-zinc-950 pt-2">
-    <OnlineAlbumDetail
-      album={selectedOnlineAlbum}
-      onBack={() => {
-        selectedOnlineAlbum = null
-        online.closeAlbum()
-      }}
-    />
-  </div>
-{:else}
-  <div class="absolute inset-0 flex flex-col bg-zinc-950">
-    <header
-      class="absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-1 px-1 transition-colors"
-      class:bg-zinc-900={scrolled > 220}
+<div class="absolute inset-0 flex flex-col bg-zinc-950">
+  <header
+    class="absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-1 px-1 transition-colors"
+    class:bg-zinc-900={scrolled > 220}
+  >
+    <button
+      type="button"
+      class="rounded-full bg-black/35 p-2.5 text-white active:bg-black/55"
+      aria-label={t('Back')}
+      onclick={onBack}
     >
-      <button
-        type="button"
-        class="rounded-full bg-black/35 p-2.5 text-white active:bg-black/55"
-        aria-label={t('Back')}
-        onclick={onBack}
-      >
-        <Icon name="back" class="size-6" />
-      </button>
-      {#if scrolled > 220 && profile}
-        <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{profile.name}</h1>
-      {/if}
-    </header>
+      <Icon name="back" class="size-6" />
+    </button>
+    {#if scrolled > 220 && profile}
+      <h1 class="min-w-0 flex-1 truncate text-base font-semibold">{profile.name}</h1>
+    {/if}
+  </header>
 
-    <div
-      class="min-h-0 flex-1 overflow-y-auto pb-8"
-      onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}
-    >
-      {#if profile}
-        <div
-          class="relative overflow-hidden px-4 pt-16 pb-4"
-          style:background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)"
-        >
+  <div
+    class="min-h-0 flex-1 overflow-y-auto pb-8"
+    onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}
+  >
+    {#if profile}
+      <div class="relative isolate overflow-hidden px-4 pt-16 pb-4">
+        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)" />
           <div class="flex flex-col items-center text-center">
             <Cover
               cover={portrait}
@@ -320,6 +314,13 @@
       {:else}
         <div class="mx-auto mt-24 size-36 animate-pulse rounded-full bg-zinc-800"></div>
       {/if}
-    </div>
   </div>
+</div>
+
+{#if selectedOnlineAlbum}
+  <MobileSheet onBack={popLayer}>
+    <div class="absolute inset-0 flex flex-col bg-zinc-950 pt-2">
+      <OnlineAlbumDetail album={selectedOnlineAlbum} onBack={popLayer} />
+    </div>
+  </MobileSheet>
 {/if}

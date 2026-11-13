@@ -1,7 +1,9 @@
 <script lang="ts">
   import { count, i18n, t } from './i18n.svelte'
   import { tick } from 'svelte'
+  import { fade, scale } from 'svelte/transition'
   import { invoke } from '@tauri-apps/api/core'
+  import { motionDuration } from './motion'
   import { playlists } from './playlists.svelte'
   import {
     tagEditor,
@@ -197,11 +199,13 @@
 {#if request}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
+    transition:fade={{ duration: motionDuration(150) }}
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
     onclick={(e) => e.target === e.currentTarget && close()}
   >
     <div
       bind:this={dialog}
+      transition:scale={{ start: 0.96, duration: motionDuration(180) }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="tag-editor-title"

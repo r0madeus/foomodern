@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
+  import { fade, scale } from 'svelte/transition'
   import { appSettings } from './appSettings.svelte'
   import Icon from './Icon.svelte'
   import { t } from './i18n.svelte'
+  import { motionDuration } from './motion'
   import PlaylistCover from './PlaylistCover.svelte'
   import {
     buildCoverPreset,
@@ -14,10 +17,13 @@
 
   let { playlist, onClose }: { playlist: PlaylistInfo; onClose: () => void } = $props()
 
-  const initial = parseCoverPreset(playlist.cover) ?? {
-    palette: fallbackPalette(playlist.name),
-    icon: 'music' as const,
-  }
+  const initial = untrack(
+    () =>
+      parseCoverPreset(playlist.cover) ?? {
+        palette: fallbackPalette(playlist.name),
+        icon: 'music' as const,
+      },
+  )
 
   let selectedPalette = $state(initial.palette.id)
   let selectedIcon = $state(initial.icon)
@@ -56,12 +62,16 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
 <div
+  transition:fade={{ duration: motionDuration(150) }}
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
   role="dialog"
   aria-modal="true"
   aria-labelledby="playlist-cover-title"
 >
-  <div class="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+  <div
+    transition:scale={{ start: 0.96, duration: motionDuration(180) }}
+    class="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+  >
     <div class="mb-4 flex items-center justify-between gap-3">
       <h3 id="playlist-cover-title" class="text-base font-semibold">
         {t('Playlist cover')}

@@ -2,6 +2,7 @@
   import { t } from '../i18n.svelte'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
+  import TintedBackdrop from '../TintedBackdrop.svelte'
   import { player } from '../player.svelte'
   import { nowCover } from '../nowCover.svelte'
   import { tintFrom } from '../tint'
@@ -17,9 +18,9 @@
 
 {#if snap.current}
   <div
-    class="relative mx-2 mb-1.5 overflow-hidden rounded-lg shadow-lg shadow-black/40 transition-[background] duration-500"
-    style:background={tintFrom(nowCover.color).surface}
+    class="relative isolate mx-2 mb-1.5 overflow-hidden rounded-lg shadow-lg shadow-black/40"
   >
+    <TintedBackdrop background={tintFrom(nowCover.color).surface} duration={500} />
     <div class="flex h-14 items-center gap-3 pr-1 pl-2">
       <button class="flex min-w-0 flex-1 items-center gap-3 text-left" onclick={onOpen} aria-label={t("Open player")}>
         <Cover cover={nowCover.cover} title={snap.current.title} class="size-10 shrink-0 rounded text-xs" />
@@ -32,8 +33,8 @@
         <Icon name={snap.status === 'playing' ? 'pause' : 'play'} class="size-7" />
       </button>
     </div>
-    <div class="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-white/20">
-      <div class="h-full rounded-full bg-white" style:width="{progress}%"></div>
+    <div class="absolute inset-x-2 bottom-0 h-0.5 overflow-hidden rounded-full bg-white/20">
+      <div class="h-full w-full origin-left bg-white" style:transform="scaleX({progress / 100})"></div>
     </div>
   </div>
 {/if}

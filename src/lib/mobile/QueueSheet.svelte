@@ -2,6 +2,7 @@
   import { t } from '../i18n.svelte'
   import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
+  import { motionDuration, viewportHeight } from '../motion'
   import { player } from '../player.svelte'
 
   let { onClose }: { onClose: () => void } = $props()
@@ -18,7 +19,7 @@
   class="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-white"
   style:padding-top="var(--inset-top)"
   style:padding-bottom="var(--inset-bottom)"
-  transition:fly={{ y: 600, duration: 220, opacity: 1 }}
+  transition:fly={{ y: viewportHeight(), duration: motionDuration(220), opacity: 1 }}
   role="dialog"
   aria-modal="true"
   aria-label={t("Queue")}

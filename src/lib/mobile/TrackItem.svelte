@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../i18n.svelte'
   import Cover from '../Cover.svelte'
+  import Equalizer from '../Equalizer.svelte'
   import FavoriteButton from '../FavoriteButton.svelte'
   import AddToPlaylist from '../AddToPlaylist.svelte'
   import { player } from '../player.svelte'
@@ -33,13 +34,15 @@
   <button class="flex min-w-0 flex-1 items-center gap-3 text-left" onclick={onPlay}>
     {#if number !== null}
       <span class={['w-6 shrink-0 text-center text-sm tabular-nums', current ? 'text-teal-400' : 'text-zinc-500']}>
-        {#if playing}<span aria-label={t("Playing")}>▶</span>{:else}{number}{/if}
+        {#if playing}<Equalizer />{:else}{number}{/if}
       </span>
     {:else}
       <span class="relative shrink-0">
         <Cover {cover} {title} class="size-12 rounded text-sm" />
         {#if playing}
-          <span class="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-teal-300" aria-label={t("Playing")}>▶</span>
+          <span class="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-teal-300">
+            <Equalizer />
+          </span>
         {/if}
       </span>
     {/if}

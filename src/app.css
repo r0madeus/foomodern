@@ -27,14 +27,19 @@ body {
 
 /* Range inputs used for seek and volume. --progress is set inline. */
 input.seek {
+  --seek-fill: var(--color-teal-600);
+  --seek-track: var(--color-zinc-300);
   appearance: none;
   border-radius: 9999px;
   cursor: pointer;
   background: linear-gradient(
     to right,
-    var(--color-teal-600) var(--progress, 0%),
-    var(--color-zinc-300) var(--progress, 0%)
+    var(--seek-fill) var(--progress, 0%),
+    var(--seek-track) var(--progress, 0%)
   );
+}
+input.seek:not(:disabled):hover {
+  --seek-fill: var(--color-teal-500);
 }
 input.seek:disabled {
   cursor: default;
@@ -44,19 +49,19 @@ html.dark {
   color-scheme: dark;
 }
 html.dark input.seek {
-  background: linear-gradient(
-    to right,
-    var(--color-teal-500) var(--progress, 0%),
-    var(--color-zinc-700) var(--progress, 0%)
-  );
+  --seek-fill: var(--color-teal-500);
+  --seek-track: var(--color-zinc-700);
+}
+html.dark input.seek:not(:disabled):hover {
+  --seek-fill: var(--color-teal-400);
 }
 @media (prefers-color-scheme: dark) {
   input.seek {
-    background: linear-gradient(
-      to right,
-      var(--color-teal-500) var(--progress, 0%),
-      var(--color-zinc-700) var(--progress, 0%)
-    );
+    --seek-fill: var(--color-teal-500);
+    --seek-track: var(--color-zinc-700);
+  }
+  input.seek:not(:disabled):hover {
+    --seek-fill: var(--color-teal-400);
   }
 }
 input.seek::-webkit-slider-thumb {
@@ -66,6 +71,19 @@ input.seek::-webkit-slider-thumb {
   border-radius: 9999px;
   background: white;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.2), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+@media (hover: hover) {
+  input.seek:not(.touch)::-webkit-slider-thumb {
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+  input.seek:not(.touch):not(:disabled):hover::-webkit-slider-thumb,
+  input.seek:not(.touch):not(:disabled):active::-webkit-slider-thumb,
+  input.seek:not(.touch):not(:disabled):focus-visible::-webkit-slider-thumb {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Phone seek bars: thicker track, bigger thumb for fingers. */
@@ -127,4 +145,85 @@ html.dark *::-webkit-scrollbar-thumb:hover {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+@keyframes eq-bar {
+  0%, 100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.eq-bar {
+  height: 100%;
+  transform-origin: bottom;
+  animation: eq-bar 900ms ease-in-out infinite;
+}
+
+@keyframes star-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.32);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-star-pop {
+  animation: star-pop 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-view-enter {
+  animation: view-enter 140ms ease-out;
+}
+
+@keyframes bar-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.animate-bar-y {
+  transform-origin: bottom;
+  animation: bar-grow-y 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes bar-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-bar-x {
+  transform-origin: left;
+  animation: bar-grow-x 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

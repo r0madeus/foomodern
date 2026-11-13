@@ -5,13 +5,17 @@
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
   import AddToPlaylist from '../AddToPlaylist.svelte'
+  import TintedBackdrop from '../TintedBackdrop.svelte'
   import TrackItem from './TrackItem.svelte'
   import { library, type AlbumRow, type TrackRow } from '../library.svelte'
+  import type { Rgb } from '../nowCover.svelte'
   import { player, formatTime } from '../player.svelte'
+  import { tintFrom } from '../tint'
 
   let { albumId, onBack }: { albumId: number; onBack: () => void } = $props()
 
   let data = $state<{ album: AlbumRow; tracks: TrackRow[] } | null>(null)
+  let color = $state<Rgb | null>(null)
   let scrolled = $state(0)
 
   $effect(() => {
@@ -24,6 +28,20 @@
       .catch((e) => (player.error = String(e)))
     return () => (stale = true)
   })
+
+  $effect(() => {
+    const cover = data?.album.cover ?? null
+    color = null
+    if (cover === null) return
+    let stale = false
+    invoke<Rgb | null>('library_cover_color', { cover })
+      .then((c) => {
+        if (!stale) color = c
+      })
+      .catch(() => {})
+    return () => (stale = true)
+  })
+  const tint = $derived(tintFrom(color))
 
   const totalSeconds = $derived(
     data ? data.tracks.reduce((sum, t) => sum + (t.durationMs ?? 0), 0) / 1000 : 0,
@@ -54,9 +72,8 @@
 
   <div class="min-h-0 flex-1 overflow-y-auto pb-6" onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}>
     {#if data}
-      <div class="relative overflow-hidden px-4 pt-16 pb-4">
-        <Cover cover={data.album.cover} title={data.album.title} class="absolute inset-0 size-full scale-150 opacity-40 blur-3xl" />
-        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-950"></div>
+      <div class="relative isolate overflow-hidden px-4 pt-16 pb-4">
+        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)" />
         <div class="relative">
           <Cover cover={data.album.cover} title={data.album.title} class="mx-auto aspect-square w-3/5 max-w-64 rounded-md text-5xl shadow-2xl shadow-black/60" />
           <h2 class="mt-5 text-2xl leading-tight font-bold">{data.album.title}</h2>
