@@ -74,6 +74,12 @@ impl MockServer {
             while !st.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // On Windows an accepted socket inherits the listener's
+                        // non-blocking mode: the first read could then fail with
+                        // WouldBlock before the request arrived, and the reply
+                        // was sent (and the socket closed) with the request
+                        // unread, which the client reports as a broken exchange.
+                        stream.set_nonblocking(false).unwrap();
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
                         let mut buf = [0u8; 4096];
                         let mut req = Vec::new();
