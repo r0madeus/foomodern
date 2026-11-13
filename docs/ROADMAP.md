@@ -27,12 +27,44 @@ contributors and agents.
 - Attach a local `.lrc` file manually
 - Windows release workflow (`v*` tags) building the NSIS installer
 
+### Android (same app, decision K7)
+- Audio through Media3/ExoPlayer behind `AudioEngine`, in a local Tauri
+  plugin (`src-tauri/plugins/android-audio`). ExoPlayer holds only
+  current + next, like mpv; the queue stays in Rust.
+- Background playback via a `MediaSessionService` with a media
+  notification; its next/previous go to the Rust queue.
+- Engine commands go through a worker thread: mobile plugin calls run on
+  the Android main thread and block.
+- Desktop-only parts are gated (libmpv, souvlaki, tray menu); lyrics use
+  rustls (ring + webpki roots) on Android.
+- Library: asks for `READ_MEDIA_AUDIO` and adds the shared `Music` folder.
+- CI builds an aarch64 debug APK (artifact `foomodern-android-debug-apk`).
+
+### Look and feel (phone and desktop)
+- Phone UI (`src/lib/mobile`, below 640 px): Albums / Songs / Search /
+  Library tabs, a mini player, a full-screen player tinted with the
+  cover's colour, the line being sung under the cover, a lyrics card and
+  full-screen lyrics (follow playback, tap a line to seek), album and
+  playlist pages, cover thumbnails, Android back button closes screens,
+  always dark, edge-to-edge insets.
+- Desktop: a now-playing view (large cover + synced lyrics) opened from
+  the player bar, the lyrics panel in the same tinted style, covers in
+  song/playlist rows and in the player bar, sidebar icons, album headers
+  on the cover's colour.
+- The cover's dominant colour is computed in Rust (`library::cover_color`).
+
 ## Next
 
 1. **Release and test on Windows**: media keys and SMTC flyout, tray and
    close-to-tray, tag editing (also while another program holds the file),
-   playlists, ReplayGain setting.
-2. **Metadata matching (post-v0, not decided yet)** – proposed design:
+   playlists, ReplayGain setting, the new now-playing view.
+2. **Try the APK on a phone**: permission prompt and Music folder scan,
+   playback with the screen off, notification controls, cover tint and
+   the lyric line, back button, status/navigation bar insets.
+3. **Android follow-ups**: ReplayGain (ExoPlayer has none), picking
+   folders other than `Music`, a signed release APK, tag writing on shared
+   storage, attaching `.lrc` files (the picker returns `content://` URIs).
+4. **Metadata matching (post-v0, not decided yet)** – proposed design:
    - Match per **album**, not per track: compare a folder's track count and
      durations with MusicBrainz releases (Picard's approach).
    - **Preview and confirm**: old and new values side by side; nothing is
@@ -58,3 +90,5 @@ contributors and agents.
 - Albums with the same title and album artist but different years are
   grouped as one album.
 - UI text is English only.
+- Android: not yet tried on a device; ReplayGain is not applied; only the
+  `Music` folder can be added; "Open files" is hidden.
