@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 5);
+    assert_eq!(v, 6);
 }
 
 #[test]
@@ -656,7 +656,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 5);
+    assert_eq!(v, 6);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -697,7 +697,7 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 5);
+        assert_eq!(v, 6);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -1450,4 +1450,101 @@ fn playlist_cover_file_preset_and_cleanup() {
 
     e.lib.clear_playlist_cover(pl.id).unwrap();
     assert_eq!(e.lib.playlists().unwrap()[0].cover, None);
+}
+
+#[test]
+fn listening_history_aggregates_and_survives_track_removal() {
+    let e = env();
+    scanned_tracks(&e, &["Alpha", "Beta"]);
+    let tracks = e.lib.tracks_page(0, 10, SortOrder::Title).unwrap();
+    let alpha = &tracks[0];
+    let beta = &tracks[1];
+
+    let day1 = 1_700_000_000i64;
+    let day2 = day1 + 86_400;
+    let day3 = day2 + 86_400;
+
+    e.lib
+        .record_listen_event(super::NewListenEvent {
+            path: alpha.path.clone(),
+            title: alpha.title.clone(),
+            artist: alpha.artist.clone(),
+            duration_ms: alpha.duration_ms,
+            started_at: day1,
+            ended_at: day1 + 180,
+            listened_ms: 180_000,
+            completed: true,
+            skipped: false,
+        })
+        .unwrap();
+    e.lib
+        .record_listen_event(super::NewListenEvent {
+            path: alpha.path.clone(),
+            title: alpha.title.clone(),
+            artist: alpha.artist.clone(),
+            duration_ms: alpha.duration_ms,
+            started_at: day2,
+            ended_at: day2 + 12,
+            listened_ms: 12_000,
+            completed: false,
+            skipped: true,
+        })
+        .unwrap();
+    e.lib
+        .record_listen_event(super::NewListenEvent {
+            path: "https://example.org/stream/live".into(),
+            title: "Stream Track".into(),
+            artist: "Online Artist".into(),
+            duration_ms: Some(210_000),
+            started_at: day3,
+            ended_at: day3 + 200,
+            listened_ms: 200_000,
+            completed: true,
+            skipped: false,
+        })
+        .unwrap();
+    e.lib
+        .record_listen_event(super::NewListenEvent {
+            path: beta.path.clone(),
+            title: beta.title.clone(),
+            artist: beta.artist.clone(),
+            duration_ms: beta.duration_ms,
+            started_at: day3 + 500,
+            ended_at: day3 + 560,
+            listened_ms: 60_000,
+            completed: true,
+            skipped: false,
+        })
+        .unwrap();
+
+    // Full range: 4 raw events, 3 valid plays (>= 15s or completed), 1 skip, 3 consecutive days.
+    let all = e.lib.listening_stats(None, None).unwrap();
+    assert_eq!(all.summary.raw_event_count, 4);
+    assert_eq!(all.summary.play_count, 3);
+    assert_eq!(all.summary.skip_count, 1);
+    assert_eq!(all.summary.completed_count, 3);
+    assert_eq!(all.summary.total_listened_ms, 452_000);
+    assert_eq!(all.summary.longest_streak_days, 3);
+    assert_eq!(all.summary.active_days, 3);
+    assert_eq!(all.recent[0].source, "local");
+    assert_eq!(all.recent[1].source, "online");
+
+    // Date range filter `[day2, day3)` excludes day1 and day3.
+    let mid = e.lib.listening_stats(Some(day2), Some(day3)).unwrap();
+    assert_eq!(mid.summary.raw_event_count, 1);
+    assert_eq!(mid.summary.play_count, 0);
+    assert_eq!(mid.summary.skip_count, 1);
+    assert_eq!(mid.summary.total_listened_ms, 12_000);
+
+    // Removing the music folder deletes `tracks`, but listen_events keep snapshots.
+    e.lib.remove_folder(e.lib.folders().unwrap()[0].id).unwrap();
+    let after_rm = e.lib.listening_stats(None, None).unwrap();
+    assert_eq!(after_rm.summary.raw_event_count, 4);
+    assert_eq!(after_rm.summary.total_listened_ms, 452_000);
+
+    assert_eq!(e.lib.clear_listen_history().unwrap(), 4);
+    assert_eq!(
+        e.lib.listening_stats(None, None).unwrap().summary.raw_event_count,
+        0
+    );
 }

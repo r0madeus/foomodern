@@ -1101,3 +1101,23 @@ pub fn favorites_play(
     let tracks = le(lib.favorites_queue_tracks())?;
     s(player.replace_queue(tracks, start_index))
 }
+
+// ---------------------------------------------------------------------
+// Listening history & stats
+// ---------------------------------------------------------------------
+
+#[tauri::command]
+pub fn history_stats(
+    lib: State<'_, Arc<Library>>,
+    from: Option<i64>,
+    to: Option<i64>,
+) -> Res<crate::library::ListeningStats> {
+    le(lib.listening_stats(from, to))
+}
+
+#[tauri::command]
+pub fn history_clear(app: AppHandle, lib: State<'_, Arc<Library>>) -> Res<u64> {
+    let removed = le(lib.clear_listen_history())?;
+    let _ = app.emit("library://history", ());
+    Ok(removed)
+}

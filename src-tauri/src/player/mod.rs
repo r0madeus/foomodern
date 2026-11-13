@@ -18,6 +18,16 @@ use crate::session::{SavedTrack, SessionState};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const MIN_LISTEN_MS: u64 = 3_000;
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlayerError {
@@ -61,6 +71,19 @@ pub struct PlayerSnapshot {
     pub replaygain: ReplayGain,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListenRecord {
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub duration_ms: Option<u64>,
+    pub started_at: i64,
+    pub ended_at: i64,
+    pub listened_ms: u64,
+    pub completed: bool,
+    pub skipped: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerEvent {
     State(PlayerSnapshot),
@@ -68,11 +91,42 @@ pub enum PlayerEvent {
         seconds: f64,
         duration: Option<f64>,
     },
+    /// A finished or interrupted playback session long enough to record.
+    Listen(ListenRecord),
     /// Something the user should know about (e.g. a file failed to play).
     Error(String),
 }
 
 pub type Observer = Box<dyn Fn(PlayerEvent) + Send + Sync>;
+
+struct ListenSession {
+    path: String,
+    title: String,
+    artist: String,
+    duration_ms: Option<u64>,
+    started_at: i64,
+    accumulated: Duration,
+    playing_since: Option<Instant>,
+}
+
+impl ListenSession {
+    fn set_playing(&mut self, playing: bool) {
+        if playing {
+            if self.playing_since.is_none() {
+                self.playing_since = Some(Instant::now());
+            }
+        } else if let Some(since) = self.playing_since.take() {
+            self.accumulated += since.elapsed();
+        }
+    }
+
+    fn total_ms(&mut self) -> u64 {
+        if let Some(since) = self.playing_since.take() {
+            self.accumulated += since.elapsed();
+        }
+        u64::try_from(self.accumulated.as_millis()).unwrap_or(u64::MAX)
+    }
+}
 
 struct Inner {
     queue: Queue,
@@ -94,6 +148,10 @@ struct Inner {
     pending_load_seek: Option<f64>,
     /// Sequence number of the last observer event built under this lock.
     event_seq: u64,
+    /// Active listening session for the current track, if any.
+    listen: Option<ListenSession>,
+    /// Completed listening sessions queued for delivery outside the lock.
+    pending_listens: Vec<ListenRecord>,
 }
 
 pub struct Player {
@@ -159,6 +217,7 @@ impl Inner {
             .ok_or(PlayerError::InvalidIndex(index))?
             .path
             .clone();
+        self.close_listen(false, true);
         self.queue.set_current(Some(index));
         self.engine_next = None; // `load` clears the next slot
         self.position = 0.0;
@@ -167,12 +226,14 @@ impl Inner {
         self.pending_load_seek = None;
         self.status = Status::Playing;
         self.pending_load = true;
+        self.open_listen();
         self.engine.load(&path)?;
         self.engine.play()?; // `load` keeps a paused engine paused
         self.sync_next()
     }
 
     fn stop_engine(&mut self) -> Result<(), PlayerError> {
+        self.close_listen(false, true);
         self.pending_load = false;
         self.resume_position = None;
         self.pending_load_seek = None;
@@ -181,6 +242,59 @@ impl Inner {
         self.engine_next = None;
         self.engine.stop()?;
         Ok(())
+    }
+
+    fn open_listen(&mut self) {
+        let Some(entry) = self.queue.current() else {
+            return;
+        };
+        let info = track_info(entry);
+        let playing_since = (self.status == Status::Playing).then(Instant::now);
+        self.listen = Some(ListenSession {
+            path: info.path,
+            title: info.title,
+            artist: info.artist,
+            duration_ms: self
+                .duration
+                .filter(|d| d.is_finite() && *d > 0.0)
+                .map(|d| (d * 1000.0).round() as u64),
+            started_at: unix_now(),
+            accumulated: Duration::ZERO,
+            playing_since,
+        });
+    }
+
+    fn set_listen_playing(&mut self, playing: bool) {
+        if let Some(listen) = &mut self.listen {
+            listen.set_playing(playing);
+        }
+    }
+
+    fn close_listen(&mut self, ended_naturally: bool, skipped_if_early: bool) {
+        let Some(mut session) = self.listen.take() else {
+            return;
+        };
+        let listened_ms = session.total_ms();
+        if listened_ms < MIN_LISTEN_MS {
+            return;
+        }
+        let completed = ended_naturally
+            || session
+                .duration_ms
+                .is_some_and(|d| d > 0 && listened_ms.saturating_mul(10) >= d.saturating_mul(8));
+        let skipped = skipped_if_early && !completed;
+        let ended_at = unix_now().max(session.started_at);
+        self.pending_listens.push(ListenRecord {
+            path: session.path,
+            title: session.title,
+            artist: session.artist,
+            duration_ms: session.duration_ms,
+            started_at: session.started_at,
+            ended_at,
+            listened_ms,
+            completed,
+            skipped,
+        });
     }
 
     /// Decision K3: keep the engine's next slot equal to `queue.next()`.
@@ -214,6 +328,8 @@ impl Player {
                 resume_position: None,
                 pending_load_seek: None,
                 event_seq: 0,
+                listen: None,
+                pending_listens: Vec::new(),
             }),
             observer,
             delivered_seq: Mutex::new(0),
@@ -222,14 +338,32 @@ impl Player {
 
     /// Hand `event` (built under the lock with sequence `seq`) to the
     /// observer, in order. Stale state/position events are dropped; errors
-    /// are always delivered.
+    /// and completed listen records are always delivered.
     fn deliver(&self, seq: u64, event: PlayerEvent) {
         let mut last = self.delivered_seq.lock().unwrap_or_else(|e| e.into_inner());
-        if seq <= *last && !matches!(event, PlayerEvent::Error(_)) {
+        if seq <= *last
+            && !matches!(event, PlayerEvent::Error(_) | PlayerEvent::Listen(_))
+        {
             return;
         }
         *last = (*last).max(seq);
         (self.observer)(event);
+    }
+
+    fn deliver_listens(&self, listens: Vec<ListenRecord>) {
+        for rec in listens {
+            (self.observer)(PlayerEvent::Listen(rec));
+        }
+    }
+
+    /// Close any in-progress listening session cleanly (used on app exit).
+    pub fn flush_listen(&self) {
+        let listens = {
+            let mut inner = self.lock();
+            inner.close_listen(false, false);
+            std::mem::take(&mut inner.pending_listens)
+        };
+        self.deliver_listens(listens);
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -242,12 +376,14 @@ impl Player {
     where
         F: FnOnce(&mut Inner) -> Result<(), PlayerError>,
     {
-        let (result, snap, seq) = {
+        let (result, snap, seq, listens) = {
             let mut inner = self.lock();
             let r = f(&mut inner);
             let seq = inner.next_seq();
-            (r, inner.snapshot(), seq)
+            let listens = std::mem::take(&mut inner.pending_listens);
+            (r, inner.snapshot(), seq, listens)
         };
+        self.deliver_listens(listens);
         self.deliver(seq, PlayerEvent::State(snap.clone()));
         result.map(|()| snap)
     }
@@ -420,6 +556,7 @@ impl Player {
             Status::Paused => {
                 s.engine.play()?;
                 s.status = Status::Playing;
+                s.set_listen_playing(true);
                 Ok(())
             }
             Status::Stopped => {
@@ -443,6 +580,7 @@ impl Player {
             if s.status == Status::Playing {
                 s.engine.pause()?;
                 s.status = Status::Paused;
+                s.set_listen_playing(false);
             }
             Ok(())
         })
@@ -555,7 +693,7 @@ impl Player {
             Position(f64, Option<f64>),
             Error(String),
         }
-        let (out, snap, seq) = {
+        let (out, snap, seq, listens) = {
             let mut s = self.lock();
             let out = match event {
                 EngineEvent::TrackStarted {
@@ -580,9 +718,11 @@ impl Player {
                 } => {
                     s.pending_load = false;
                     s.status = Status::Playing;
+                    s.set_listen_playing(true);
                     Out::State
                 }
                 EngineEvent::Idle => {
+                    s.close_listen(true, false);
                     s.status = Status::Stopped;
                     s.position = 0.0;
                     s.engine_next = None;
@@ -594,6 +734,7 @@ impl Player {
                         (_, true) => Status::Paused,
                         (_, false) => Status::Playing,
                     };
+                    s.set_listen_playing(new == Status::Playing);
                     if new != s.status {
                         s.status = new;
                         Out::State
@@ -603,6 +744,12 @@ impl Player {
                 }
                 EngineEvent::Duration { seconds } => {
                     s.duration = Some(seconds);
+                    if seconds.is_finite() && seconds > 0.0 {
+                        let ms = (seconds * 1000.0).round() as u64;
+                        if let Some(l) = &mut s.listen {
+                            l.duration_ms = Some(ms);
+                        }
+                    }
                     if let Some(pos) = s.pending_load_seek.take() {
                         let target = pos.min(seconds.max(0.0));
                         if let Err(e) = s.engine.seek(target) {
@@ -618,6 +765,17 @@ impl Player {
                     Out::Position(seconds, s.duration)
                 }
                 EngineEvent::TrackEnded { path, reason } => {
+                    let same_track = s
+                        .listen
+                        .as_ref()
+                        .is_some_and(|l| l.path == path.to_string_lossy());
+                    if same_track {
+                        match reason {
+                            EndReason::Eof => s.close_listen(true, false),
+                            EndReason::Error => s.close_listen(false, false),
+                            EndReason::Stopped => {}
+                        }
+                    }
                     if reason == EndReason::Error {
                         log::warn!("track failed to play: {}", path.display());
                     }
@@ -630,8 +788,10 @@ impl Player {
                 EngineEvent::Remote(_) => Out::None, // handled above
             };
             let seq = s.next_seq();
-            (out, s.snapshot(), seq)
+            let listens = std::mem::take(&mut s.pending_listens);
+            (out, s.snapshot(), seq, listens)
         };
+        self.deliver_listens(listens);
         match out {
             Out::None => {}
             Out::State => self.deliver(seq, PlayerEvent::State(snap)),
@@ -647,6 +807,7 @@ impl Player {
     /// queued: we load the entry after the last known current one, or stop
     /// when there is none.
     fn on_auto_advance(s: &mut Inner, path: &Path) -> Result<(), PlayerError> {
+        s.close_listen(true, false);
         s.position = 0.0;
         s.duration = None;
         // The track change may have been reported after the user paused at
@@ -662,6 +823,7 @@ impl Player {
         match idx {
             Some(i) => {
                 s.queue.set_current(Some(i));
+                s.open_listen();
                 s.sync_next()
             }
             None => match s.queue.next_index() {
@@ -1388,5 +1550,61 @@ mod tests {
             !calls.take().iter().any(|c| matches!(c, Call::Seek(_))),
             "explicit track selection must start from 0.0"
         );
+    }
+
+    #[test]
+    fn listen_tracking_records_skips_completions_and_ignores_short_taps() {
+        let (p, _, events) = setup();
+        p.replace_queue(pbs(&["a.mp3", "b.mp3", "c.mp3"]), 0).unwrap();
+
+        // Short tap (< 3s) skipped immediately: must not emit Listen.
+        p.next().unwrap();
+        assert!(
+            !events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, PlayerEvent::Listen(_)))
+        );
+
+        // Simulate 10s on a 120s track then skip with next() -> skipped = true.
+        p.handle_engine_event(EngineEvent::Duration { seconds: 120.0 });
+        p.lock().listen.as_mut().unwrap().accumulated += Duration::from_secs(10);
+        p.next().unwrap();
+        let listens: Vec<ListenRecord> = events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                PlayerEvent::Listen(r) => Some(r.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(listens.len(), 1);
+        assert_eq!(listens[0].path, "b.mp3");
+        assert!(listens[0].skipped);
+        assert!(!listens[0].completed);
+        assert!(listens[0].listened_ms >= 10_000);
+
+        // Simulate 90s on c.mp3 finishing naturally via EOF -> completed = true, skipped = false.
+        p.handle_engine_event(EngineEvent::Duration { seconds: 90.0 });
+        p.lock().listen.as_mut().unwrap().accumulated += Duration::from_secs(90);
+        p.handle_engine_event(EngineEvent::TrackEnded {
+            path: pb("c.mp3"),
+            reason: EndReason::Eof,
+        });
+        let listens: Vec<ListenRecord> = events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                PlayerEvent::Listen(r) => Some(r.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(listens.len(), 2);
+        assert_eq!(listens[1].path, "c.mp3");
+        assert!(listens[1].completed);
+        assert!(!listens[1].skipped);
     }
 }

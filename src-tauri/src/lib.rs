@@ -112,6 +112,28 @@ pub fn run() {
                             }
                             handle.emit("player://position", PositionPayload { seconds, duration })
                         }
+                        PlayerEvent::Listen(rec) => {
+                            if let Some(lib) = handle.try_state::<Arc<Library>>() {
+                                if let Err(e) = lib.record_listen_event(library::NewListenEvent {
+                                    path: rec.path,
+                                    title: rec.title,
+                                    artist: rec.artist,
+                                    duration_ms: rec.duration_ms,
+                                    started_at: rec.started_at,
+                                    ended_at: rec.ended_at,
+                                    listened_ms: rec.listened_ms,
+                                    completed: rec.completed,
+                                    skipped: rec.skipped,
+                                }) {
+                                    log::warn!("failed to record listen event: {e}");
+                                    Ok(())
+                                } else {
+                                    handle.emit("library://history", ())
+                                }
+                            } else {
+                                Ok(())
+                            }
+                        }
                         PlayerEvent::Error(message) => handle.emit("player://error", message),
                     };
                     if let Err(e) = result {
@@ -282,6 +304,8 @@ pub fn run() {
             commands::favorites_toggle_by_path,
             commands::favorites_tracks_page,
             commands::favorites_play,
+            commands::history_stats,
+            commands::history_clear,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -292,6 +316,7 @@ pub fn run() {
                     app_handle.try_state::<Arc<SessionStore>>(),
                 )
             {
+                player.flush_listen();
                 session.save_now(&player.export_session());
             }
         });

@@ -9,6 +9,7 @@
   import SongsView from './lib/SongsView.svelte'
   import AlbumsView from './lib/AlbumsView.svelte'
   import FavoritesView from './lib/FavoritesView.svelte'
+  import StatsView from './lib/StatsView.svelte'
   import QueueView from './lib/QueueView.svelte'
   import SearchView from './lib/SearchView.svelte'
   import SettingsView from './lib/SettingsView.svelte'
@@ -20,6 +21,7 @@
   import { lyrics } from './lib/lyrics.svelte'
   import { playlists } from './lib/playlists.svelte'
   import { favorites } from './lib/favorites.svelte'
+  import { history } from './lib/history.svelte'
   import { pinned } from './lib/pinned.svelte'
   import { appSettings } from './lib/appSettings.svelte'
   import { online } from './lib/online.svelte'
@@ -34,21 +36,23 @@
     'wma', 'aif', 'aiff', 'dsf', 'dff', 'mka', 'mpc', 'tta', 'alac',
   ]
 
-  type View = 'songs' | 'albums' | 'search' | 'favorites' | 'queue' | 'settings' | 'playlist'
+  type View = 'songs' | 'albums' | 'search' | 'stats' | 'favorites' | 'queue' | 'settings' | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
   // section, Queue is toggled from the bottom bar, and Settings sits at the bottom.
-  type NavView = 'songs' | 'albums' | 'search'
-  const NAV: NavView[] = ['songs', 'albums', 'search']
+  type NavView = 'songs' | 'albums' | 'search' | 'stats'
+  const NAV: NavView[] = ['songs', 'albums', 'search', 'stats']
   const VIEWS: View[] = [...NAV, 'favorites', 'queue', 'settings']
   const LABELS: Record<NavView, string> = {
     songs: 'Songs',
     albums: 'Albums',
     search: 'Search',
+    stats: 'Listening stats',
   } // English keys, shown through t()
-  const ICONS: Record<NavView, 'music' | 'album' | 'search'> = {
+  const ICONS: Record<NavView, 'music' | 'album' | 'search' | 'chart'> = {
     songs: 'music',
     albums: 'album',
     search: 'search',
+    stats: 'chart',
   }
   const KEY = 'foomodern.view'
 
@@ -144,6 +148,7 @@
     songs: library.stats.tracks,
     albums: library.stats.albums,
     search: null,
+    stats: null,
   })
 
   onMount(() => {
@@ -151,6 +156,7 @@
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
     favorites.init().catch((e) => (player.error = String(e)))
+    history.init().catch((e) => (player.error = String(e)))
     pinned.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
@@ -460,6 +466,8 @@
             onOpenSettings={() => go('settings')}
             onOpenLocalAlbum={(id) => openAlbum(id)}
           />
+        {:else if view === 'stats'}
+          <StatsView onOpenAlbum={(id) => openAlbum(id)} />
         {:else if view === 'favorites'}
           <FavoritesView />
         {:else if view === 'queue'}

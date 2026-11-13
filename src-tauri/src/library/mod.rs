@@ -112,6 +112,123 @@ pub struct FavoriteRef {
     pub path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewListenEvent {
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub duration_ms: Option<u64>,
+    pub started_at: i64,
+    pub ended_at: i64,
+    pub listened_ms: u64,
+    pub completed: bool,
+    pub skipped: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatsSummary {
+    pub total_listened_ms: u64,
+    pub play_count: u64,
+    pub raw_event_count: u64,
+    pub skip_count: u64,
+    pub completed_count: u64,
+    pub unique_tracks: u64,
+    pub unique_artists: u64,
+    pub unique_albums: u64,
+    pub active_days: u64,
+    pub longest_streak_days: u64,
+    pub current_streak_days: u64,
+    pub top_hour: Option<u32>,
+    pub top_weekday: Option<u32>,
+    pub first_listen_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopTrackStat {
+    pub track_id: Option<i64>,
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub cover: Option<String>,
+    pub play_count: u64,
+    pub listened_ms: u64,
+    pub skip_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopArtistStat {
+    pub artist: String,
+    pub cover: Option<String>,
+    pub play_count: u64,
+    pub listened_ms: u64,
+    pub unique_tracks: u64,
+    pub skip_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopAlbumStat {
+    pub album: String,
+    pub artist: String,
+    pub album_id: Option<i64>,
+    pub cover: Option<String>,
+    pub play_count: u64,
+    pub listened_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopGenreStat {
+    pub genre: String,
+    pub play_count: u64,
+    pub listened_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BucketStat {
+    pub label: String,
+    pub listened_ms: u64,
+    pub play_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentListen {
+    pub id: i64,
+    pub track_id: Option<i64>,
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub cover: Option<String>,
+    pub started_at: i64,
+    pub listened_ms: u64,
+    pub completed: bool,
+    pub skipped: bool,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListeningStats {
+    pub summary: StatsSummary,
+    pub top_tracks_by_plays: Vec<TopTrackStat>,
+    pub top_tracks_by_time: Vec<TopTrackStat>,
+    pub top_artists_by_time: Vec<TopArtistStat>,
+    pub top_albums_by_time: Vec<TopAlbumStat>,
+    pub top_genres: Vec<TopGenreStat>,
+    pub by_hour: Vec<BucketStat>,
+    pub by_weekday: Vec<BucketStat>,
+    pub by_month: Vec<BucketStat>,
+    pub recent: Vec<RecentListen>,
+    pub available_years: Vec<i32>,
+}
+
 /// Result of importing an M3U playlist.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -524,6 +641,21 @@ impl Library {
             matched: ids.len(),
             missing: found.len() - ids.len(),
         })
+    }
+
+    /// Records one completed or interrupted playback session.
+    pub fn record_listen_event(&self, event: NewListenEvent) -> Result<()> {
+        db::record_listen_event(&self.conn(), &event)
+    }
+
+    /// Aggregated listening statistics for the `[from, to)` Unix-second range.
+    pub fn listening_stats(&self, from: Option<i64>, to: Option<i64>) -> Result<ListeningStats> {
+        db::listening_stats(&self.conn(), from, to, 15)
+    }
+
+    /// Removes all recorded listening history entries and returns rows deleted.
+    pub fn clear_listen_history(&self) -> Result<u64> {
+        db::clear_listen_history(&self.conn())
     }
 
     /// Library file paths (and their folder ids) for the given track ids, in
