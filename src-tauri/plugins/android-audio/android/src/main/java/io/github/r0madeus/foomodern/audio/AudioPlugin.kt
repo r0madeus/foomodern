@@ -3,8 +3,14 @@ package io.github.r0madeus.foomodern.audio
 import android.Manifest
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
+import android.provider.Settings
+import androidx.activity.result.ActivityResult
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
@@ -17,6 +23,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import app.tauri.PermissionState
+import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.Permission
@@ -37,6 +44,15 @@ class AttachArgs {
 @InvokeArg
 class PathArgs {
     var path: String? = null
+    /** ReplayGain volume factor for this file (0..1), computed in Rust. */
+    var gain: Double? = null
+}
+
+@InvokeArg
+class SaveTextArgs {
+    lateinit var name: String
+    lateinit var text: String
+    var mimeType: String = "audio/x-mpegurl"
 }
 
 @InvokeArg
@@ -77,6 +93,12 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
     private var currentPath: String? = null
     private var durationSentFor: String? = null
 
+    /** Volume chosen by the user (already cubic), before ReplayGain. */
+    private var userVolume = 1f
+    /** ReplayGain factor per file path. */
+    private val gains = HashMap<String, Float>()
+    private var pendingSaveText: String? = null
+
     private val positionTick = object : Runnable {
         override fun run() {
             if (player.isPlaying) {
@@ -96,6 +118,7 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
             }
             currentPath?.let { emitEnded(it, "eof") }
             currentPath = path
+            applyVolume()
             emit(JSObject().put("type", "started").put("path", path).put("auto", true))
             // Keep [current, next]: drop the finished item in front.
             handler.post {
@@ -188,13 +211,17 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun loadTrack(invoke: Invoke) {
-        val path = invoke.parseArgs(PathArgs::class.java).path
+        val args = invoke.parseArgs(PathArgs::class.java)
+        val path = args.path
         if (path == null) {
             invoke.reject("path is required")
             return
         }
         currentPath?.let { emitEnded(it, "stopped") }
         currentPath = path
+        gains.clear()
+        args.gain?.let { gains[path] = it.toFloat() }
+        applyVolume()
         durationSentFor = null
         // `load` keeps a paused engine paused (same as mpv); Rust calls `play`.
         player.setMediaItem(item(path))
@@ -205,7 +232,9 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun setNextTrack(invoke: Invoke) {
-        val path = invoke.parseArgs(PathArgs::class.java).path
+        val args = invoke.parseArgs(PathArgs::class.java)
+        val path = args.path
+        if (path != null) args.gain?.let { gains[path] = it.toFloat() }
         val keep = player.currentMediaItemIndex + 1
         if (player.mediaItemCount > keep) player.removeMediaItems(keep, player.mediaItemCount)
         if (path != null && player.mediaItemCount > 0) player.addMediaItem(item(path))
@@ -252,9 +281,181 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
         // mpv maps its 0..100 volume cubically; do the same so a saved volume
         // sounds alike on both platforms.
         val linear = percent / 100.0
-        player.volume = (linear * linear * linear).toFloat()
+        userVolume = (linear * linear * linear).toFloat()
+        applyVolume()
         invoke.resolve()
     }
+
+    /** New ReplayGain factor for a file (the mode changed). */
+    @Command
+    fun setGain(invoke: Invoke) {
+        val args = invoke.parseArgs(PathArgs::class.java)
+        val path = args.path
+        if (path != null && args.gain != null) {
+            gains[path] = args.gain!!.toFloat()
+            if (path == currentPath) applyVolume()
+        }
+        invoke.resolve()
+    }
+
+    private fun applyVolume() {
+        val gain = currentPath?.let { gains[it] } ?: 1f
+        player.volume = (userVolume * gain).coerceIn(0f, 1f)
+    }
+
+    /**
+     * Lets the user pick a folder (system picker) and resolves `{ path }`
+     * with its file-system path, or `{ path: null }` when cancelled. Only
+     * folders on device storage or an SD card have such a path.
+     */
+    @Command
+    fun pickFolder(invoke: Invoke) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        startActivityForResult(invoke, intent, "folderPicked")
+    }
+
+    @ActivityCallback
+    fun folderPicked(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            invoke.resolve(JSObject().put("path", null as String?))
+            return
+        }
+        val path = storagePath(uri, DocumentsContract.getTreeDocumentId(uri))
+        if (path == null) {
+            invoke.reject("Choose a folder on the device storage or SD card.")
+        } else {
+            invoke.resolve(JSObject().put("path", path))
+        }
+    }
+
+    /** Picks one file and resolves `{ path }` (file-system path) or `{ path: null }`. */
+    @Command
+    fun pickFile(invoke: Invoke) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(invoke, intent, "filePicked")
+    }
+
+    @ActivityCallback
+    fun filePicked(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            invoke.resolve(JSObject().put("path", null as String?))
+            return
+        }
+        val path = if (DocumentsContract.isDocumentUri(activity, uri)) {
+            storagePath(uri, DocumentsContract.getDocumentId(uri))
+        } else {
+            null
+        }
+        if (path == null) {
+            invoke.reject("Open the file from the device storage (\"Browse\" in the picker).")
+        } else {
+            invoke.resolve(JSObject().put("path", path))
+        }
+    }
+
+    /** Picks a text file (any location) and resolves `{ name, text }` or `{ text: null }`. */
+    @Command
+    fun openTextFile(invoke: Invoke) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(invoke, intent, "textFileOpened")
+    }
+
+    @ActivityCallback
+    fun textFileOpened(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            invoke.resolve(JSObject().put("text", null as String?))
+            return
+        }
+        try {
+            val text = activity.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+            invoke.resolve(JSObject().put("name", displayName(uri)).put("text", text))
+        } catch (e: Exception) {
+            invoke.reject("Could not read the file: ${e.message}")
+        }
+    }
+
+    /** Asks where to save `text` (system picker) and writes it; resolves `{ saved }`. */
+    @Command
+    fun saveTextFile(invoke: Invoke) {
+        val args = invoke.parseArgs(SaveTextArgs::class.java)
+        pendingSaveText = args.text
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = args.mimeType
+            putExtra(Intent.EXTRA_TITLE, args.name)
+        }
+        startActivityForResult(invoke, intent, "textFileSaved")
+    }
+
+    @ActivityCallback
+    fun textFileSaved(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        val text = pendingSaveText
+        pendingSaveText = null
+        if (result.resultCode != Activity.RESULT_OK || uri == null || text == null) {
+            invoke.resolve(JSObject().put("saved", false))
+            return
+        }
+        try {
+            activity.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+            invoke.resolve(JSObject().put("saved", true))
+        } catch (e: Exception) {
+            invoke.reject("Could not save the file: ${e.message}")
+        }
+    }
+
+    /** `{ granted }`: whether the app may read and write all files (tag editing, .lrc). */
+    @Command
+    fun fileAccessStatus(invoke: Invoke) {
+        invoke.resolve(JSObject().put("granted", hasFullFileAccess()))
+    }
+
+    /** Opens the system screen where the user allows access to all files. */
+    @Command
+    fun requestFileAccess(invoke: Invoke) {
+        if (Build.VERSION.SDK_INT >= 30 && !hasFullFileAccess()) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:${activity.packageName}"),
+            )
+            try {
+                activity.startActivity(intent)
+            } catch (e: Exception) {
+                activity.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+        }
+        invoke.resolve()
+    }
+
+    private fun hasFullFileAccess(): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
+
+    /** "primary:Music/x" style document ids of the external storage provider → a path. */
+    private fun storagePath(uri: Uri, docId: String): String? {
+        if (uri.authority != "com.android.externalstorage.documents") return null
+        val parts = docId.split(":", limit = 2)
+        if (parts.size != 2) return null
+        val base = if (parts[0].equals("primary", ignoreCase = true)) {
+            Environment.getExternalStorageDirectory().path
+        } else {
+            "/storage/${parts[0]}"
+        }
+        return if (parts[1].isEmpty()) base else "$base/${parts[1]}"
+    }
+
+    private fun displayName(uri: Uri): String? =
+        activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
 
     /** Asks for read access to the music library; resolves `{ granted }`. */
     @Command

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { open } from '@tauri-apps/plugin-dialog'
+  import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
   import { lyrics, type LyricsSource } from './lyrics.svelte'
@@ -27,14 +27,7 @@
 
   async function attachLocal() {
     if (!current || lyrics.loading) return
-    const targetPath = current.path
-    const picked = await open({
-      multiple: false,
-      directory: false,
-      filters: [{ name: 'Lyrics', extensions: ['lrc', 'txt'] }],
-    })
-    if (!picked || typeof picked !== 'string' || current?.path !== targetPath) return
-    await lyrics.attachFile(targetPath, picked)
+    await lyrics.pickAndAttach(current.path)
   }
 
   const iconButton =
@@ -42,17 +35,17 @@
 </script>
 
 <aside
-  aria-label="Lyrics"
+  aria-label={t("Lyrics")}
   class="flex w-80 shrink-0 flex-col text-white transition-[background] duration-700 lg:w-96"
   style:background={tint.surface}
 >
   <header class="flex items-start justify-between gap-2 px-5 pt-4 pb-2">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
-        <h2 class="text-base font-bold">Lyrics</h2>
+        <h2 class="text-base font-bold">{t("Lyrics")}</h2>
         {#if res && res.kind !== 'notFound'}
           <span class="rounded bg-black/25 px-1.5 py-0.5 text-[11px] font-medium text-white/80">
-            {SOURCE_LABELS[res.source]}
+            {t(SOURCE_LABELS[res.source])}
           </span>
         {/if}
       </div>
@@ -63,13 +56,13 @@
       {/if}
     </div>
     <div class="flex shrink-0 items-center gap-0.5">
-      <button class={iconButton} onclick={() => void attachLocal()} disabled={!current || lyrics.loading} aria-label="Load .lrc file" title="Load .lrc file">
+      <button class={iconButton} onclick={() => void attachLocal()} disabled={!current || lyrics.loading} aria-label={t("Load .lrc file")} title={t("Load .lrc file")}>
         <Icon name="upload" class="size-4" />
       </button>
-      <button class={iconButton} onclick={refresh} disabled={!current || lyrics.loading} aria-label="Refresh lyrics" title="Refresh lyrics">
+      <button class={iconButton} onclick={refresh} disabled={!current || lyrics.loading} aria-label={t("Refresh lyrics")} title={t("Refresh lyrics")}>
         <Icon name="refresh" class={lyrics.loading ? 'size-4 animate-spin' : 'size-4'} />
       </button>
-      <button class={iconButton} onclick={() => lyrics.setOpen(false)} aria-label="Close lyrics" title="Close lyrics">
+      <button class={iconButton} onclick={() => lyrics.setOpen(false)} aria-label={t("Close lyrics")} title={t("Close lyrics")}>
         <Icon name="close" class="size-4" />
       </button>
     </div>
@@ -77,17 +70,17 @@
 
   {#if !current}
     <div class="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/60">
-      Play a track to see lyrics.
+      {t("Play a track to see lyrics.")}
     </div>
   {:else if (lyrics.error && (!res || res.kind === 'notFound')) || (!lyrics.loading && res?.kind === 'notFound')}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-      <p class="text-sm text-white/70">{lyrics.error ?? 'No lyrics found.'}</p>
+      <p class="text-sm text-white/70">{lyrics.error ?? t('No lyrics found.')}</p>
       <div class="flex items-center gap-2">
         <button class="rounded-full px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10" onclick={refresh}>
-          Retry
+          {t("Retry")}
         </button>
         <button class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/90" onclick={() => void attachLocal()}>
-          Load .lrc
+          {t("Load .lrc")}
         </button>
       </div>
     </div>

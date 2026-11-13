@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import { fly } from 'svelte/transition'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
@@ -64,7 +65,7 @@
   role="dialog"
   tabindex="-1"
   aria-modal="true"
-  aria-label="Now playing"
+  aria-label={t("Now playing")}
 >
   <div bind:this={scroller} class="h-full overflow-y-auto overscroll-contain">
     <section
@@ -74,13 +75,13 @@
       style:padding-bottom="calc(var(--inset-bottom) + 12px)"
     >
       <header class="flex h-14 shrink-0 items-center">
-        <button class="-ml-3 rounded-full p-3 active:bg-white/10" aria-label="Close player" onclick={onClose}>
+        <button class="-ml-3 rounded-full p-3 active:bg-white/10" aria-label={t("Close player")} onclick={onClose}>
           <Icon name="down" class="size-7" />
         </button>
         <div class="min-w-0 flex-1 text-center leading-tight">
-          <p class="text-[11px] tracking-widest text-white/70 uppercase">Now playing</p>
+          <p class="text-[11px] tracking-widest text-white/70 uppercase">{t("Now playing")}</p>
           {#if snap.queueLength > 0}
-            <p class="text-sm font-bold">{(snap.currentIndex ?? 0) + 1} of {snap.queueLength}</p>
+            <p class="text-sm font-bold">{t('{i} of {n}', { i: (snap.currentIndex ?? 0) + 1, n: snap.queueLength })}</p>
           {/if}
         </div>
         <span class="w-10"></span>
@@ -94,7 +95,7 @@
         <div class="shrink-0">
           <CurrentLine />
           <h2 class="mt-1 truncate text-[22px] leading-tight font-bold">{snap.current.title}</h2>
-          <p class="mt-0.5 truncate text-base text-white/70">{snap.current.artist || 'Unknown artist'}</p>
+          <p class="mt-0.5 truncate text-base text-white/70">{snap.current.artist || t('Unknown artist')}</p>
 
           <div class="mt-5" data-no-pull>
             <input
@@ -106,7 +107,7 @@
               step="0.1"
               value={shown}
               disabled={!duration}
-              aria-label="Seek"
+              aria-label={t("Seek")}
               oninput={(e) => (dragging = e.currentTarget.valueAsNumber)}
               onchange={commitSeek}
             />
@@ -120,29 +121,29 @@
             <button
               class={['relative rounded-full p-3 active:bg-white/10', snap.shuffle ? 'text-teal-400' : 'text-white']}
               aria-pressed={snap.shuffle}
-              aria-label={snap.shuffle ? 'Shuffle on' : 'Shuffle off'}
+              aria-label={t(snap.shuffle ? 'Shuffle on' : 'Shuffle off')}
               onclick={player.toggleShuffle}
             >
               <Icon name="shuffle" class="size-6" />
               {#if snap.shuffle}<span class="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-teal-400"></span>{/if}
             </button>
-            <button class="rounded-full p-2 active:bg-white/10" aria-label="Previous" onclick={player.previous}>
+            <button class="rounded-full p-2 active:bg-white/10" aria-label={t("Previous")} onclick={player.previous}>
               <Icon name="prev" class="size-10" />
             </button>
             <button
               class="flex size-[72px] items-center justify-center rounded-full bg-white text-zinc-950 active:scale-95"
-              aria-label={snap.status === 'playing' ? 'Pause' : 'Play'}
+              aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
               onclick={player.togglePause}
             >
               <Icon name={snap.status === 'playing' ? 'pause' : 'play'} class="size-9" />
             </button>
-            <button class="rounded-full p-2 active:bg-white/10" aria-label="Next" onclick={player.next}>
+            <button class="rounded-full p-2 active:bg-white/10" aria-label={t("Next")} onclick={player.next}>
               <Icon name="next" class="size-10" />
             </button>
             <button
               class={['relative rounded-full p-3 active:bg-white/10', snap.repeat !== 'off' ? 'text-teal-400' : 'text-white']}
               aria-pressed={snap.repeat !== 'off'}
-              aria-label={snap.repeat === 'one' ? 'Repeat one' : snap.repeat === 'all' ? 'Repeat all' : 'Repeat off'}
+              aria-label={t(snap.repeat === 'one' ? 'Repeat one' : snap.repeat === 'all' ? 'Repeat all' : 'Repeat off')}
               onclick={player.cycleRepeat}
             >
               <Icon name={snap.repeat === 'one' ? 'repeatOne' : 'repeat'} class="size-6" />
@@ -151,10 +152,10 @@
           </div>
 
           <div class="mt-3 flex items-center justify-between">
-            <button class="-ml-3 rounded-full p-3 text-white/80 active:bg-white/10" aria-label="Lyrics" onclick={onLyrics}>
+            <button class="-ml-3 rounded-full p-3 text-white/80 active:bg-white/10" aria-label={t("Lyrics")} onclick={onLyrics}>
               <Icon name="lyrics" class="size-6" />
             </button>
-            <button class="-mr-3 rounded-full p-3 text-white/80 active:bg-white/10" aria-label="Queue" onclick={onQueue}>
+            <button class="-mr-3 rounded-full p-3 text-white/80 active:bg-white/10" aria-label={t("Queue")} onclick={onQueue}>
               <Icon name="queue" class="size-6" />
             </button>
           </div>
@@ -166,13 +167,27 @@
     <section class="px-4" style:padding-bottom="calc(var(--inset-bottom) + 24px)">
       <div class="overflow-hidden rounded-xl" style:background={tint.surface}>
         <div class="flex items-center justify-between px-4 pt-4 pb-1">
-          <h3 class="text-base font-bold">Lyrics</h3>
-          {#if hasLyrics}
-            <button class="rounded-full bg-black/25 p-2.5 active:bg-black/40" aria-label="Full-screen lyrics" onclick={onLyrics}>
-              <Icon name="expand" class="size-4" />
-            </button>
-          {/if}
+          <h3 class="text-base font-bold">{t("Lyrics")}</h3>
+          <div class="flex items-center gap-2">
+            {#if snap.current}
+              <button
+                class="rounded-full bg-black/25 p-2.5 active:bg-black/40"
+                aria-label={t("Load .lrc file")}
+                onclick={() => snap.current && void lyrics.pickAndAttach(snap.current.path)}
+              >
+                <Icon name="upload" class="size-4" />
+              </button>
+            {/if}
+            {#if hasLyrics}
+              <button class="rounded-full bg-black/25 p-2.5 active:bg-black/40" aria-label={t("Full-screen lyrics")} onclick={onLyrics}>
+                <Icon name="expand" class="size-4" />
+              </button>
+            {/if}
+          </div>
         </div>
+        {#if lyrics.error}
+          <p class="px-4 pb-1 text-sm text-red-200">{lyrics.error}</p>
+        {/if}
         <LyricLines dim={tint.dim} class={hasLyrics ? 'h-[420px] px-4' : 'px-4'} />
       </div>
     </section>

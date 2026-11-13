@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import VirtualList from './VirtualList.svelte'
   import EmptyLibrary from './EmptyLibrary.svelte'
   import AlbumDetail from './AlbumDetail.svelte'
@@ -44,20 +45,20 @@
     <div class="flex items-center justify-between gap-3 px-5 pb-2">
       <div class="text-xs text-zinc-500">
         {#if q !== '' && rows.total !== null}
-          {rows.total} matching
+          {t('{n} matching', { n: rows.total })}
         {/if}
       </div>
-      <SearchInput placeholder="Search albums, artists, songs…" />
+      <SearchInput placeholder={t("Search albums, artists, songs…")} />
     </div>
     {#if q !== '' && rows.total === 0}
       <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p class="text-sm text-zinc-500">No albums match “{q}”.</p>
+        <p class="text-sm text-zinc-500">{t('No albums match “{q}”.', { q })}</p>
         <button
           type="button"
           class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
           onclick={() => library.setQuery('')}
         >
-          Clear search
+          {t("Clear search")}
         </button>
       </div>
     {:else}

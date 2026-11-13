@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import VirtualList from '../VirtualList.svelte'
   import Icon from '../Icon.svelte'
   import EmptyLibrary from '../EmptyLibrary.svelte'
@@ -40,14 +41,14 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <PageHeader title="Songs">
+  <PageHeader title={t("Songs")}>
     {#snippet actions()}
       {#if total > 0}
         <button
           class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-4 pl-3 text-sm font-semibold text-zinc-950 active:scale-95"
           onclick={shuffleAll}
         >
-          <Icon name="shuffle" class="size-4" /> Shuffle
+          <Icon name="shuffle" class="size-4" /> {t("Shuffle")}
         </button>
       {/if}
     {/snippet}
@@ -64,21 +65,21 @@
           ]}
           onclick={() => setSort(s.value)}
         >
-          {s.label}
+          {t(s.label)}
         </button>
       {/each}
     </div>
     {#key sort}
       <VirtualList class="min-h-0 flex-1 pb-2" count={total} rowHeight={ROW} onRangeChange={(s, e) => rows.ensureRange(s, e)}>
         {#snippet row(i)}
-          {@const t = rows.get(i)}
-          {#if t}
+          {@const track = rows.get(i)}
+          {#if track}
             <TrackItem
-              title={t.title}
-              subtitle={[t.artist, t.album].filter(Boolean).join(' · ')}
-              path={t.path}
-              cover={t.cover}
-              trackId={t.id}
+              title={track.title}
+              subtitle={[track.artist, track.album].filter(Boolean).join(' · ')}
+              path={track.path}
+              cover={track.cover}
+              trackId={track.id}
               onPlay={() => library.playAll(i)}
             />
           {:else}

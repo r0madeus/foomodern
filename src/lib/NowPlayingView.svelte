@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './i18n.svelte'
   import Cover from './Cover.svelte'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
@@ -26,10 +27,10 @@
   style:background="linear-gradient(160deg, {tint.top} 0%, {tint.surface} 45%, #09090b 100%)"
 >
   <header class="flex shrink-0 items-center gap-2 px-6 pt-4">
-    <button class="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close now playing" title="Close (Esc)" onclick={onClose}>
+    <button class="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" aria-label={t("Close now playing")} title={t("Close (Esc)")} onclick={onClose}>
       <Icon name="down" class="size-6" />
     </button>
-    <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">Now playing</p>
+    <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">{t("Now playing")}</p>
   </header>
 
   {#if snap.current}
@@ -42,10 +43,10 @@
         />
         <div class="mx-auto mt-6 w-full max-w-[480px]">
           <h2 class="truncate text-3xl leading-tight font-bold">{snap.current.title}</h2>
-          <p class="mt-1 truncate text-lg text-white/70">{snap.current.artist || 'Unknown artist'}</p>
+          <p class="mt-1 truncate text-lg text-white/70">{snap.current.artist || t('Unknown artist')}</p>
           {#if !hasLyrics}
             <p class="mt-4 text-sm text-white/50">
-              {lyrics.loading ? 'Looking for lyrics…' : lyrics.result?.kind === 'instrumental' ? '♪ Instrumental' : 'No lyrics for this song.'}
+              {lyrics.loading ? t('Looking for lyrics…') : lyrics.result?.kind === 'instrumental' ? t('♪ Instrumental') : t('No lyrics for this song.')}
             </p>
           {/if}
         </div>
@@ -55,6 +56,6 @@
       {/if}
     </div>
   {:else}
-    <div class="flex flex-1 items-center justify-center text-white/60">Nothing playing.</div>
+    <div class="flex flex-1 items-center justify-center text-white/60">{t("Nothing playing.")}</div>
   {/if}
 </div>

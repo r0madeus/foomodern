@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, i18n, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { playlists } from './playlists.svelte'
@@ -32,7 +33,7 @@
   let formError = $state<string | null>(null)
   let failures = $state<TagFailure[]>([])
   let saved = $state(0)
-  let count = $state(0)
+  let fileCount = $state(0)
   let initial = $state<Record<TagField, string>>(blank())
   let draft = $state<Record<TagField, string>>(blank())
   let mixed = $state<Set<TagField>>(new Set())
@@ -70,12 +71,12 @@
     invoke<TagsRead>('tags_read', { trackIds: req.trackIds })
       .then(async (r) => {
         if (stale) return
-        count = r.tracks.length
+        fileCount = r.tracks.length
         mixed = new Set(r.mixed)
         initial = toDraft(r.common)
         draft = { ...initial }
         if (r.tracks.length === 0) {
-          loadError = r.failed[0]?.error ?? 'These tracks are no longer in the library.'
+          loadError = r.failed[0]?.error ?? t('These tracks are no longer in the library.')
         } else if (r.failed.length > 0) {
           failures = r.failed
         }
@@ -109,7 +110,7 @@
       } else if (f.numeric) {
         const n = Number(raw)
         if (!Number.isInteger(n) || n < 0 || (f.key === 'year' && (n < 1 || n > 9999))) {
-          return f.key === 'year' ? 'Year must be between 1 and 9999.' : `${f.label} must be a whole number.`
+          return f.key === 'year' ? t('Year must be between 1 and 9999.') : t('{label} must be a whole number.', { label: t(f.label) })
         }
         out[f.key] = n
       } else {
@@ -132,7 +133,7 @@
       const r = await invoke<TagsWritten>('tags_write', { trackIds: request.trackIds, changes })
       saved = r.updated
       if (r.failed.length === 0) {
-        playlists.flash(`Updated tags of ${r.updated.toLocaleString()} ${r.updated === 1 ? 'track' : 'tracks'}`)
+        playlists.flash(t('Updated tags of {count}', { count: count(r.updated, '{n} track', '{n} tracks') }))
         // close() refuses while `saving` is set, and `finally` runs too late.
         saving = false
         close()
@@ -212,13 +213,13 @@
         <h2 id="tag-editor-title" class="text-lg font-semibold tracking-tight">{request.heading}</h2>
         {#if !loading && !loadError}
           <p class="text-sm text-zinc-500">
-            {count.toLocaleString()} {count === 1 ? 'file' : 'files'}. Only the fields you change are written.
+            {count(fileCount, '{n} file', '{n} files')}. {t('Only the fields you change are written.')}
           </p>
         {/if}
       </div>
 
       {#if loading}
-        <p class="text-sm text-zinc-500" role="status">Reading tags…</p>
+        <p class="text-sm text-zinc-500" role="status">{t("Reading tags…")}</p>
       {:else if loadError}
         <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300" role="alert">
           {loadError}
@@ -229,7 +230,7 @@
             class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             onclick={close}
           >
-            Close
+            {t("Close")}
           </button>
         </div>
       {:else}
@@ -245,18 +246,18 @@
               {@const isMixed = mixed.has(f.key) && !changed(f.key)}
               <div class={['flex flex-col gap-1', f.wide && 'sm:col-span-2']}>
                 <div class="flex items-center justify-between">
-                  <label for="tag-{f.key}" class="text-xs font-medium text-zinc-500">{f.label}</label>
+                  <label for="tag-{f.key}" class="text-xs font-medium text-zinc-500">{t(f.label)}</label>
                   {#if mixed.has(f.key) && !cleared.has(f.key)}
                     <button
                       type="button"
                       class="rounded px-1 text-xs text-zinc-500 outline-none hover:text-zinc-800 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-zinc-100"
-                      aria-label="Clear {f.label} on all files"
+                      aria-label={t('Clear {label} on all files', { label: t(f.label) })}
                       onclick={() => {
                         draft[f.key] = ''
                         cleared = new Set(cleared).add(f.key)
                       }}
                     >
-                      Clear
+                      {t("Clear")}
                     </button>
                   {/if}
                 </div>
@@ -266,7 +267,7 @@
                   type={f.numeric ? 'number' : 'text'}
                   min={f.numeric ? 0 : undefined}
                   inputmode={f.numeric ? 'numeric' : undefined}
-                  placeholder={cleared.has(f.key) ? '(will be cleared)' : isMixed ? '(multiple values)' : ''}
+                  placeholder={cleared.has(f.key) ? t('(will be cleared)') : isMixed ? t('(multiple values)') : ''}
                   bind:value={draft[f.key]}
                   oninput={() => {
                     if (cleared.has(f.key)) {
@@ -289,8 +290,7 @@
           {#if failures.length > 0}
             <div class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200" role="alert">
               <p class="font-medium">
-                {saved > 0 ? `${saved.toLocaleString()} updated, ` : ''}{failures.length.toLocaleString()}
-                {failures.length === 1 ? 'file' : 'files'} could not be edited:
+                {saved > 0 ? t('{n} updated, ', { n: saved.toLocaleString(i18n.locale) }) : ''}{t('{count} could not be edited:', { count: count(failures.length, '{n} file', '{n} files') })}
               </p>
               <ul class="mt-1 max-h-32 list-disc overflow-y-auto pl-5">
                 {#each failures as f (f.path)}
@@ -307,14 +307,14 @@
               disabled={saving}
               onclick={close}
             >
-              {saved > 0 ? 'Close' : 'Cancel'}
+              {saved > 0 ? t('Close') : t('Cancel')}
             </button>
             <button
               type="submit"
               class="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
               disabled={!dirty || saving}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('Saving…') : t('Save')}
             </button>
           </div>
         </form>

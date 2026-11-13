@@ -15,6 +15,7 @@
 
 pub mod cover_color;
 pub mod db;
+pub mod m3u;
 pub mod scan;
 pub mod tags;
 
@@ -100,6 +101,16 @@ pub struct PlaylistInfo {
     pub id: i64,
     pub name: String,
     pub track_count: u32,
+}
+
+/// Result of importing an M3U playlist.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedPlaylist {
+    pub playlist: PlaylistInfo,
+    pub matched: usize,
+    /// Entries with no matching song in this library.
+    pub missing: usize,
 }
 
 /// Result of saving the queue as a playlist.
@@ -371,6 +382,41 @@ impl Library {
         Ok(SavedPlaylist {
             playlist,
             skipped: found.len() - ids.len(),
+        })
+    }
+
+    /// The playlist as extended M3U text.
+    pub fn export_m3u(&self, id: i64) -> Result<String> {
+        let rows = db::playlist_tracks(&self.conn(), id, 0, u32::MAX as u64)?;
+        Ok(m3u::render(&rows))
+    }
+
+    /// Creates a playlist from M3U text, matching entries to this library
+    /// (see [`m3u`]). Relative paths are resolved against `base`.
+    pub fn import_m3u(
+        &self,
+        name: &str,
+        text: &str,
+        base: Option<&Path>,
+    ) -> Result<ImportedPlaylist> {
+        let mut entries = m3u::parse(text);
+        if let Some(base) = base {
+            for e in &mut entries {
+                let p = Path::new(&e.path);
+                if p.is_relative() && !e.path.contains(['\\', ':']) {
+                    e.path = scan::display_path(&base.join(p));
+                }
+            }
+        }
+        let mut conn = self.conn();
+        let library = db::match_candidates(&conn)?;
+        let found = m3u::resolve(&entries, &library);
+        let ids: Vec<i64> = found.iter().flatten().copied().collect();
+        let playlist = db::create_playlist(&mut conn, name, &ids, unix_now())?;
+        Ok(ImportedPlaylist {
+            playlist,
+            matched: ids.len(),
+            missing: found.len() - ids.len(),
         })
     }
 

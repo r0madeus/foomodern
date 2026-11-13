@@ -1,7 +1,10 @@
+import { count, t } from './i18n.svelte'
 // Playlist state on the UI side. Rust owns the playlists (AGENTS.md rule 1);
 // this module mirrors the list and sends commands.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { open, save } from '@tauri-apps/plugin-dialog'
+import { appSettings } from './appSettings.svelte'
 import type { TrackRow } from './library.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
 
@@ -16,12 +19,18 @@ interface SavedPlaylist {
   skipped: number
 }
 
+interface ImportedPlaylist {
+  playlist: PlaylistInfo
+  matched: number
+  missing: number
+}
+
+const M3U_FILTERS = [{ name: 'Playlist', extensions: ['m3u8', 'm3u'] }]
+
 /** Playlist rows are fetched in pages; never the whole list in one IPC call. */
 const PAGE_SIZE = 500
 
-function plural(n: number, word: string): string {
-  return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`
-}
+const tracks = (n: number) => count(n, '{n} track', '{n} tracks')
 
 class PlaylistStore {
   list = $state<PlaylistInfo[]>([])
@@ -75,12 +84,12 @@ class PlaylistStore {
 
   async addTracks(playlist: PlaylistInfo, trackIds: number[]): Promise<void> {
     const ok = await this.#try(() => invoke('playlist_add_tracks', { id: playlist.id, trackIds }))
-    if (ok !== null) this.flash(`Added ${plural(trackIds.length, 'track')} to “${playlist.name}”`)
+    if (ok !== null) this.flash(t('Added {count} to “{name}”', { count: tracks(trackIds.length), name: playlist.name }))
   }
 
   async addAlbum(playlist: PlaylistInfo, albumId: number): Promise<void> {
     const ok = await this.#try(() => invoke('playlist_add_album', { id: playlist.id, albumId }))
-    if (ok !== null) this.flash(`Added album to “${playlist.name}”`)
+    if (ok !== null) this.flash(t('Added album to “{name}”', { name: playlist.name }))
   }
 
   async removeAt(id: number, positions: number[]): Promise<boolean> {
@@ -101,8 +110,46 @@ class PlaylistStore {
     if (!res) return null
     const { playlist, skipped } = res.value
     this.flash(
-      `Saved “${playlist.name}” with ${plural(playlist.trackCount, 'track')}` +
-        (skipped > 0 ? ` (${skipped.toLocaleString()} not in the library, skipped)` : ''),
+      t('Saved “{name}” with {count}', { name: playlist.name, count: tracks(playlist.trackCount) }) +
+        (skipped > 0 ? t(' ({n} not in the library, skipped)', { n: skipped }) : ''),
+    )
+    return playlist
+  }
+
+  /** Saves a playlist as an M3U file (to move it to another device). */
+  async exportM3u(p: PlaylistInfo): Promise<void> {
+    const fileName = `${p.name.replace(/[\\/:*?"<>|]/g, '_')}.m3u8`
+    const res = await this.#try(async () => {
+      if (appSettings.platform === 'android') {
+        const text = await invoke<string>('playlist_export_m3u', { id: p.id })
+        return invoke<boolean>('android_save_text', { name: fileName, text })
+      }
+      const path = await save({ defaultPath: fileName, filters: M3U_FILTERS })
+      if (!path) return false
+      await invoke('playlist_export_m3u_file', { id: p.id, path })
+      return true
+    })
+    if (res?.value) this.flash(t('Exported “{name}”', { name: p.name }))
+  }
+
+  /** Creates a playlist from an M3U file; songs are matched to this library. */
+  async importM3u(): Promise<PlaylistInfo | null> {
+    const res = await this.#try(async () => {
+      if (appSettings.platform === 'android') {
+        const file = await invoke<{ name: string | null; text: string | null }>('android_open_text')
+        if (file.text === null) return null
+        const name = (file.name ?? t('Imported')).replace(/\.m3u8?$/i, '') || t('Imported')
+        return invoke<ImportedPlaylist>('playlist_import_m3u', { name, text: file.text })
+      }
+      const path = await open({ multiple: false, directory: false, filters: M3U_FILTERS })
+      if (!path || typeof path !== 'string') return null
+      return invoke<ImportedPlaylist>('playlist_import_m3u_file', { path })
+    })
+    if (!res?.value) return null
+    const { playlist, matched, missing } = res.value
+    this.flash(
+      t('Imported “{name}” with {count}', { name: playlist.name, count: tracks(matched) }) +
+        (missing > 0 ? t(' ({n} not found in this library)', { n: missing }) : ''),
     )
     return playlist
   }

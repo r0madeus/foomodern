@@ -4,10 +4,12 @@ pub mod library;
 pub mod lyrics;
 #[cfg(not(target_os = "android"))]
 pub mod media_keys;
+mod net;
 pub mod player;
 pub mod queue;
 pub mod session;
 pub mod tray;
+pub mod update;
 
 #[cfg(not(target_os = "android"))]
 use audio::mpv::{MpvEngine, MpvOptions};
@@ -28,18 +30,28 @@ struct PositionPayload {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(tauri_plugin_android_audio::init());
     builder
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Logs go to stdout and to a file in the app log folder (shown in
+            // Settings), in release builds too, so problems on an installed
+            // copy can be diagnosed. Two old files are kept.
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .max_file_size(2 * 1024 * 1024)
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(2))
+                    .build(),
+            )?;
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                log::error!("panic: {info}");
+                default_hook(info);
+            }));
 
             let data_dir = app.path().app_data_dir()?;
             let cache_dir = app.path().app_cache_dir()?;
@@ -181,7 +193,12 @@ pub fn run() {
             commands::player_set_replaygain,
             commands::player_snapshot,
             commands::library_add_folder,
-            commands::library_android_music_folder,
+            commands::library_android_pick_folder,
+            commands::android_pick_file,
+            commands::app_file_access,
+            commands::app_request_file_access,
+            commands::android_open_text,
+            commands::android_save_text,
             commands::library_track_cover,
             commands::library_cover_color,
             commands::library_remove_folder,
@@ -204,8 +221,15 @@ pub fn run() {
             commands::playlist_move,
             commands::playlist_play,
             commands::playlist_from_queue,
+            commands::playlist_export_m3u,
+            commands::playlist_export_m3u_file,
+            commands::playlist_import_m3u,
+            commands::playlist_import_m3u_file,
             commands::app_settings,
             commands::app_window_insets,
+            commands::app_log_dir,
+            commands::app_check_update,
+            commands::app_open_release,
             commands::app_set_close_to_tray,
             commands::tags_read,
             commands::tags_write,

@@ -138,23 +138,6 @@ pub fn pick_best_match(
     candidates.into_iter().next()
 }
 
-/// Android: rustls (ring) with the Mozilla root store. The default rustls
-/// setup of reqwest uses the platform verifier, which needs JNI setup on
-/// Android, and native-tls would mean cross-compiling OpenSSL.
-#[cfg(target_os = "android")]
-fn android_tls() -> rustls::ClientConfig {
-    let roots = rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
-        rustls::crypto::ring::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .expect("ring supports the default TLS versions")
-    .with_root_certificates(roots)
-    .with_no_client_auth()
-}
-
 #[derive(Debug, Clone)]
 pub struct LrclibClient {
     http: Client,
@@ -163,13 +146,11 @@ pub struct LrclibClient {
 
 impl LrclibClient {
     pub fn new(base_url: impl Into<String>) -> std::result::Result<Self, LyricsError> {
-        let http = Client::builder()
+        let http = crate::net::client_builder()
             .user_agent(USER_AGENT)
             .connect_timeout(Duration::from_secs(4))
-            .timeout(Duration::from_secs(8));
-        #[cfg(target_os = "android")]
-        let http = http.tls_backend_preconfigured(android_tls());
-        let http = http.build()?;
+            .timeout(Duration::from_secs(8))
+            .build()?;
         Ok(Self {
             http,
             base_url: base_url.into().trim_end_matches('/').to_string(),

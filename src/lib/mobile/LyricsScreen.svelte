@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n.svelte'
   import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
   import LyricLines from '../LyricLines.svelte'
@@ -25,10 +26,10 @@
   transition:fly={{ y: 600, duration: 240, opacity: 1 }}
   role="dialog"
   aria-modal="true"
-  aria-label="Lyrics"
+  aria-label={t("Lyrics")}
 >
   <header class="flex h-16 shrink-0 items-center gap-1 px-2">
-    <button class="rounded-full p-3 active:bg-white/10" aria-label="Close lyrics" onclick={onClose}>
+    <button class="rounded-full p-3 active:bg-white/10" aria-label={t("Close lyrics")} onclick={onClose}>
       <Icon name="down" class="size-7" />
     </button>
     {#if snap.current}
@@ -52,7 +53,7 @@
       step="0.1"
       value={shown}
       disabled={!duration}
-      aria-label="Seek"
+      aria-label={t("Seek")}
       oninput={(e) => (dragging = e.currentTarget.valueAsNumber)}
       onchange={() => {
         if (dragging !== null) void player.seek(dragging)
@@ -63,7 +64,7 @@
       <span class="w-10">{formatTime(shown)}</span>
       <button
         class="flex size-14 items-center justify-center rounded-full bg-white text-zinc-950 active:scale-95"
-        aria-label={snap.status === 'playing' ? 'Pause' : 'Play'}
+        aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
         onclick={player.togglePause}
       >
         <Icon name={snap.status === 'playing' ? 'pause' : 'play'} class="size-7" />

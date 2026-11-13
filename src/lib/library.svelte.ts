@@ -191,11 +191,11 @@ class LibraryStore {
 
   async addFolder(): Promise<void> {
     try {
-      // Android: no folder picker for plain paths; Rust asks for access and
-      // returns the shared Music folder.
+      // Android: the system folder picker, mapped to a file path in Rust
+      // (after asking for permission to read music).
       const path =
         appSettings.platform === 'android'
-          ? await invoke<string>('library_android_music_folder')
+          ? await invoke<string | null>('library_android_pick_folder')
           : await open({ directory: true, multiple: false })
       if (!path) return
       this.folders = await invoke<FolderInfo[]>('library_add_folder', { path })

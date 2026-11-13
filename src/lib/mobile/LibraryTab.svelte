@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, i18n, t } from '../i18n.svelte'
   import Icon from '../Icon.svelte'
   import Cover from '../Cover.svelte'
   import PageHeader from './PageHeader.svelte'
@@ -24,9 +25,9 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <PageHeader title="Your Library">
+  <PageHeader title={t("Your Library")}>
     {#snippet actions()}
-      <button class="-mr-2 rounded-full p-2.5 active:bg-white/10" aria-label="New playlist" onclick={() => (creating = !creating)}>
+      <button class="-mr-2 rounded-full p-2.5 active:bg-white/10" aria-label={t("New playlist")} onclick={() => (creating = !creating)}>
         <Icon name="plus" class="size-6" />
       </button>
     {/snippet}
@@ -43,13 +44,13 @@
       >
         <input
           class="min-w-0 flex-1 rounded-lg bg-zinc-800 px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-teal-500"
-          placeholder="Playlist name"
-          aria-label="New playlist name"
+          placeholder={t("Playlist name")}
+          aria-label={t("New playlist name")}
           bind:value={name}
           {@attach (el) => el.focus()}
         />
         <button class="rounded-lg bg-teal-500 px-4 text-sm font-semibold text-zinc-950 disabled:opacity-40" disabled={name.trim() === ''}>
-          Create
+          {t("Create")}
         </button>
       </form>
     {/if}
@@ -57,7 +58,7 @@
     {#if library.scanning}
       <p class="flex items-center gap-2 px-4 pb-3 text-sm text-teal-400" role="status">
         <span class="size-2 animate-pulse rounded-full bg-teal-400"></span>
-        Scanning{library.scan ? ` · ${library.scan.scanned.toLocaleString()} files` : '…'}
+        {library.scan ? t('Scanning · {n} files', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
       </p>
     {/if}
 
@@ -67,7 +68,7 @@
         <span class="min-w-0 flex-1">
           <span class="block truncate text-[15px]">{p.name}</span>
           <span class="mt-0.5 block text-[13px] text-zinc-400">
-            Playlist · {p.trackCount.toLocaleString()} {p.trackCount === 1 ? 'song' : 'songs'}
+            {t('Playlist · {count}', { count: count(p.trackCount, '{n} song', '{n} songs') })}
           </span>
         </span>
       </button>
@@ -77,25 +78,39 @@
           <span class="flex size-14 shrink-0 items-center justify-center rounded bg-zinc-800 text-zinc-300">
             <Icon name="plus" class="size-7" />
           </span>
-          <span class="text-[15px]">Create a playlist</span>
+          <span class="text-[15px]">{t("Create a playlist")}</span>
         </button>
       {/if}
     {/each}
+
+    <button
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={async () => {
+        const made = await playlists.importM3u()
+        if (made) onOpenPlaylist(made.id)
+      }}
+    >
+      <Icon name="upload" class="size-6 text-zinc-400" />
+      <span class="min-w-0 flex-1">
+        <span class="block text-[15px]">{t("Import playlist")}</span>
+        <span class="block text-[13px] text-zinc-400">{t("An M3U file exported from FooModern on another device")}</span>
+      </span>
+    </button>
 
     <div class="mt-4 border-t border-zinc-800 pt-2">
       <button class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5" onclick={() => onOpenPage('folders')}>
         <Icon name="folder" class="size-6 text-zinc-400" />
         <span class="min-w-0 flex-1">
-          <span class="block text-[15px]">Music folders</span>
+          <span class="block text-[15px]">{t("Music folders")}</span>
           <span class="block text-[13px] text-zinc-400">
-            {library.stats.tracks.toLocaleString()} songs · {library.stats.albums.toLocaleString()} albums
+            {count(library.stats.tracks, '{n} song', '{n} songs')} · {count(library.stats.albums, '{n} album', '{n} albums')}
           </span>
         </span>
         <Icon name="chevronRight" class="size-5 text-zinc-500" />
       </button>
       <button class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5" onclick={() => onOpenPage('settings')}>
         <Icon name="settings" class="size-6 text-zinc-400" />
-        <span class="flex-1 text-[15px]">Settings</span>
+        <span class="flex-1 text-[15px]">{t("Settings")}</span>
         <Icon name="chevronRight" class="size-5 text-zinc-500" />
       </button>
     </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count, t } from '../i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
@@ -42,7 +43,7 @@
 <div class="absolute inset-0 flex flex-col bg-zinc-950">
   <!-- Back bar: the title fades in once the big header scrolled away. -->
   <header class="absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-1 px-1 transition-colors" class:bg-zinc-900={scrolled > 260}>
-    <button class="rounded-full bg-black/30 p-2.5 text-white active:bg-black/50" aria-label="Back" onclick={onBack}>
+    <button class="rounded-full bg-black/30 p-2.5 text-white active:bg-black/50" aria-label={t("Back")} onclick={onBack}>
       <Icon name="back" class="size-6" />
     </button>
     {#if scrolled > 260 && data}
@@ -60,32 +61,35 @@
           <h2 class="mt-5 text-2xl leading-tight font-bold">{data.album.title}</h2>
           <p class="mt-1 text-sm font-medium text-zinc-200">{data.album.albumArtist}</p>
           <p class="mt-1 text-xs text-zinc-400">
-            Album{data.album.year ? ` · ${data.album.year}` : ''} · {data.album.trackCount}
-            {data.album.trackCount === 1 ? 'song' : 'songs'} · {formatTime(totalSeconds)}
+            {t('Album · {details}', {
+              details: [data.album.year, count(data.album.trackCount, '{n} song', '{n} songs'), formatTime(totalSeconds)]
+                .filter(Boolean)
+                .join(' · '),
+            })}
           </p>
         </div>
       </div>
       <div class="flex items-center gap-2 px-4 pb-2">
         <AddToPlaylist {albumId} label="Add album to playlist" class="p-2.5 text-zinc-300" />
         <span class="flex-1"></span>
-        <button class="rounded-full p-3 text-zinc-300 active:bg-white/10" aria-label="Shuffle play" onclick={shufflePlay}>
+        <button class="rounded-full p-3 text-zinc-300 active:bg-white/10" aria-label={t("Shuffle play")} onclick={shufflePlay}>
           <Icon name="shuffle" class="size-6" />
         </button>
         <button
           class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
-          aria-label={playingThis ? 'Pause' : 'Play'}
+          aria-label={t(playingThis ? 'Pause' : 'Play')}
           onclick={() => (playingThis ? player.togglePause() : library.playAlbum(albumId, 0))}
         >
           <Icon name={playingThis ? 'pause' : 'play'} class="size-7" />
         </button>
       </div>
-      {#each data.tracks as t, i (t.id)}
+      {#each data.tracks as track, i (track.id)}
         <TrackItem
-          title={t.title}
-          subtitle={t.artist}
-          path={t.path}
-          trackId={t.id}
-          number={t.trackNo ?? i + 1}
+          title={track.title}
+          subtitle={track.artist}
+          path={track.path}
+          trackId={track.id}
+          number={track.trackNo ?? i + 1}
           onPlay={() => library.playAlbum(albumId, i)}
         />
       {/each}
