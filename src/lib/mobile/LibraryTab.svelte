@@ -1,15 +1,25 @@
 <script lang="ts">
   import { count, i18n, t } from '../i18n.svelte'
   import Icon from '../Icon.svelte'
-  import Cover from '../Cover.svelte'
+  import PlaylistCover from '../PlaylistCover.svelte'
   import PageHeader from './PageHeader.svelte'
+  import { favorites } from '../favorites.svelte'
   import { playlists } from '../playlists.svelte'
   import { library } from '../library.svelte'
 
   let {
     onOpenPlaylist,
+    onOpenFavorites,
+    onOpenArtists,
+    onOpenStats,
     onOpenPage,
-  }: { onOpenPlaylist: (id: number) => void; onOpenPage: (page: 'folders' | 'settings') => void } = $props()
+  }: {
+    onOpenPlaylist: (id: number) => void
+    onOpenFavorites: () => void
+    onOpenArtists: () => void
+    onOpenStats: () => void
+    onOpenPage: (page: 'folders' | 'settings') => void
+  } = $props()
 
   let creating = $state(false)
   let name = $state('')
@@ -62,9 +72,51 @@
       </p>
     {/if}
 
+    <button
+      type="button"
+      class="flex h-[72px] w-full items-center gap-3 px-4 text-left active:bg-white/5"
+      onclick={onOpenFavorites}
+    >
+      <span class="flex size-14 shrink-0 items-center justify-center rounded bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+        <Icon name="star" class="size-7" />
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-[15px] font-medium">{t('Favorites')}</span>
+        <span class="mt-0.5 block text-[13px] text-zinc-400">
+          {t('Playlist · {count}', { count: count(favorites.ids.size, '{n} song', '{n} songs') })}
+        </span>
+      </span>
+    </button>
+
+    <button
+      type="button"
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={onOpenArtists}
+    >
+      <Icon name="artist" class="size-6 text-teal-400" />
+      <span class="min-w-0 flex-1 text-[15px]">{t('Artists')}</span>
+      <Icon name="chevronRight" class="size-5 text-zinc-500" />
+    </button>
+
+    <button
+      type="button"
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={onOpenStats}
+    >
+      <Icon name="chart" class="size-6 text-teal-400" />
+      <span class="min-w-0 flex-1 text-[15px]">{t('Listening stats')}</span>
+      <Icon name="chevronRight" class="size-5 text-zinc-500" />
+    </button>
+
     {#each playlists.list as p (p.id)}
       <button class="flex h-[72px] w-full items-center gap-3 px-4 text-left active:bg-white/5" onclick={() => onOpenPlaylist(p.id)}>
-        <Cover cover={null} title={p.name} class="size-14 shrink-0 rounded text-lg" />
+        <PlaylistCover
+          cover={p.cover}
+          albumCovers={p.albumCovers}
+          name={p.name}
+          class="size-14 shrink-0 rounded text-lg"
+          iconClass="size-6"
+        />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-[15px]">{p.name}</span>
           <span class="mt-0.5 block text-[13px] text-zinc-400">

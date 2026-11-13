@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../i18n.svelte'
   import Cover from '../Cover.svelte'
+  import FavoriteButton from '../FavoriteButton.svelte'
   import AddToPlaylist from '../AddToPlaylist.svelte'
   import { player } from '../player.svelte'
 
@@ -48,6 +49,7 @@
     </span>
   </button>
   {#if trackId !== null}
+    <FavoriteButton {trackId} {title} size="size-5" light />
     <AddToPlaylist trackIds={[trackId]} editTags label={t('More actions for “{title}”', { title })} class="p-3 text-zinc-400" />
   {/if}
 </div>

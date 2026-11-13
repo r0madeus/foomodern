@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from '../i18n.svelte'
   import { fly } from 'svelte/transition'
+  import ArtistLinks from '../ArtistLinks.svelte'
   import Cover from '../Cover.svelte'
+  import FavoriteButton from '../FavoriteButton.svelte'
   import Icon from '../Icon.svelte'
   import CurrentLine from '../CurrentLine.svelte'
   import LyricLines from '../LyricLines.svelte'
@@ -94,8 +96,21 @@
 
         <div class="shrink-0">
           <CurrentLine />
-          <h2 class="mt-1 truncate text-[22px] leading-tight font-bold">{snap.current.title}</h2>
-          <p class="mt-0.5 truncate text-base text-white/70">{snap.current.artist || t('Unknown artist')}</p>
+          <div class="mt-1 flex items-center gap-3">
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-[22px] leading-tight font-bold">{snap.current.title}</h2>
+              <p class="mt-0.5 truncate text-base text-white/70">
+                {#if snap.current.artist}
+                  <ArtistLinks artist={snap.current.artist} />
+                {:else}
+                  {t('Unknown artist')}
+                {/if}
+              </p>
+            </div>
+            {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
+              <FavoriteButton path={snap.current.path} title={snap.current.title} size="size-6" light />
+            {/if}
+          </div>
 
           <div class="mt-5" data-no-pull>
             <input

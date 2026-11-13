@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from '../i18n.svelte'
+  import { artists } from '../artists.svelte'
   import VirtualList from '../VirtualList.svelte'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
@@ -20,21 +21,31 @@
     void library.stats.version
     return new PagedRows(library.albumsPage(q))
   })
+  const matchingArtists = $derived.by(() => {
+    void library.stats.version
+    return new PagedRows(artists.page(q))
+  })
   $effect(() => {
     const s = songs
     const a = albums
+    const ar = matchingArtists
     if (q !== '') {
       s.ensureRange(0, 1)
       a.ensureRange(0, 12)
+      ar.ensureRange(0, 12)
     }
     return () => {
       s.dispose()
       a.dispose()
+      ar.dispose()
     }
   })
 
   const albumList = $derived(
     Array.from({ length: Math.min(12, albums.total ?? 0) }, (_, i) => albums.get(i)).filter((a) => a !== undefined),
+  )
+  const artistList = $derived(
+    Array.from({ length: Math.min(12, matchingArtists.total ?? 0) }, (_, i) => matchingArtists.get(i)).filter((a) => a !== undefined),
   )
 </script>
 
@@ -64,12 +75,23 @@
       <p class="text-lg font-semibold">{t("Search your library")}</p>
       <p class="text-sm text-zinc-400">{t("Find songs, artists and albums by name.")}</p>
     </div>
-  {:else if songs.total === 0 && albums.total === 0}
+  {:else if songs.total === 0 && albums.total === 0 && matchingArtists.total === 0}
     <div class="flex flex-1 flex-col items-center justify-center gap-2 px-10 text-center">
       <p class="text-lg font-semibold">{t('No results for “{q}”', { q })}</p>
       <p class="text-sm text-zinc-400">{t("Check the spelling or try fewer words.")}</p>
     </div>
   {:else}
+    {#if artistList.length > 0}
+      <h2 class="shrink-0 px-4 pb-2 text-lg font-bold">{t("Artists")}</h2>
+      <div class="flex shrink-0 gap-3 overflow-x-auto px-4 pb-4">
+        {#each artistList as ar (ar.name)}
+          <button class="w-24 shrink-0 text-center active:opacity-70" onclick={() => artists.open(ar.name)}>
+            <Cover cover={ar.cover} title={ar.name} class="aspect-square w-full rounded-full text-2xl" />
+            <span class="mt-1.5 block truncate text-[13px] font-medium">{ar.name}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
     {#if albumList.length > 0}
       <h2 class="shrink-0 px-4 pb-2 text-lg font-bold">{t("Albums")}</h2>
       <div class="flex shrink-0 gap-3 overflow-x-auto px-4 pb-4">

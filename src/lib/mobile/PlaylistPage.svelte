@@ -1,7 +1,8 @@
 <script lang="ts">
   import { count, t } from '../i18n.svelte'
   import Icon from '../Icon.svelte'
-  import Cover from '../Cover.svelte'
+  import PlaylistCover from '../PlaylistCover.svelte'
+  import PlaylistCoverModal from '../PlaylistCoverModal.svelte'
   import PageHeader from './PageHeader.svelte'
   import TrackItem from './TrackItem.svelte'
   import { playlists } from '../playlists.svelte'
@@ -12,6 +13,7 @@
 
   const info = $derived(playlists.byId(id))
   let tracks = $state<TrackRow[]>([])
+  let editingCover = $state(false)
 
   $effect(() => {
     void playlists.version
@@ -43,7 +45,24 @@
   <div class="min-h-0 flex-1 overflow-y-auto pb-6">
     {#if info}
       <div class="flex flex-col items-center px-4 pt-2 pb-4">
-        <Cover cover={tracks[0]?.cover ?? null} title={info.name} class="aspect-square w-1/2 max-w-56 rounded-md text-5xl shadow-2xl shadow-black/60" />
+        <button
+          type="button"
+          class="group relative aspect-square w-1/2 max-w-56 overflow-hidden rounded-xl shadow-2xl shadow-black/60 active:scale-[0.98]"
+          aria-label={t('Playlist cover')}
+          onclick={() => (editingCover = true)}
+        >
+          <PlaylistCover
+            cover={info.cover}
+            albumCovers={info.albumCovers}
+            name={info.name}
+            class="size-full rounded-xl text-5xl"
+            iconClass="size-20"
+          />
+          <span class="absolute right-2 bottom-2 flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-xs">
+            <Icon name="image" class="size-3.5" />
+            {t('Cover')}
+          </span>
+        </button>
         <h2 class="mt-4 self-start text-2xl font-bold">{info.name}</h2>
         <p class="self-start text-xs text-zinc-400">
           {t('Playlist · {count}', { count: count(info.trackCount, '{n} song', '{n} songs') })}
@@ -80,3 +99,7 @@
     {/if}
   </div>
 </div>
+
+{#if editingCover && info}
+  <PlaylistCoverModal playlist={info} onClose={() => (editingCover = false)} />
+{/if}

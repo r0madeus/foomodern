@@ -10,16 +10,21 @@
   import PageHeader from './PageHeader.svelte'
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
+  import ArtistPage from './ArtistPage.svelte'
+  import ArtistsPage from './ArtistsPage.svelte'
+  import FavoritesPage from './FavoritesPage.svelte'
   import SongsTab from './SongsTab.svelte'
   import SearchTab from './SearchTab.svelte'
   import LibraryTab from './LibraryTab.svelte'
   import PlaylistPage from './PlaylistPage.svelte'
+  import StatsPage from './StatsPage.svelte'
   import MiniPlayer from './MiniPlayer.svelte'
   import NowPlaying from './NowPlaying.svelte'
   import QueueSheet from './QueueSheet.svelte'
   import UpdateBanner from '../UpdateBanner.svelte'
   import { updates } from '../updates.svelte'
   import { pushLayer, popLayer, clearLayers } from './layers'
+  import { artists } from '../artists.svelte'
   import { player } from '../player.svelte'
   import { library } from '../library.svelte'
   import { lyrics } from '../lyrics.svelte'
@@ -29,6 +34,15 @@
   // a full-screen player. Every pushed screen is a history entry so the
   // Android back button closes it.
   type Tab = 'home' | 'songs' | 'search' | 'library'
+  type Sheet =
+    | { type: 'album'; id: number }
+    | { type: 'artist'; name: string }
+    | { type: 'playlist'; id: number }
+    | { type: 'favorites' }
+    | { type: 'artists' }
+    | { type: 'stats' }
+    | { type: 'page'; page: 'folders' | 'settings' }
+
   const TABS: { id: Tab; label: string; icon: 'album' | 'music' | 'search' | 'library' }[] = [
     { id: 'home', label: 'Albums', icon: 'album' },
     { id: 'songs', label: 'Songs', icon: 'music' },
@@ -37,15 +51,14 @@
   ]
 
   let tab = $state<Tab>('home')
-  let album = $state<number | null>(null)
-  let playlist = $state<number | null>(null)
-  let page = $state<'folders' | 'settings' | null>(null)
+  let sheets = $state<Sheet[]>([])
   let playerOpen = $state(false)
   let queueOpen = $state(false)
   let lyricsOpen = $state(false)
 
   function selectTab(next: Tab) {
     clearLayers()
+    sheets = []
     if (tab === 'search' && next !== 'search') library.setQuery('')
     tab = next
   }
@@ -54,17 +67,36 @@
     set()
     pushLayer(unset)
   }
-  const openAlbum = (id: number) => open(() => (album = id), () => (album = null))
-  const openPlaylist = (id: number) => open(() => (playlist = id), () => (playlist = null))
-  const openPage = (p: 'folders' | 'settings') => open(() => (page = p), () => (page = null))
+  function pushSheet(sheet: Sheet) {
+    sheets = [...sheets, sheet]
+    pushLayer(() => {
+      sheets = sheets.slice(0, -1)
+    })
+  }
+  const openAlbum = (id: number) => pushSheet({ type: 'album', id })
+  const openArtist = (name: string) => pushSheet({ type: 'artist', name })
+  const openPlaylist = (id: number) => pushSheet({ type: 'playlist', id })
+  const openFavorites = () => pushSheet({ type: 'favorites' })
+  const openArtists = () => pushSheet({ type: 'artists' })
+  const openStats = () => pushSheet({ type: 'stats' })
+  const openPage = (p: 'folders' | 'settings') => pushSheet({ type: 'page', page: p })
   const openPlayer = () => open(() => (playerOpen = true), () => (playerOpen = false))
   const openQueue = () => open(() => (queueOpen = true), () => (queueOpen = false))
   const openLyrics = () => open(() => (lyricsOpen = true), () => (lyricsOpen = false))
 
-
-  // A deleted playlist closes its page.
   $effect(() => {
-    if (playlist !== null && playlists.loaded && !playlists.byId(playlist)) popLayer()
+    artists.registerNavigator((name) => {
+      if (lyricsOpen) lyricsOpen = false
+      if (queueOpen) queueOpen = false
+      if (playerOpen) playerOpen = false
+      openArtist(name)
+    })
+  })
+
+  // A deleted playlist closes its page when it is on top.
+  $effect(() => {
+    const top = sheets.at(-1)
+    if (top?.type === 'playlist' && playlists.loaded && !playlists.byId(top.id)) popLayer()
   })
 
   async function applyInsets() {
@@ -111,23 +143,37 @@
     {:else if tab === 'search'}
       <SearchTab onOpenAlbum={openAlbum} />
     {:else}
-      <LibraryTab onOpenPlaylist={openPlaylist} onOpenPage={openPage} />
+      <LibraryTab
+        onOpenPlaylist={openPlaylist}
+        {onOpenFavorites}
+        {onOpenArtists}
+        {onOpenStats}
+        onOpenPage={openPage}
+      />
     {/if}
 
-    {#if page !== null}
-      <div class="absolute inset-0 flex flex-col bg-zinc-950">
-        <PageHeader title={t(page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          {#if page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
+    {#each sheets as sheet, i (`${i}:${sheet.type}`)}
+      {#if sheet.type === 'page'}
+        <div class="absolute inset-0 flex flex-col bg-zinc-950">
+          <PageHeader title={t(sheet.page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            {#if sheet.page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
+          </div>
         </div>
-      </div>
-    {/if}
-    {#if playlist !== null}
-      <PlaylistPage id={playlist} onBack={popLayer} />
-    {/if}
-    {#if album !== null}
-      <AlbumPage albumId={album} onBack={popLayer} />
-    {/if}
+      {:else if sheet.type === 'favorites'}
+        <FavoritesPage onBack={popLayer} />
+      {:else if sheet.type === 'artists'}
+        <ArtistsPage onBack={popLayer} onOpenArtist={openArtist} />
+      {:else if sheet.type === 'stats'}
+        <StatsPage onBack={popLayer} onOpenAlbum={openAlbum} />
+      {:else if sheet.type === 'playlist'}
+        <PlaylistPage id={sheet.id} onBack={popLayer} />
+      {:else if sheet.type === 'artist'}
+        <ArtistPage name={sheet.name} onBack={popLayer} onOpenAlbum={openAlbum} />
+      {:else if sheet.type === 'album'}
+        <AlbumPage albumId={sheet.id} onBack={popLayer} />
+      {/if}
+    {/each}
 
     {#if playlists.notice}
       <p role="status" class="pointer-events-none absolute inset-x-4 bottom-3 z-30 rounded-lg bg-zinc-100 px-3 py-2.5 text-sm text-zinc-900 shadow-lg">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { count, t } from '../i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import ArtistLinks from '../ArtistLinks.svelte'
   import Cover from '../Cover.svelte'
   import Icon from '../Icon.svelte'
   import AddToPlaylist from '../AddToPlaylist.svelte'
@@ -59,7 +60,9 @@
         <div class="relative">
           <Cover cover={data.album.cover} title={data.album.title} class="mx-auto aspect-square w-3/5 max-w-64 rounded-md text-5xl shadow-2xl shadow-black/60" />
           <h2 class="mt-5 text-2xl leading-tight font-bold">{data.album.title}</h2>
-          <p class="mt-1 text-sm font-medium text-zinc-200">{data.album.albumArtist}</p>
+          <p class="mt-1 text-sm font-medium text-zinc-200">
+            <ArtistLinks artist={data.album.albumArtist} />
+          </p>
           <p class="mt-1 text-xs text-zinc-400">
             {t('Album · {details}', {
               details: [data.album.year, count(data.album.trackCount, '{n} song', '{n} songs'), formatTime(totalSeconds)]

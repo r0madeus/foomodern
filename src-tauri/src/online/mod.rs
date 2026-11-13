@@ -3,20 +3,18 @@
 //! types and commands cleanly disabled so shared IPC handlers stay uniform.
 
 use crate::library::Library;
-use crate::library::scan::display_path;
+use crate::library::scan::{display_path, fnv1a};
+use crate::net::client_builder;
 use crate::session::SessionStore;
+use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-#[cfg(not(target_os = "android"))]
-use crate::library::scan::fnv1a;
-#[cfg(not(target_os = "android"))]
-use crate::net::client_builder;
-#[cfg(not(target_os = "android"))]
-use image::ImageFormat;
 #[cfg(not(target_os = "android"))]
 use lofty::config::WriteOptions;
 #[cfg(not(target_os = "android"))]
@@ -30,17 +28,11 @@ use lofty::tag::Tag;
 #[cfg(not(target_os = "android"))]
 use lofty::tag::items::Timestamp;
 #[cfg(not(target_os = "android"))]
-use std::io::Cursor;
-#[cfg(not(target_os = "android"))]
 use std::process::Command;
 #[cfg(not(target_os = "android"))]
 use std::sync::mpsc;
-#[cfg(not(target_os = "android"))]
-use std::time::Duration;
 
-#[cfg(not(target_os = "android"))]
 const HTTP_TIMEOUT: Duration = Duration::from_secs(12);
-#[cfg(not(target_os = "android"))]
 const USER_AGENT: &str = concat!("FooModern/", env!("CARGO_PKG_VERSION"));
 #[cfg(not(target_os = "android"))]
 const MAX_KEPT_JOBS: usize = 25;
@@ -49,7 +41,6 @@ const MAX_KEPT_JOBS: usize = 25;
 pub enum OnlineError {
     #[error("{0}")]
     Message(String),
-    #[cfg(not(target_os = "android"))]
     #[error("http error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("json error: {0}")]
@@ -169,7 +160,6 @@ struct DownloadWork {
 }
 
 pub struct OnlineService {
-    #[cfg(not(target_os = "android"))]
     covers_dir: PathBuf,
     default_download_dir: PathBuf,
     jobs: Arc<Mutex<Vec<DownloadJob>>>,
@@ -177,7 +167,6 @@ pub struct OnlineService {
     stream_covers: Mutex<HashMap<String, String>>,
     #[cfg(not(target_os = "android"))]
     on_jobs: JobsObserver,
-    #[cfg(not(target_os = "android"))]
     client: reqwest::Client,
     #[cfg(not(target_os = "android"))]
     worker_tx: mpsc::Sender<DownloadWork>,
@@ -186,12 +175,11 @@ pub struct OnlineService {
 impl OnlineService {
     pub fn new(covers_dir: PathBuf, default_download_dir: PathBuf, on_jobs: JobsObserver) -> Self {
         #[cfg(target_os = "android")]
-        let _ = (covers_dir, on_jobs);
+        let _ = on_jobs;
         #[cfg(not(target_os = "android"))]
         let (worker_tx, worker_rx) = mpsc::channel::<DownloadWork>();
         let jobs = Arc::new(Mutex::new(Vec::new()));
 
-        #[cfg(not(target_os = "android"))]
         let client = client_builder()
             .timeout(HTTP_TIMEOUT)
             .user_agent(USER_AGENT)
@@ -221,7 +209,6 @@ impl OnlineService {
         }
 
         Self {
-            #[cfg(not(target_os = "android"))]
             covers_dir,
             default_download_dir,
             jobs,
@@ -229,7 +216,6 @@ impl OnlineService {
             stream_covers: Mutex::new(HashMap::new()),
             #[cfg(not(target_os = "android"))]
             on_jobs,
-            #[cfg(not(target_os = "android"))]
             client,
             #[cfg(not(target_os = "android"))]
             worker_tx,
@@ -406,40 +392,41 @@ impl OnlineService {
         Ok(results)
     }
 
-    #[cfg(target_os = "android")]
-    pub async fn album_detail(
-        &self,
-        _album: &OnlineAlbum,
-        _ytdlp_bin: &str,
-    ) -> Result<OnlineAlbumDetail, OnlineError> {
-        Err(OnlineError::Unsupported)
-    }
-
-    #[cfg(not(target_os = "android"))]
     pub async fn album_detail(
         &self,
         album: &OnlineAlbum,
-        ytdlp_bin: &str,
+        #[cfg_attr(target_os = "android", allow(unused_variables))] ytdlp_bin: &str,
     ) -> Result<OnlineAlbumDetail, OnlineError> {
         let mut detail = if let Some(cid) = album.id.strip_prefix("itunes:") {
             fetch_itunes_album_detail(&self.client, cid, album).await?
         } else {
-            let url = album
-                .source_url
-                .clone()
-                .or_else(|| album.id.strip_prefix("ytpl:").map(str::to_owned))
-                .ok_or_else(|| OnlineError::Message("missing album source".into()))?;
-            let bin = ytdlp_bin.to_owned();
-            let raw = tokio::task::spawn_blocking(move || {
-                run_ytdlp_json(&bin, &["--flat-playlist", "--dump-single-json", &url])
-            })
-            .await
-            .map_err(|e| OnlineError::Message(e.to_string()))??;
-            let parsed = parse_ytdlp_flat_json(&raw, album.source_url.as_deref())?;
-            let resolved_album = parsed.albums.into_iter().next().unwrap_or_else(|| album.clone());
-            OnlineAlbumDetail {
-                album: resolved_album,
-                tracks: parsed.tracks,
+            #[cfg(target_os = "android")]
+            {
+                return Err(OnlineError::Unsupported);
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let url = album
+                    .source_url
+                    .clone()
+                    .or_else(|| album.id.strip_prefix("ytpl:").map(str::to_owned))
+                    .ok_or_else(|| OnlineError::Message("missing album source".into()))?;
+                let bin = ytdlp_bin.to_owned();
+                let raw = tokio::task::spawn_blocking(move || {
+                    run_ytdlp_json(&bin, &["--flat-playlist", "--dump-single-json", &url])
+                })
+                .await
+                .map_err(|e| OnlineError::Message(e.to_string()))??;
+                let parsed = parse_ytdlp_flat_json(&raw, album.source_url.as_deref())?;
+                let resolved_album = parsed
+                    .albums
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| album.clone());
+                OnlineAlbumDetail {
+                    album: resolved_album,
+                    tracks: parsed.tracks,
+                }
             }
         };
 
@@ -561,7 +548,6 @@ impl OnlineService {
         Ok(job)
     }
 
-    #[cfg(not(target_os = "android"))]
     async fn cache_search_covers(&self, results: &mut SearchResults) {
         let mut handles = Vec::new();
         for a in results.albums.iter().take(12) {
@@ -592,18 +578,6 @@ impl OnlineService {
         }
     }
 
-    #[cfg(target_os = "android")]
-    pub async fn enrich_artist(
-        &self,
-        _artist: &str,
-        _prefer_tr: bool,
-        _need_image: bool,
-        _need_bio: bool,
-    ) -> ArtistOnlineInfo {
-        ArtistOnlineInfo::default()
-    }
-
-    #[cfg(not(target_os = "android"))]
     pub async fn enrich_artist(
         &self,
         artist: &str,
@@ -622,21 +596,25 @@ impl OnlineService {
         let q2 = q.to_owned();
         let q3 = q.to_owned();
 
-        let (img_url, bio, raw_albums) = tokio::join!(
-            async {
-                if !need_image {
-                    return None;
-                }
-                fetch_deezer_artist_image(&c1, &q1).await
-            },
-            async {
-                if !need_bio {
-                    return None;
-                }
-                fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
-            },
-            async { fetch_itunes_albums(&c3, &q3).await.ok().unwrap_or_default() }
-        );
+        let h_img = tokio::task::spawn(async move {
+            if !need_image {
+                return None;
+            }
+            fetch_deezer_artist_image(&c1, &q1).await
+        });
+        let h_bio = tokio::task::spawn(async move {
+            if !need_bio {
+                return None;
+            }
+            fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
+        });
+        let h_alb = tokio::task::spawn(async move {
+            fetch_itunes_albums(&c3, &q3).await.ok().unwrap_or_default()
+        });
+
+        let img_url = h_img.await.ok().flatten();
+        let bio = h_bio.await.ok().flatten();
+        let raw_albums = h_alb.await.ok().unwrap_or_default();
 
         let image = match img_url {
             Some(url) => ensure_cached_cover(&self.client, &self.covers_dir, &url).await,
@@ -665,7 +643,6 @@ impl OnlineService {
     }
 }
 
-#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn parse_deezer_artist_image(json: &str, wanted: &str) -> Option<String> {
     let val: serde_json::Value = serde_json::from_str(json).ok()?;
     let data = val.get("data")?.as_array()?;
@@ -689,7 +666,6 @@ pub(crate) fn parse_deezer_artist_image(json: &str, wanted: &str) -> Option<Stri
     None
 }
 
-#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn parse_wikipedia_bio(json: &str) -> Option<String> {
     let val: serde_json::Value = serde_json::from_str(json).ok()?;
     if val.get("type").and_then(|v| v.as_str()) == Some("disambiguation") {
@@ -733,7 +709,6 @@ pub(crate) fn parse_wikipedia_bio(json: &str) -> Option<String> {
     Some(trim_bio(extract, 380))
 }
 
-#[cfg(any(not(target_os = "android"), test))]
 fn trim_bio(text: &str, max_chars: usize) -> String {
     let single = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if single.chars().count() <= max_chars {
@@ -748,7 +723,6 @@ fn trim_bio(text: &str, max_chars: usize) -> String {
     format!("{}…", prefix.trim_end())
 }
 
-#[cfg(not(target_os = "android"))]
 async fn fetch_deezer_artist_image(client: &reqwest::Client, artist: &str) -> Option<String> {
     let resp = client
         .get("https://api.deezer.com/search/artist")
@@ -763,7 +737,6 @@ async fn fetch_deezer_artist_image(client: &reqwest::Client, artist: &str) -> Op
     parse_deezer_artist_image(&text, artist)
 }
 
-#[cfg(not(target_os = "android"))]
 async fn fetch_wikipedia_bio(
     client: &reqwest::Client,
     artist: &str,
@@ -782,7 +755,6 @@ async fn fetch_wikipedia_bio(
     None
 }
 
-#[cfg(not(target_os = "android"))]
 async fn fetch_wiki_for_lang(
     client: &reqwest::Client,
     lang: &str,
@@ -836,7 +808,6 @@ async fn fetch_wiki_for_lang(
     None
 }
 
-#[cfg(not(target_os = "android"))]
 fn url_encode_segment(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
@@ -1135,7 +1106,6 @@ fn run_ytdlp_lines(bin: &str, args: &[&str]) -> Result<Vec<String>, OnlineError>
         .collect())
 }
 
-#[cfg(not(target_os = "android"))]
 async fn ensure_cached_cover(
     client: &reqwest::Client,
     covers_dir: &Path,
@@ -1160,7 +1130,6 @@ async fn ensure_cached_cover(
     Some(display_path(&file))
 }
 
-#[cfg(not(target_os = "android"))]
 fn normalize_cover_jpeg(bytes: &[u8]) -> Option<Vec<u8>> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) || bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         return Some(bytes.to_vec());
@@ -1172,7 +1141,6 @@ fn normalize_cover_jpeg(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-#[cfg(not(target_os = "android"))]
 async fn fetch_itunes_albums(
     client: &reqwest::Client,
     query: &str,
@@ -1197,7 +1165,6 @@ async fn fetch_itunes_albums(
     parse_itunes_albums(&text)
 }
 
-#[cfg(not(target_os = "android"))]
 async fn fetch_itunes_album_detail(
     client: &reqwest::Client,
     collection_id: &str,
