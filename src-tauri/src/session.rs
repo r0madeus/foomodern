@@ -21,6 +21,20 @@ fn default_close_to_tray() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PinnedKind {
+    Album,
+    Playlist,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedRef {
+    pub kind: PinnedKind,
+    pub id: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedTrack {
@@ -53,6 +67,9 @@ pub struct SessionState {
     /// Optional custom path to the `yt-dlp` executable (`None` = search PATH).
     #[serde(default)]
     pub ytdlp_path: Option<PathBuf>,
+    /// Albums and playlists pinned by the user to the desktop sidebar.
+    #[serde(default)]
+    pub pinned: Vec<PinnedRef>,
 }
 
 impl Default for SessionState {
@@ -68,6 +85,7 @@ impl Default for SessionState {
             close_to_tray: default_close_to_tray(),
             download_dir: None,
             ytdlp_path: None,
+            pinned: Vec::new(),
         }
     }
 }
@@ -87,6 +105,13 @@ impl SessionState {
         } else {
             0.0
         };
+        let mut seen = Vec::with_capacity(self.pinned.len());
+        for item in self.pinned {
+            if !seen.contains(&item) {
+                seen.push(item);
+            }
+        }
+        self.pinned = seen;
         self
     }
 }
@@ -147,6 +172,7 @@ pub struct SessionStore {
     close_to_tray: AtomicBool,
     download_dir: Mutex<Option<PathBuf>>,
     ytdlp_path: Mutex<Option<PathBuf>>,
+    pinned: Mutex<Vec<PinnedRef>>,
 }
 
 impl SessionStore {
@@ -157,6 +183,7 @@ impl SessionStore {
             close_to_tray: AtomicBool::new(default_close_to_tray()),
             download_dir: Mutex::new(None),
             ytdlp_path: Mutex::new(None),
+            pinned: Mutex::new(Vec::new()),
         }
     }
 
@@ -169,6 +196,7 @@ impl SessionStore {
             clean_opt_path(state.download_dir.clone());
         *self.ytdlp_path.lock().unwrap_or_else(|e| e.into_inner()) =
             clean_opt_path(state.ytdlp_path.clone());
+        *self.pinned.lock().unwrap_or_else(|e| e.into_inner()) = state.pinned.clone();
         state
     }
 
@@ -202,10 +230,26 @@ impl SessionStore {
         *self.ytdlp_path.lock().unwrap_or_else(|e| e.into_inner()) = clean_opt_path(path);
     }
 
+    pub fn pinned(&self) -> Vec<PinnedRef> {
+        self.pinned.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub fn toggle_pin(&self, item: PinnedRef) -> bool {
+        let mut pinned = self.pinned.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(pos) = pinned.iter().position(|p| *p == item) {
+            pinned.remove(pos);
+            false
+        } else {
+            pinned.push(item);
+            true
+        }
+    }
+
     fn write_locked(&self, g: &mut GuardState, mut state: SessionState, now: Instant) {
         state.close_to_tray = self.close_to_tray();
         state.download_dir = self.download_dir();
         state.ytdlp_path = self.ytdlp_path();
+        state.pinned = self.pinned();
         if let Err(e) = save(&self.path, &state) {
             log::warn!("failed to save session state: {e}");
         } else {
@@ -283,6 +327,16 @@ mod tests {
             close_to_tray: false,
             download_dir: Some(PathBuf::from("/music/downloads")),
             ytdlp_path: None,
+            pinned: vec![
+                PinnedRef {
+                    kind: PinnedKind::Album,
+                    id: 7,
+                },
+                PinnedRef {
+                    kind: PinnedKind::Playlist,
+                    id: 3,
+                },
+            ],
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);
@@ -351,5 +405,31 @@ mod tests {
         // Later saves driven by player events keep the value.
         again.maybe_save_position(SessionState::default);
         assert!(!load(&file).close_to_tray);
+    }
+
+    #[test]
+    fn pinned_items_dedup_toggle_and_persist() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+        let album = PinnedRef {
+            kind: PinnedKind::Album,
+            id: 42,
+        };
+        let playlist = PinnedRef {
+            kind: PinnedKind::Playlist,
+            id: 9,
+        };
+
+        let store = SessionStore::new(file.clone());
+        assert!(store.toggle_pin(album));
+        assert!(store.toggle_pin(playlist));
+        assert_eq!(store.pinned(), vec![album, playlist]);
+        store.save_now(&SessionState::default());
+
+        let reloaded = SessionStore::new(file.clone());
+        let state = reloaded.load();
+        assert_eq!(state.pinned, vec![album, playlist]);
+        assert!(!reloaded.toggle_pin(album));
+        assert_eq!(reloaded.pinned(), vec![playlist]);
     }
 }

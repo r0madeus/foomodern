@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { i18n, t } from './lib/i18n.svelte'
+  import { count, i18n, t } from './lib/i18n.svelte'
   import { onMount, untrack } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
+  import Cover from './lib/Cover.svelte'
   import PlayerBar from './lib/PlayerBar.svelte'
   import Icon from './lib/Icon.svelte'
   import SongsView from './lib/SongsView.svelte'
@@ -17,6 +18,7 @@
   import { library } from './lib/library.svelte'
   import { lyrics } from './lib/lyrics.svelte'
   import { playlists } from './lib/playlists.svelte'
+  import { pinned } from './lib/pinned.svelte'
   import { appSettings } from './lib/appSettings.svelte'
   import { online } from './lib/online.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
@@ -78,6 +80,7 @@
   })
 
   let playlistId = $state<number | null>(null)
+  let selectedAlbumId = $state<number | null>(null)
   let creatingPlaylist = $state(false)
   let newPlaylistName = $state('')
   let beforeQueue = $state<{ view: View; playlistId: number | null }>({ view: 'songs', playlistId: null })
@@ -117,6 +120,11 @@
     go('playlist')
   }
 
+  function openAlbum(id: number) {
+    selectedAlbumId = id
+    go('albums')
+  }
+
   async function createPlaylist() {
     const name = newPlaylistName.trim()
     if (name === '') return
@@ -143,6 +151,7 @@
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
+    pinned.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
     })
@@ -196,7 +205,10 @@
                 : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
             ]}
             aria-current={view === v ? 'page' : undefined}
-            onclick={() => go(v)}
+            onclick={() => {
+              if (v === 'albums') selectedAlbumId = null
+              go(v)
+            }}
           >
             <span class="flex items-center gap-2.5">
               <Icon name={ICONS[v]} class="size-[18px] opacity-80" />
@@ -209,7 +221,72 @@
         {/each}
       </nav>
 
-      <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-col gap-0.5">
+      {#if pinned.entries.length > 0}
+        <nav aria-labelledby="pinned-heading" class="flex max-h-48 shrink-0 flex-col gap-1">
+          <div class="flex items-center justify-between px-2">
+            <h2
+              id="pinned-heading"
+              class="text-xs font-medium uppercase tracking-wide text-zinc-400"
+            >
+              {t('Pinned items')}
+            </h2>
+          </div>
+          <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+            {#each pinned.entries as entry (`${entry.kind}:${entry.id}`)}
+              {@const active =
+                (entry.kind === 'album' && view === 'albums' && selectedAlbumId === entry.id) ||
+                (entry.kind === 'playlist' && view === 'playlist' && playlistId === entry.id)}
+              <div class="group flex items-center gap-0.5">
+                <button
+                  type="button"
+                  class={[
+                    'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left',
+                    active
+                      ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                      : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                  ]}
+                  aria-current={active ? 'page' : undefined}
+                  onclick={() =>
+                    entry.kind === 'album' ? openAlbum(entry.id) : openPlaylist(entry.id)}
+                >
+                  {#if entry.kind === 'album'}
+                    <Cover
+                      cover={entry.cover}
+                      title={entry.title}
+                      class="size-8 shrink-0 rounded text-xs"
+                    />
+                  {:else}
+                    <span class="flex size-8 shrink-0 items-center justify-center rounded bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      <Icon name="music" class="size-4" />
+                    </span>
+                  {/if}
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm leading-tight">{entry.title}</span>
+                    <span class="block truncate text-[11px] text-zinc-500">
+                      {#if entry.kind === 'album'}
+                        {t('Album')}{entry.subtitle ? ` · ${entry.subtitle}` : ''}
+                      {:else}
+                        {t('Playlist')} · {count(entry.trackCount, '{n} track', '{n} tracks')}
+                      {/if}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  title={t('Unpin')}
+                  aria-label={t('Unpin “{title}”', { title: entry.title })}
+                  class="shrink-0 rounded p-1 text-teal-600 opacity-75 hover:bg-zinc-200 hover:opacity-100 dark:text-teal-400 dark:hover:bg-zinc-800"
+                  onclick={() => void pinned.toggle(entry.kind, entry.id)}
+                >
+                  <Icon name="pin" class="size-3.5" />
+                </button>
+              </div>
+            {/each}
+          </div>
+        </nav>
+      {/if}
+
+      <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-1 flex-col gap-0.5">
         <div class="flex items-center justify-between px-2">
           <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
           <span class="flex items-center gap-0.5">
@@ -255,19 +332,36 @@
         <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
           {#each playlists.list as p (p.id)}
             {@const active = view === 'playlist' && playlistId === p.id}
-            <button
-              class={[
-                'flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-                active
-                  ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
-                  : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
-              ]}
-              aria-current={active ? 'page' : undefined}
-              onclick={() => openPlaylist(p.id)}
-            >
-              <span class="truncate">{p.name}</span>
-              <span class="text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
-            </button>
+            {@const isPinned = pinned.isPinned('playlist', p.id)}
+            <div class="group flex items-center gap-0.5">
+              <button
+                class={[
+                  'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+                  active
+                    ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                    : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                ]}
+                aria-current={active ? 'page' : undefined}
+                onclick={() => openPlaylist(p.id)}
+              >
+                <span class="truncate">{p.name}</span>
+                <span class="text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
+              </button>
+              <button
+                type="button"
+                title={t(isPinned ? 'Unpin' : 'Pin')}
+                aria-label={t(isPinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title: p.name })}
+                class={[
+                  'shrink-0 rounded p-1 transition hover:bg-zinc-200 dark:hover:bg-zinc-800',
+                  isPinned
+                    ? 'text-teal-600 opacity-100 dark:text-teal-400'
+                    : 'text-zinc-400 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
+                ]}
+                onclick={() => void pinned.toggle('playlist', p.id)}
+              >
+                <Icon name="pin" class="size-3.5" />
+              </button>
+            </div>
           {:else}
             {#if !creatingPlaylist}
               <p class="px-2 text-xs text-zinc-400">{t("No playlists yet.")}</p>
@@ -311,7 +405,7 @@
         {#if view === 'songs'}
           <SongsView />
         {:else if view === 'albums'}
-          <AlbumsView />
+          <AlbumsView {selectedAlbumId} onSelectAlbum={(id) => (selectedAlbumId = id)} />
         {:else if view === 'search'}
           <SearchView onOpenSettings={() => go('settings')} />
         {:else if view === 'queue'}

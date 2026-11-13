@@ -7,6 +7,7 @@
   import ExtBadge from './ExtBadge.svelte'
   import { tagEditor } from './tags.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
+  import { pinned } from './pinned.svelte'
   import { player, formatTime } from './player.svelte'
   import { tintFrom } from './tint'
   import type { Rgb } from './nowCover.svelte'
@@ -68,6 +69,20 @@
             onclick={() => library.playAlbum(albumId, 0)}
           >
             <Icon name="play" class="size-5" /> {t("Play")}
+          </button>
+          <button
+            type="button"
+            aria-pressed={pinned.isPinned('album', albumId)}
+            class={[
+              'flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap transition',
+              pinned.isPinned('album', albumId)
+                ? 'border-teal-400/60 bg-teal-500/20 text-teal-200 hover:bg-teal-500/30'
+                : 'border-white/20 bg-white/10 text-white/90 hover:bg-white/20',
+            ]}
+            onclick={() => void pinned.toggle('album', albumId)}
+          >
+            <Icon name="pin" class="size-4" />
+            {pinned.isPinned('album', albumId) ? t('Pinned') : t('Pin')}
           </button>
           <AddToPlaylist {albumId} label="Add to playlist" text class="whitespace-nowrap text-white! hover:bg-white/10!" />
           <button

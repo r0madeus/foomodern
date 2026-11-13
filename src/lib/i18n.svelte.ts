@@ -321,4 +321,12 @@ const TR: Record<string, string> = {
   'Not found': 'Bulunamadı',
   'ffmpeg available': 'ffmpeg hazır',
   'ffmpeg missing': 'ffmpeg yok',
+
+  // Pinned sidebar items
+  Pin: 'Sabitle',
+  Pinned: 'Sabitlendi',
+  'Pinned items': 'Sabitlenenler',
+  Unpin: 'Sabitlemeyi kaldır',
+  'Pin “{title}”': '“{title}” öğesini sabitle',
+  'Unpin “{title}”': '“{title}” sabitlemesini kaldır',
 }

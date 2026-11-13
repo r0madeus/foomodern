@@ -927,3 +927,85 @@ pub fn online_downloads(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJo
 pub fn online_clear_finished(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJob> {
     online.clear_finished()
 }
+
+// ---------------------------------------------------------------------
+// Sidebar pinned items (albums & playlists)
+// ---------------------------------------------------------------------
+
+use crate::session::{PinnedKind, PinnedRef};
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedEntry {
+    pub kind: PinnedKind,
+    pub id: i64,
+    pub title: String,
+    pub subtitle: String,
+    pub cover: Option<String>,
+    pub track_count: u32,
+}
+
+fn resolve_pinned(store: &SessionStore, lib: &Library) -> Res<Vec<PinnedEntry>> {
+    let refs = store.pinned();
+    let mut playlists_cache = None;
+    let mut out = Vec::with_capacity(refs.len());
+    for item in refs {
+        match item.kind {
+            PinnedKind::Album => {
+                if let Ok(detail) = lib.album(item.id) {
+                    out.push(PinnedEntry {
+                        kind: PinnedKind::Album,
+                        id: detail.album.id,
+                        title: detail.album.title,
+                        subtitle: detail.album.album_artist,
+                        cover: detail.album.cover,
+                        track_count: detail.album.track_count,
+                    });
+                }
+            }
+            PinnedKind::Playlist => {
+                let list = match &playlists_cache {
+                    Some(v) => v,
+                    None => playlists_cache.insert(le(lib.playlists())?),
+                };
+                if let Some(p) = list.iter().find(|p| p.id == item.id) {
+                    out.push(PinnedEntry {
+                        kind: PinnedKind::Playlist,
+                        id: p.id,
+                        title: p.name.clone(),
+                        subtitle: String::new(),
+                        cover: None,
+                        track_count: p.track_count,
+                    });
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn pinned_list(
+    store: State<'_, Arc<SessionStore>>,
+    lib: State<'_, Arc<Library>>,
+) -> Res<Vec<PinnedEntry>> {
+    resolve_pinned(&store, &lib)
+}
+
+#[tauri::command]
+pub fn pinned_toggle(
+    app: AppHandle,
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
+    lib: State<'_, Arc<Library>>,
+    kind: PinnedKind,
+    id: i64,
+) -> Res<Vec<PinnedEntry>> {
+    store.toggle_pin(PinnedRef { kind, id });
+    store.save_now(&player.export_session());
+    if let Err(e) = app.emit("pinned://changed", ()) {
+        log::warn!("failed to emit pinned change event: {e}");
+    }
+    resolve_pinned(&store, &lib)
+}

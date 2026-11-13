@@ -7,6 +7,7 @@
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Icon from './Icon.svelte'
   import type { TrackRow } from './library.svelte'
+  import { pinned } from './pinned.svelte'
   import { playlists } from './playlists.svelte'
   import { player, formatTime } from './player.svelte'
 
@@ -141,6 +142,20 @@
             {t("Cancel")}
           </button>
         {:else}
+          <button
+            type="button"
+            aria-pressed={pinned.isPinned('playlist', id)}
+            class={[
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition',
+              pinned.isPinned('playlist', id)
+                ? 'bg-teal-50 font-medium text-teal-700 hover:bg-teal-100 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950'
+                : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+            ]}
+            onclick={() => void pinned.toggle('playlist', id)}
+          >
+            <Icon name="pin" class="size-4" />
+            {pinned.isPinned('playlist', id) ? t('Pinned') : t('Pin')}
+          </button>
           <button
             class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
             onclick={startRename}

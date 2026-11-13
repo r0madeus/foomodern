@@ -12,8 +12,19 @@
   const PAD = 20
   const TEXT = 52
 
-  let selected = $state<number | null>(null)
+  let {
+    selectedAlbumId = null,
+    onSelectAlbum,
+  }: { selectedAlbumId?: number | null; onSelectAlbum?: (id: number | null) => void } = $props()
+
+  let localSelected = $state<number | null>(null)
   let width = $state(0)
+  const selected = $derived(onSelectAlbum ? selectedAlbumId : localSelected)
+
+  function selectAlbum(id: number | null) {
+    if (onSelectAlbum) onSelectAlbum(id)
+    else localSelected = id
+  }
 
   const q = $derived(library.debouncedQuery)
   const rows = $derived.by(() => {
@@ -37,7 +48,7 @@
 </script>
 
 {#if selected !== null}
-  <AlbumDetail albumId={selected} onBack={() => (selected = null)} />
+  <AlbumDetail albumId={selected} onBack={() => selectAlbum(null)} />
 {:else if library.stats.albums === 0}
   <EmptyLibrary />
 {:else}
@@ -78,7 +89,7 @@
                   {#if idx < totalCount}
                     {@const a = rows.get(idx)}
                     {#if a}
-                      <button class="group min-w-0 text-left" onclick={() => (selected = a.id)}>
+                      <button class="group min-w-0 text-left" onclick={() => selectAlbum(a.id)}>
                         <Cover
                           cover={a.cover}
                           title={a.title}
