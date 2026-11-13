@@ -20,9 +20,23 @@
     | 'up'
     | 'down'
     | 'trash'
+    | 'album'
+    | 'music'
+    | 'library'
+    | 'back'
+    | 'chevronRight'
+    | 'queue'
+    | 'settings'
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
+    album: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 14.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-5.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z',
+    music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z',
+    library: 'M20 2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-2 5h-3v5.5a2.5 2.5 0 1 1-2.5-2.5c.57 0 1.08.19 1.5.51V5h4v2ZM4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6Z',
+    back: 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59Z',
+    chevronRight: 'M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6Z',
+    queue: 'M15 6H3v2h12V6Zm0 4H3v2h12v-2ZM3 16h8v-2H3v2ZM17 6v8.18A3 3 0 1 0 19 17V8h3V6h-5Z',
+    settings: 'M3 17v2h6v-2H3ZM3 5v2h10V5H3Zm10 16v-2h8v-2h-8v-2h-2v6h2ZM7 9v2H3v2h4v2h2V9H7Zm14 4v-2H11v2h10Zm-6-4h2V7h4V5h-4V3h-2v6Z',
     play: 'M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14Z',
     pause: 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z',
     prev: 'M6 5h2v14H6zM19 6.2v11.6a.8.8 0 0 1-1.24.67L9.5 13a1.2 1.2 0 0 1 0-2l8.26-5.47A.8.8 0 0 1 19 6.2Z',

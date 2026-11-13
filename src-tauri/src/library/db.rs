@@ -171,7 +171,7 @@ pub fn counts(conn: &Connection) -> Result<(u64, u64)> {
 }
 
 const TRACK_SELECT: &str = "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''), t.album_id,
-        t.track_no, t.disc_no, t.year, t.duration_ms, t.path
+        t.track_no, t.disc_no, t.year, t.duration_ms, t.path, a.cover
      FROM tracks t LEFT JOIN albums a ON a.id = t.album_id";
 
 fn opt_u32(v: Option<i64>) -> Option<u32> {
@@ -194,6 +194,7 @@ fn track_row(r: &Row<'_>) -> rusqlite::Result<TrackRow> {
             .get::<_, Option<i64>>(8)?
             .and_then(|n| u64::try_from(n).ok()),
         path: r.get(9)?,
+        cover: r.get(10)?,
     })
 }
 

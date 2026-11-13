@@ -14,11 +14,7 @@
     { value: 'album', label: 'Album' },
     { value: 'added', label: 'Recently added' },
   ]
-  // Phones show #, title, artist and the actions menu only.
-  const COLS =
-    'grid grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,1fr)_2rem] items-center gap-3 px-3 sm:grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_2rem] sm:px-5'
-  // Touch screens have no double-click: a tap plays.
-  const tapToPlay = window.matchMedia('(pointer: coarse)').matches
+  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_2rem] items-center gap-3 px-5'
 
   const q = $derived(library.debouncedQuery)
   // A fresh cache whenever the library version, sort, or search query changes.
@@ -63,7 +59,7 @@
       <SearchInput placeholder="Search songs, artists, albums…" />
     </div>
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
-      <span class="text-right">#</span><span>Title</span><span>Artist</span><span class="max-sm:hidden">Album</span><span class="text-right max-sm:hidden">Time</span><span></span>
+      <span class="text-right">#</span><span>Title</span><span>Artist</span><span>Album</span><span class="text-right">Time</span><span></span>
     </div>
     {#if q !== '' && rows.total === 0}
       <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
@@ -99,7 +95,6 @@
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
               ondblclick={() => library.playAll(i)}
-              onclick={() => tapToPlay && library.playAll(i)}
               onkeydown={(e) => e.key === 'Enter' && library.playAll(i)}
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -111,11 +106,11 @@
                 <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
               </span>
               <span class="truncate text-zinc-500">{t.artist}</span>
-              <span class="truncate text-zinc-500 max-sm:hidden">{t.album}</span>
-              <span class="text-right text-xs tabular-nums text-zinc-500 max-sm:hidden">
+              <span class="truncate text-zinc-500">{t.album}</span>
+              <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
               </span>
-              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
+              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
                 <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
               </span>
             </div>
@@ -124,8 +119,8 @@
               <span></span>
               <span class="h-3 w-3/4 rounded bg-zinc-200 dark:bg-zinc-800"></span>
               <span class="h-3 w-1/2 rounded bg-zinc-200 dark:bg-zinc-800"></span>
-              <span class="h-3 w-1/2 rounded bg-zinc-200 max-sm:hidden dark:bg-zinc-800"></span>
-              <span class="max-sm:hidden"></span>
+              <span class="h-3 w-1/2 rounded bg-zinc-200 dark:bg-zinc-800"></span>
+              <span></span>
               <span></span>
             </div>
           {/if}

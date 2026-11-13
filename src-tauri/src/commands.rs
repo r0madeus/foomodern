@@ -133,6 +133,41 @@ pub fn library_add_folder(lib: State<'_, Arc<Library>>, path: String) -> Res<Vec
     Ok(folders)
 }
 
+/// Cached cover of the album containing `path` (the playing track in the UI).
+#[tauri::command]
+pub fn library_track_cover(lib: State<'_, Arc<Library>>, path: String) -> Res<Option<String>> {
+    le(lib.track_cover(&path))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct WindowInsets {
+    top: f64,
+    bottom: f64,
+}
+
+/// Space covered by the Android status and navigation bars (CSS pixels);
+/// zero on desktop.
+#[tauri::command]
+pub async fn app_window_insets(app: tauri::AppHandle) -> Res<WindowInsets> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let handle = app
+            .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+            .0
+            .clone();
+        handle
+            .run_mobile_plugin_async("windowInsets", ())
+            .await
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Ok(WindowInsets::default())
+    }
+}
+
 /// Android has no folder picker for plain file paths: ask for read access to
 /// the music library and return the shared Music folder to add.
 #[tauri::command]

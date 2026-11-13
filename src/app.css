@@ -1,7 +1,22 @@
 @import "tailwindcss";
 
+/* `dark:` follows the system theme, or the `dark` class on <html> (set on
+   phones, where the app is always dark). */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    @slot;
+  }
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+}
+
 :root {
   color-scheme: light dark;
+  /* Space taken by the status and navigation bars on Android (edge-to-edge);
+     set from Rust/Kotlin at runtime, env() as a fallback. */
+  --inset-top: env(safe-area-inset-top, 0px);
+  --inset-bottom: env(safe-area-inset-bottom, 0px);
   font-family: Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -25,6 +40,16 @@ input.seek:disabled {
   cursor: default;
   opacity: 0.5;
 }
+html.dark {
+  color-scheme: dark;
+}
+html.dark input.seek {
+  background: linear-gradient(
+    to right,
+    var(--color-teal-500) var(--progress, 0%),
+    var(--color-zinc-700) var(--progress, 0%)
+  );
+}
 @media (prefers-color-scheme: dark) {
   input.seek {
     background: linear-gradient(
@@ -41,4 +66,20 @@ input.seek::-webkit-slider-thumb {
   border-radius: 9999px;
   background: white;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.2), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+/* Phone seek bars: thicker track, bigger thumb for fingers. */
+input.seek.touch {
+  height: 4px;
+}
+input.seek.touch::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+}
+:root input.seek.light {
+  background: linear-gradient(
+    to right,
+    white var(--progress, 0%),
+    rgb(255 255 255 / 0.25) var(--progress, 0%)
+  );
 }

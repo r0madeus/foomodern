@@ -7,6 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.webkit.WebView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -68,6 +71,7 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
     private val handler = Handler(Looper.getMainLooper())
     private var events: Channel? = null
     private var controller: ListenableFuture<MediaController>? = null
+    private var webView: WebView? = null
 
     /** Path of the item that is playing (or loaded), as last reported to Rust. */
     private var currentPath: String? = null
@@ -133,6 +137,34 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
                 emit(JSObject().put("type", "idle"))
             }
         }
+    }
+
+    override fun load(webView: WebView) {
+        this.webView = webView
+    }
+
+    /**
+     * How far the status bar (top) and navigation bar (bottom) overlap the
+     * web view, in CSS pixels. Zero when the app is not drawn edge-to-edge.
+     */
+    @Command
+    fun windowInsets(invoke: Invoke) {
+        val view = webView
+        val root = activity.window.decorView
+        val insets = ViewCompat.getRootWindowInsets(root)
+        if (view == null || insets == null) {
+            invoke.resolve(JSObject().put("top", 0.0).put("bottom", 0.0))
+            return
+        }
+        val bars = insets.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        )
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val top = (bars.top - location[1]).coerceAtLeast(0)
+        val bottom = (location[1] + view.height - (root.height - bars.bottom)).coerceAtLeast(0)
+        val density = view.resources.displayMetrics.density
+        invoke.resolve(JSObject().put("top", top / density.toDouble()).put("bottom", bottom / density.toDouble()))
     }
 
     /** First call from Rust: wires up events and starts the media session service. */

@@ -80,6 +80,7 @@
       </label>
     </section>
 
+    {#if appSettings.platform !== 'android'}
     <section aria-labelledby="set-window" class="flex flex-col gap-3">
       <h3 id="set-window" class="text-xs font-medium uppercase tracking-wide text-zinc-400">Window</h3>
       <label class="flex cursor-pointer items-start justify-between gap-6">
@@ -106,6 +107,7 @@
         />
       </label>
     </section>
+    {/if}
 
     <section aria-labelledby="set-about" class="flex flex-col gap-3">
       <h3 id="set-about" class="text-xs font-medium uppercase tracking-wide text-zinc-400">About</h3>

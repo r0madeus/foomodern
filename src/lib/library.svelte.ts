@@ -37,6 +37,8 @@ export interface TrackRow {
   year: number | null
   durationMs: number | null
   path: string
+  /** Cached cover of the track's album. */
+  cover: string | null
 }
 
 export interface AlbumRow {

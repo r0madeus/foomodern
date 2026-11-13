@@ -77,6 +77,8 @@ pub struct TrackRow {
     pub year: Option<i32>,
     pub duration_ms: Option<u64>,
     pub path: String,
+    /// Absolute path of the album's cached cover, if any.
+    pub cover: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
