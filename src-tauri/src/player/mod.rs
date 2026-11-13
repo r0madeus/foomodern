@@ -90,11 +90,22 @@ struct Inner {
     resume_position: Option<f64>,
     /// Seek deferred until the engine finishes opening the loaded file.
     pending_load_seek: Option<f64>,
+    /// Sequence number of the last observer event built under this lock.
+    event_seq: u64,
 }
 
 pub struct Player {
     inner: Mutex<Inner>,
     observer: Observer,
+    /// Sequence number of the last event handed to the observer.
+    ///
+    /// Events are built under `inner` but delivered after it is released,
+    /// so two threads (a user command and the engine-event thread) can
+    /// deliver out of order. Delivery is serialised here and an event older
+    /// than one already delivered is dropped: the newer snapshot supersedes
+    /// it. Without this a stale "playing" snapshot could overwrite a newer
+    /// "paused" one in the UI and the OS media controls.
+    delivered_seq: Mutex<u64>,
 }
 
 fn track_info(e: &crate::queue::QueueEntry) -> TrackInfo {
@@ -116,6 +127,12 @@ fn track_info(e: &crate::queue::QueueEntry) -> TrackInfo {
 }
 
 impl Inner {
+    /// Next observer event sequence number (always increasing).
+    fn next_seq(&mut self) -> u64 {
+        self.event_seq += 1;
+        self.event_seq
+    }
+
     fn snapshot(&self) -> PlayerSnapshot {
         PlayerSnapshot {
             status: self.status,
@@ -192,9 +209,23 @@ impl Player {
                 pending_load: false,
                 resume_position: None,
                 pending_load_seek: None,
+                event_seq: 0,
             }),
             observer,
+            delivered_seq: Mutex::new(0),
         }
+    }
+
+    /// Hand `event` (built under the lock with sequence `seq`) to the
+    /// observer, in order. Stale state/position events are dropped; errors
+    /// are always delivered.
+    fn deliver(&self, seq: u64, event: PlayerEvent) {
+        let mut last = self.delivered_seq.lock().unwrap_or_else(|e| e.into_inner());
+        if seq <= *last && !matches!(event, PlayerEvent::Error(_)) {
+            return;
+        }
+        *last = (*last).max(seq);
+        (self.observer)(event);
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -207,12 +238,13 @@ impl Player {
     where
         F: FnOnce(&mut Inner) -> Result<(), PlayerError>,
     {
-        let (result, snap) = {
+        let (result, snap, seq) = {
             let mut inner = self.lock();
             let r = f(&mut inner);
-            (r, inner.snapshot())
+            let seq = inner.next_seq();
+            (r, inner.snapshot(), seq)
         };
-        (self.observer)(PlayerEvent::State(snap.clone()));
+        self.deliver(seq, PlayerEvent::State(snap.clone()));
         result.map(|()| snap)
     }
 
@@ -470,7 +502,7 @@ impl Player {
             Position(f64, Option<f64>),
             Error(String),
         }
-        let (out, snap) = {
+        let (out, snap, seq) = {
             let mut s = self.lock();
             let out = match event {
                 EngineEvent::TrackStarted {
@@ -543,15 +575,16 @@ impl Player {
                     Out::Error(msg)
                 }
             };
-            (out, s.snapshot())
+            let seq = s.next_seq();
+            (out, s.snapshot(), seq)
         };
         match out {
             Out::None => {}
-            Out::State => (self.observer)(PlayerEvent::State(snap)),
+            Out::State => self.deliver(seq, PlayerEvent::State(snap)),
             Out::Position(seconds, duration) => {
-                (self.observer)(PlayerEvent::Position { seconds, duration })
+                self.deliver(seq, PlayerEvent::Position { seconds, duration })
             }
-            Out::Error(msg) => (self.observer)(PlayerEvent::Error(msg)),
+            Out::Error(msg) => self.deliver(seq, PlayerEvent::Error(msg)),
         }
     }
 
@@ -562,7 +595,11 @@ impl Player {
     fn on_auto_advance(s: &mut Inner, path: &Path) -> Result<(), PlayerError> {
         s.position = 0.0;
         s.duration = None;
-        s.status = Status::Playing;
+        // The track change may have been reported after the user paused at
+        // the boundary: mpv stays paused, so the player must too.
+        if s.status != Status::Paused {
+            s.status = Status::Playing;
+        }
         let idx = s
             .engine_next
             .and_then(|id| s.queue.index_of(id))
@@ -830,6 +867,58 @@ mod tests {
             (page[0].title.as_str(), page[0].artist.as_str()),
             ("02 - Plain", "")
         );
+    }
+
+    #[test]
+    fn concurrent_updates_never_leave_a_stale_snapshot_last() {
+        // A user command and the engine-event thread build snapshots under
+        // the lock but deliver them after releasing it. The observer must
+        // still end up with the newest state (regression: the OS media
+        // controls kept showing "playing" after a pause).
+        for _ in 0..200 {
+            let (p, _, events) = setup();
+            p.replace_queue(pbs(&["a", "b"]), 0).unwrap();
+            p.handle_engine_event(started("a", false));
+            std::thread::scope(|sc| {
+                sc.spawn(|| {
+                    for _ in 0..25 {
+                        p.toggle_pause().unwrap();
+                    }
+                });
+                sc.spawn(|| {
+                    for i in 0..25 {
+                        p.handle_engine_event(EngineEvent::Duration {
+                            seconds: 100.0 + f64::from(i),
+                        });
+                    }
+                });
+            });
+            let last = events
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    PlayerEvent::State(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(last, p.snapshot());
+        }
+    }
+
+    #[test]
+    fn pausing_right_at_a_track_change_stays_paused() {
+        let (p, _, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c"]), 0).unwrap();
+        p.handle_engine_event(started("a", false));
+        p.pause().unwrap();
+        // mpv had already moved to b when the pause arrived; the event
+        // reporting it is handled afterwards.
+        p.handle_engine_event(started("b", true));
+        let snap = p.snapshot();
+        assert_eq!(snap.status, Status::Paused);
+        assert_eq!(snap.current_index, Some(1));
     }
 
     #[test]

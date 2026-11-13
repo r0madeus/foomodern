@@ -376,6 +376,19 @@ pub fn album_tracks(conn: &Connection, album_id: i64) -> Result<Vec<Track>> {
     Ok(rows.collect::<std::result::Result<_, _>>()?)
 }
 
+/// Cover file of the album a track belongs to, if any.
+pub fn track_cover_by_path(conn: &Connection, path: &str) -> Result<Option<String>> {
+    conn.query_row(
+        "SELECT a.cover FROM tracks t JOIN albums a ON a.id = t.album_id
+         WHERE t.path = ?1",
+        [path],
+        |r| r.get::<_, Option<String>>(0),
+    )
+    .optional()
+    .map(Option::flatten)
+    .map_err(Into::into)
+}
+
 pub fn track_meta_by_path(conn: &Connection, path: &str) -> Result<Option<TrackMeta>> {
     conn.query_row(
         "SELECT t.title, t.artist, COALESCE(a.title, ''), t.duration_ms

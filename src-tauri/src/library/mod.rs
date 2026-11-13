@@ -247,6 +247,12 @@ impl Library {
         db::track_meta_by_path(&self.conn(), &key)
     }
 
+    /// Absolute cover path of the album containing the track at `path`.
+    pub fn track_cover(&self, path: &str) -> Result<Option<String>> {
+        let key = scan::display_path(Path::new(path));
+        db::track_cover_by_path(&self.conn(), &key)
+    }
+
     pub fn albums_page(&self, offset: u64, limit: u64) -> Result<Vec<AlbumRow>> {
         db::albums_page(&self.conn(), offset, limit.min(1000))
     }

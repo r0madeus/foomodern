@@ -56,6 +56,17 @@ pub fn run() {
                             if let Some(p) = handle.try_state::<Arc<Player>>() {
                                 observer_session.on_player_state(&snap, || p.export_session());
                             }
+                            if let Some(keys) = handle.try_state::<media_keys::MediaKeys>() {
+                                keys.publish(&snap, |path| {
+                                    let Some(lib) = handle.try_state::<Arc<Library>>() else {
+                                        return media_keys::Extra::default();
+                                    };
+                                    media_keys::Extra {
+                                        album: lib.track_meta(path).ok().flatten().map(|m| m.album),
+                                        cover: lib.track_cover(path).ok().flatten(),
+                                    }
+                                });
+                            }
                             handle.emit("player://state", snap)
                         }
                         PlayerEvent::Position { seconds, duration } => {
@@ -82,6 +93,17 @@ pub fn run() {
                         worker.handle_engine_event(ev);
                     }
                 })?;
+
+            #[cfg(target_os = "windows")]
+            let hwnd = app
+                .get_webview_window("main")
+                .and_then(|w| w.hwnd().ok())
+                .map(|h| h.0 as *mut std::ffi::c_void);
+            #[cfg(not(target_os = "windows"))]
+            let hwnd = None;
+            if let Some(keys) = media_keys::create(hwnd, &player) {
+                app.manage(keys);
+            }
 
             app.manage(player);
             app.manage(session_store);
