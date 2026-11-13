@@ -13,9 +13,9 @@
 //! just before a user command (e.g. a late `Idle`) can be applied after it.
 
 use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
-use crate::queue::{EntryId, Queue};
+use crate::queue::{EntryId, Queue, Track};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 #[derive(Debug, thiserror::Error)]
@@ -38,8 +38,10 @@ pub enum Status {
 pub struct TrackInfo {
     pub id: EntryId,
     pub path: String,
-    /// File name without extension.
+    /// Tag title, or the file name without extension.
     pub title: String,
+    /// Tag artist, empty when unknown.
+    pub artist: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -93,10 +95,16 @@ fn track_info(e: &crate::queue::QueueEntry) -> TrackInfo {
         id: e.id,
         path: e.path.to_string_lossy().into_owned(),
         title: e
-            .path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default(),
+            .title
+            .clone()
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| {
+                e.path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            }),
+        artist: e.artist.clone().unwrap_or_default(),
     }
 }
 
@@ -210,7 +218,7 @@ impl Player {
     /// clears the queue and stops playback.
     pub fn replace_queue(
         &self,
-        paths: Vec<PathBuf>,
+        paths: Vec<impl Into<Track>>,
         start_index: usize,
     ) -> Result<PlayerSnapshot, PlayerError> {
         if !paths.is_empty() && start_index >= paths.len() {
@@ -227,7 +235,7 @@ impl Player {
         })
     }
 
-    pub fn append(&self, paths: Vec<PathBuf>) -> Result<PlayerSnapshot, PlayerError> {
+    pub fn append(&self, paths: Vec<impl Into<Track>>) -> Result<PlayerSnapshot, PlayerError> {
         self.run(|s| {
             s.queue.append(paths);
             s.sync_next()
@@ -482,6 +490,7 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -704,6 +713,29 @@ mod tests {
         // engine_next was already c, path mismatch -> treated as stale.
         assert_eq!(calls.take(), [Call::Load(pb("c")), Call::Play]);
         assert_eq!(p.snapshot().current_index, Some(1));
+    }
+
+    #[test]
+    fn tags_from_the_library_are_shown_instead_of_the_file_name() {
+        let (p, _, _) = setup();
+        let tagged = Track {
+            path: pb("/music/01 - Track 1.mp3"),
+            title: Some("Morning Light".into()),
+            artist: Some("Nadia Okafor".into()),
+        };
+        let snap = p
+            .replace_queue(vec![tagged, Track::from(pb("/music/02 - Plain.mp3"))], 0)
+            .unwrap();
+        let cur = snap.current.unwrap();
+        assert_eq!(
+            (cur.title.as_str(), cur.artist.as_str()),
+            ("Morning Light", "Nadia Okafor")
+        );
+        let page = p.queue_page(1, 1);
+        assert_eq!(
+            (page[0].title.as_str(), page[0].artist.as_str()),
+            ("02 - Plain", "")
+        );
     }
 
     #[test]

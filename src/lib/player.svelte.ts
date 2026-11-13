@@ -10,6 +10,8 @@ export interface TrackInfo {
   id: number
   path: string
   title: string
+  /** Empty when unknown (files opened directly, untagged files). */
+  artist: string
 }
 
 export interface PlayerSnapshot {

@@ -28,7 +28,7 @@
       </span>
       <button class="min-w-0 flex-1 truncate text-left" onclick={() => player.playIndex(i)} title={track.path}>
         <span class="font-medium">{track.title}</span>
-        <span class="ml-2 text-xs text-zinc-400">{track.path}</span>
+        <span class="ml-2 text-xs text-zinc-400">{track.artist || track.path}</span>
       </button>
       <button
         class="invisible rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 group-hover:visible dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
