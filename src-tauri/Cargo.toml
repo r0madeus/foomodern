@@ -50,3 +50,11 @@ webpki-roots = "=1.0.10"
 [dev-dependencies]
 hound = "=3.5.1"
 tempfile = "=3.27.0"
+
+# Smaller release binaries (desktop installer and Android APK): no debug
+# symbols, whole-program optimisation. Panics still unwind, so the panic
+# hook can log them.
+[profile.release]
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
