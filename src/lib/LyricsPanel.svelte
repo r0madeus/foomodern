@@ -88,6 +88,10 @@
     {#if lyrics.error}
       <p class="px-5 pb-2 text-xs text-red-200">{lyrics.error}</p>
     {/if}
-    <LyricLines dim={tint.dim} class="flex-1 px-5 [mask-image:linear-gradient(to_bottom,transparent,black_4%,black_90%,transparent)]" />
+    <LyricLines
+      dim={tint.dim}
+      class="flex-1 px-5"
+      scrollClass="[mask-image:linear-gradient(to_bottom,transparent,black_4%,black_90%,transparent)]"
+    />
   {/if}
 </aside>

@@ -52,7 +52,12 @@
         </div>
       </div>
       {#if hasLyrics}
-        <LyricLines big dim={tint.dim} class="h-full pr-4 [mask-image:linear-gradient(to_bottom,transparent,black_6%,black_88%,transparent)]" />
+        <LyricLines
+          big
+          dim={tint.dim}
+          class="h-full pr-4"
+          scrollClass="[mask-image:linear-gradient(to_bottom,transparent,black_6%,black_88%,transparent)]"
+        />
       {/if}
     </div>
   {:else}

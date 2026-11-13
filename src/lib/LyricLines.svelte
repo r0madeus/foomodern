@@ -11,11 +11,13 @@
     big = false,
     dim,
     class: className = '',
+    scrollClass = '',
   }: {
     /** Full-screen size instead of the card size. */
     big?: boolean
     dim: string
     class?: string
+    scrollClass?: string
   } = $props()
 
   let box = $state<HTMLDivElement | null>(null)
@@ -72,7 +74,7 @@
 <div class={['relative min-h-0', className]}>
   <div
     bind:this={box}
-    class="relative h-full overflow-y-auto overscroll-contain"
+    class={['relative h-full overflow-y-auto overscroll-contain', scrollClass]}
     role="region"
     aria-label={t("Lyrics")}
     {@attach watchManualScroll}
@@ -114,10 +116,11 @@
   </div>
   {#if !follow && res?.kind === 'synced'}
     <button
-      class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg"
+      type="button"
+      class="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg hover:bg-zinc-100"
       onclick={resume}
     >
-      {t("Back to current line")}
+      {t("Sync")}
     </button>
   {/if}
 </div>

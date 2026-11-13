@@ -116,7 +116,7 @@ const TR: Record<string, string> = {
   'No lyrics found.': 'Söz bulunamadı.',
   '♪ Instrumental': '♪ Enstrümantal',
   'Play a track to see lyrics.': 'Sözleri görmek için bir şarkı çal.',
-  'Back to current line': 'Çalan satıra dön',
+  Sync: 'Senkronize et',
   Retry: 'Tekrar dene',
 
   // Lists and sorting
