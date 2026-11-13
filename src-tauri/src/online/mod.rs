@@ -148,6 +148,15 @@ pub struct DownloadJob {
     pub output_dir: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DownloadRequest {
+    pub kind: DownloadKind,
+    pub title: String,
+    pub artist: String,
+    pub cover: Option<String>,
+    pub tracks: Vec<OnlineTrack>,
+}
+
 pub type JobsObserver = Arc<dyn Fn(&[DownloadJob]) + Send + Sync>;
 
 #[cfg(not(target_os = "android"))]
@@ -470,11 +479,7 @@ impl OnlineService {
     #[cfg(target_os = "android")]
     pub fn enqueue_download(
         &self,
-        _kind: DownloadKind,
-        _title: String,
-        _artist: String,
-        _cover: Option<String>,
-        _tracks: Vec<OnlineTrack>,
+        _req: DownloadRequest,
         _store: &SessionStore,
         _lib: &Arc<Library>,
     ) -> Result<DownloadJob, OnlineError> {
@@ -484,15 +489,11 @@ impl OnlineService {
     #[cfg(not(target_os = "android"))]
     pub fn enqueue_download(
         &self,
-        kind: DownloadKind,
-        title: String,
-        artist: String,
-        cover: Option<String>,
-        tracks: Vec<OnlineTrack>,
+        req: DownloadRequest,
         store: &SessionStore,
         lib: &Arc<Library>,
     ) -> Result<DownloadJob, OnlineError> {
-        if tracks.is_empty() {
+        if req.tracks.is_empty() {
             return Err(OnlineError::Message("no tracks to download".into()));
         }
         let download_dir = self.resolve_download_dir(store, lib);
@@ -500,13 +501,13 @@ impl OnlineService {
         let job_id = self.next_id();
         let job = DownloadJob {
             id: job_id,
-            kind,
-            title,
-            artist,
-            cover,
+            kind: req.kind,
+            title: req.title,
+            artist: req.artist,
+            cover: req.cover,
             state: DownloadState::Queued,
             done_tracks: 0,
-            total_tracks: tracks.len(),
+            total_tracks: req.tracks.len(),
             current_track: None,
             error: None,
             output_dir: Some(display_path(&download_dir)),
@@ -523,7 +524,7 @@ impl OnlineService {
         self.worker_tx
             .send(DownloadWork {
                 job_id,
-                tracks,
+                tracks: req.tracks,
                 download_dir,
                 ytdlp_bin,
                 lib: Arc::clone(lib),
@@ -1022,14 +1023,18 @@ fn download_one_track(
 
 #[cfg(not(target_os = "android"))]
 fn no_window_cmd(bin: &str) -> Command {
-    let mut cmd = Command::new(bin);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = Command::new(bin);
         cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
     }
-    cmd
+    #[cfg(not(windows))]
+    {
+        Command::new(bin)
+    }
 }
 
 #[cfg(not(target_os = "android"))]

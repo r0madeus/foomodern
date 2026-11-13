@@ -811,8 +811,8 @@ pub async fn lyrics_attach_file(audio_path: String, lrc_path: String) -> Res<Lyr
 // ---------------------------------------------------------------------
 
 use crate::online::{
-    DownloadJob, DownloadKind, OnlineAlbum, OnlineAlbumDetail, OnlineService, OnlineStatus,
-    OnlineTrack, SearchResults,
+    DownloadJob, DownloadKind, DownloadRequest, OnlineAlbum, OnlineAlbumDetail, OnlineService,
+    OnlineStatus, OnlineTrack, SearchResults,
 };
 use crate::queue::Track;
 
@@ -919,17 +919,15 @@ pub fn online_download_track(
     let title = track.title.clone();
     let artist = track.artist.clone();
     let cover = track.cover.clone().or_else(|| track.cover_url.clone());
-    online
-        .enqueue_download(
-            DownloadKind::Track,
-            title,
-            artist,
-            cover,
-            vec![track],
-            &store,
-            &lib,
-        )
-        .map_err(|e| e.to_string())
+    let req = DownloadRequest {
+        kind: DownloadKind::Track,
+        title,
+        artist,
+        cover,
+        tracks: vec![track],
+    };
+    let res = online.enqueue_download(req, &store, &lib);
+    res.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -941,17 +939,15 @@ pub fn online_download_album(
     tracks: Vec<OnlineTrack>,
 ) -> Res<DownloadJob> {
     let cover = album.cover.or(album.cover_url);
-    online
-        .enqueue_download(
-            DownloadKind::Album,
-            album.title,
-            album.artist,
-            cover,
-            tracks,
-            &store,
-            &lib,
-        )
-        .map_err(|e| e.to_string())
+    let req = DownloadRequest {
+        kind: DownloadKind::Album,
+        title: album.title,
+        artist: album.artist,
+        cover,
+        tracks,
+    };
+    let res = online.enqueue_download(req, &store, &lib);
+    res.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
