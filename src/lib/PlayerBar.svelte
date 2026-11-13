@@ -37,7 +37,7 @@
         {snap.current.title}
       </p>
       <p class="truncate text-xs text-zinc-500">
-        {(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
+        {snap.current.artist ? `${snap.current.artist} · ` : ''}{(snap.currentIndex ?? 0) + 1} / {snap.queueLength}
       </p>
     {:else}
       <p class="text-sm text-zinc-400">Nothing playing</p>

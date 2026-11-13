@@ -7,6 +7,7 @@ pub mod player;
 pub mod queue;
 
 use audio::mpv::{MpvEngine, MpvOptions};
+use library::{Hooks, Library};
 use player::{Player, PlayerEvent};
 use serde::Serialize;
 use std::sync::{Arc, mpsc};
@@ -65,6 +66,33 @@ pub fn run() {
                 })?;
 
             app.manage(player);
+
+            let data_dir = app.path().app_data_dir()?;
+            let cache_dir = app.path().app_cache_dir()?;
+            let (progress_handle, changed_handle) = (app.handle().clone(), app.handle().clone());
+            let library = Arc::new(
+                Library::open(
+                    &data_dir.join("library.sqlite3"),
+                    &cache_dir.join("covers"),
+                    Hooks {
+                        on_progress: Box::new(move |p| {
+                            if let Err(e) = progress_handle.emit("library://scan", p) {
+                                log::warn!("failed to emit library scan event: {e}");
+                            }
+                        }),
+                        on_changed: Box::new(move |version| {
+                            if let Err(e) = changed_handle.emit("library://changed", version) {
+                                log::warn!("failed to emit library change event: {e}");
+                            }
+                        }),
+                    },
+                )
+                .map_err(|e| {
+                    log::error!("failed to open library: {e}");
+                    e
+                })?,
+            );
+            app.manage(library);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +110,16 @@ pub fn run() {
             commands::player_seek,
             commands::player_set_volume,
             commands::player_snapshot,
+            commands::library_add_folder,
+            commands::library_remove_folder,
+            commands::library_folders,
+            commands::library_rescan,
+            commands::library_stats,
+            commands::library_tracks_page,
+            commands::library_albums_page,
+            commands::library_album,
+            commands::library_play_album,
+            commands::library_play_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

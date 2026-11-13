@@ -16,10 +16,30 @@ impl EntryId {
     }
 }
 
+/// What gets queued: a file plus the tags we already know (from the
+/// library). Plain paths (e.g. "Open files") convert without tags.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Track {
+    pub path: PathBuf,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+}
+
+impl From<PathBuf> for Track {
+    fn from(path: PathBuf) -> Self {
+        Track {
+            path,
+            ..Track::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueEntry {
     pub id: EntryId,
     pub path: PathBuf,
+    pub title: Option<String>,
+    pub artist: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -35,27 +55,35 @@ impl Queue {
         Self::default()
     }
 
-    fn make_entry(&mut self, path: PathBuf) -> QueueEntry {
+    fn make_entry(&mut self, track: Track) -> QueueEntry {
         let id = EntryId(self.next_id);
         self.next_id += 1;
-        QueueEntry { id, path }
+        QueueEntry {
+            id,
+            path: track.path,
+            title: track.title,
+            artist: track.artist,
+        }
     }
 
     /// Replace all entries. `start` becomes the current index when in range,
     /// otherwise there is no current entry.
-    pub fn replace(&mut self, paths: Vec<PathBuf>, start: Option<usize>) {
-        let entries: Vec<QueueEntry> = paths.into_iter().map(|p| self.make_entry(p)).collect();
+    pub fn replace<T: Into<Track>>(&mut self, tracks: Vec<T>, start: Option<usize>) {
+        let entries: Vec<QueueEntry> = tracks
+            .into_iter()
+            .map(|t| self.make_entry(t.into()))
+            .collect();
         self.entries = entries;
         self.current = start.filter(|&i| i < self.entries.len());
         self.version += 1;
     }
 
-    pub fn append(&mut self, paths: Vec<PathBuf>) {
-        if paths.is_empty() {
+    pub fn append<T: Into<Track>>(&mut self, tracks: Vec<T>) {
+        if tracks.is_empty() {
             return;
         }
-        for p in paths {
-            let e = self.make_entry(p);
+        for t in tracks {
+            let e = self.make_entry(t.into());
             self.entries.push(e);
         }
         self.version += 1;
@@ -210,7 +238,7 @@ mod tests {
         assert_eq!(names(&q), ["a", "b", "c"]);
         assert_eq!(q.current_index(), Some(0));
         assert_eq!(q.version(), v + 1);
-        q.append(vec![]);
+        q.append(Vec::<PathBuf>::new());
         assert_eq!(q.version(), v + 1);
     }
 

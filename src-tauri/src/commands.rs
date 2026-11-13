@@ -92,3 +92,91 @@ pub fn player_set_volume(player: State<'_, Arc<Player>>, percent: f64) -> Res<Pl
 pub fn player_snapshot(player: State<'_, Arc<Player>>) -> Res<PlayerSnapshot> {
     Ok(player.snapshot())
 }
+
+// ---------------------------------------------------------------------
+// Library
+// ---------------------------------------------------------------------
+
+use crate::library::{
+    AlbumDetail, AlbumRow, FolderInfo, Library, LibraryStats, SortOrder, TrackRow,
+};
+
+fn le<T>(r: Result<T, crate::library::LibraryError>) -> Res<T> {
+    r.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_add_folder(lib: State<'_, Arc<Library>>, path: String) -> Res<Vec<FolderInfo>> {
+    let id = le(lib.add_folder(&path))?;
+    let folders = le(lib.folders())?;
+    lib.start_scan(folders.iter().filter(|f| f.id == id).cloned().collect());
+    Ok(folders)
+}
+
+#[tauri::command]
+pub fn library_remove_folder(lib: State<'_, Arc<Library>>, id: i64) -> Res<Vec<FolderInfo>> {
+    le(lib.remove_folder(id))?;
+    le(lib.folders())
+}
+
+#[tauri::command]
+pub fn library_folders(lib: State<'_, Arc<Library>>) -> Res<Vec<FolderInfo>> {
+    le(lib.folders())
+}
+
+#[tauri::command]
+pub fn library_rescan(lib: State<'_, Arc<Library>>) -> Res<()> {
+    lib.start_scan(le(lib.folders())?);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn library_stats(lib: State<'_, Arc<Library>>) -> Res<LibraryStats> {
+    le(lib.stats())
+}
+
+#[tauri::command]
+pub fn library_tracks_page(
+    lib: State<'_, Arc<Library>>,
+    offset: u64,
+    limit: u64,
+    sort: String,
+) -> Res<Vec<TrackRow>> {
+    le(lib.tracks_page(offset, limit, SortOrder::parse(&sort)))
+}
+
+#[tauri::command]
+pub fn library_albums_page(
+    lib: State<'_, Arc<Library>>,
+    offset: u64,
+    limit: u64,
+) -> Res<Vec<AlbumRow>> {
+    le(lib.albums_page(offset, limit))
+}
+
+#[tauri::command]
+pub fn library_album(lib: State<'_, Arc<Library>>, album_id: i64) -> Res<AlbumDetail> {
+    le(lib.album(album_id))
+}
+
+#[tauri::command]
+pub fn library_play_album(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    album_id: i64,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let paths = le(lib.album_tracks(album_id))?;
+    s(player.replace_queue(paths, start_index))
+}
+
+#[tauri::command]
+pub fn library_play_all(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    sort: String,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let paths = le(lib.all_tracks(SortOrder::parse(&sort)))?;
+    s(player.replace_queue(paths, start_index))
+}
