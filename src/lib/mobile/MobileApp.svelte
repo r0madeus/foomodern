@@ -1,11 +1,11 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import Icon from '../Icon.svelte'
   import EmptyLibrary from '../EmptyLibrary.svelte'
   import FoldersView from '../FoldersView.svelte'
   import SettingsView from '../SettingsView.svelte'
-  import LyricsPanel from '../LyricsPanel.svelte'
+  import LyricsScreen from './LyricsScreen.svelte'
   import PageHeader from './PageHeader.svelte'
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
@@ -57,21 +57,14 @@
   const openPage = (p: 'folders' | 'settings') => open(() => (page = p), () => (page = null))
   const openPlayer = () => open(() => (playerOpen = true), () => (playerOpen = false))
   const openQueue = () => open(() => (queueOpen = true), () => (queueOpen = false))
-  const openLyrics = () =>
-    open(
-      () => {
-        lyricsOpen = true
-        lyrics.setOpen(true)
-      },
-      () => {
-        lyricsOpen = false
-        lyrics.setOpen(false)
-      },
-    )
+  const openLyrics = () => open(() => (lyricsOpen = true), () => (lyricsOpen = false))
 
-  // The lyrics panel's own close button only flips the store.
+  // The phone player shows lyrics inline, so they load for every track.
+  lyrics.always = true
   $effect(() => {
-    if (lyricsOpen && !lyrics.open) popLayer()
+    const path = player.snapshot.current?.path ?? null
+    const duration = untrack(() => player.snapshot.durationSeconds)
+    untrack(() => void lyrics.load(path, duration))
   })
 
   $effect(() => {
@@ -172,8 +165,6 @@
     <QueueSheet onClose={popLayer} />
   {/if}
   {#if lyricsOpen}
-    <div class="fixed inset-0 z-50 flex flex-col bg-zinc-950" style:padding-top="var(--inset-top)" style:padding-bottom="var(--inset-bottom)">
-      <div class="relative min-h-0 flex-1"><LyricsPanel /></div>
-    </div>
+    <LyricsScreen onClose={popLayer} />
   {/if}
 </div>

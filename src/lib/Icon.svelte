@@ -27,9 +27,11 @@
     | 'chevronRight'
     | 'queue'
     | 'settings'
+    | 'expand'
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
+    expand: 'M14 3h7v7h-2V6.41l-5.29 5.3-1.42-1.42L17.59 5H14V3ZM10 21H3v-7h2v3.59l5.29-5.3 1.42 1.42L6.41 19H10v2Z',
     album: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 14.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-5.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z',
     music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z',
     library: 'M20 2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-2 5h-3v5.5a2.5 2.5 0 1 1-2.5-2.5c.57 0 1.08.19 1.5.51V5h4v2ZM4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6Z',

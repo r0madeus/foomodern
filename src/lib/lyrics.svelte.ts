@@ -15,6 +15,24 @@ export type LyricsResult =
   | { kind: 'instrumental'; source: LyricsSource }
   | { kind: 'notFound' }
 
+/** Index of the synced line playing at `pos` seconds; -1 before the first. */
+export function findActiveIndex(lines: LyricLine[], pos: number): number {
+  const t = pos + 0.05
+  let lo = 0
+  let hi = lines.length - 1
+  let ans = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (lines[mid].timeSeconds <= t) {
+      ans = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return ans
+}
+
 const KEY = 'foomodern.lyricsOpen'
 
 function loadOpen(): boolean {
@@ -31,6 +49,8 @@ class LyricsStore {
   error = $state<string | null>(null)
   result = $state<LyricsResult | null>(null)
   trackPath = $state<string | null>(null)
+  /** Load lyrics even while the panel is closed (the phone player shows them inline). */
+  always = false
 
   #requestSeq = 0
 
@@ -48,7 +68,7 @@ class LyricsStore {
   }
 
   async load(path: string | null, durationSeconds: number | null, force = false): Promise<void> {
-    if (!this.open || path === null) {
+    if ((!this.open && !this.always) || path === null) {
       if (path === null) {
         this.#requestSeq++
         this.trackPath = null

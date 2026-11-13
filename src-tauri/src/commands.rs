@@ -168,6 +168,31 @@ pub async fn app_window_insets(app: tauri::AppHandle) -> Res<WindowInsets> {
     }
 }
 
+/// Dominant colour of a cached cover (phone UI tint). Only files in the
+/// cover cache are read.
+#[tauri::command]
+pub async fn library_cover_color(app: tauri::AppHandle, cover: String) -> Res<Option<[u8; 3]>> {
+    use tauri::Manager;
+    let covers = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("covers");
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::path::Path::new(&cover);
+        let inside = match (path.canonicalize(), covers.canonicalize()) {
+            (Ok(p), Ok(dir)) => p.starts_with(dir),
+            _ => false,
+        };
+        if !inside {
+            return Ok(None);
+        }
+        Ok(crate::library::cover_color::cover_color(path).ok())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Android has no folder picker for plain file paths: ask for read access to
 /// the music library and return the shared Music folder to add.
 #[tauri::command]

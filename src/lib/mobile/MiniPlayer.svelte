@@ -3,6 +3,7 @@
   import Icon from '../Icon.svelte'
   import { player } from '../player.svelte'
   import { nowCover } from './nowCover.svelte'
+  import { tintFrom } from './tint'
 
   // Floating bar above the tabs; tapping it opens the full player.
   let { onOpen }: { onOpen: () => void } = $props()
@@ -14,7 +15,10 @@
 </script>
 
 {#if snap.current}
-  <div class="relative mx-2 mb-1.5 overflow-hidden rounded-lg bg-zinc-800 shadow-lg shadow-black/40">
+  <div
+    class="relative mx-2 mb-1.5 overflow-hidden rounded-lg shadow-lg shadow-black/40 transition-[background] duration-500"
+    style:background={tintFrom(nowCover.color).surface}
+  >
     <div class="flex h-14 items-center gap-3 pr-1 pl-2">
       <button class="flex min-w-0 flex-1 items-center gap-3 text-left" onclick={onOpen} aria-label="Open player">
         <Cover cover={nowCover.cover} title={snap.current.title} class="size-10 shrink-0 rounded text-xs" />

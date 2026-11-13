@@ -13,6 +13,7 @@
 //! The database lock is only held while a batch (~500 files) is written, so
 //! queries stay responsive during a scan.
 
+pub mod cover_color;
 pub mod db;
 pub mod scan;
 pub mod tags;

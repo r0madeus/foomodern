@@ -183,6 +183,7 @@ pub fn run() {
             commands::library_add_folder,
             commands::library_android_music_folder,
             commands::library_track_cover,
+            commands::library_cover_color,
             commands::library_remove_folder,
             commands::library_folders,
             commands::library_rescan,

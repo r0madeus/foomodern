@@ -2,7 +2,7 @@
   import { open } from '@tauri-apps/plugin-dialog'
   import { untrack } from 'svelte'
   import Icon from './Icon.svelte'
-  import { lyrics, type LyricLine, type LyricsSource } from './lyrics.svelte'
+  import { lyrics, findActiveIndex, type LyricsSource } from './lyrics.svelte'
   import { player } from './player.svelte'
 
   const SOURCE_LABELS: Record<LyricsSource, string> = {
@@ -19,23 +19,6 @@
   const current = $derived(player.snapshot.current)
   const duration = $derived(player.snapshot.durationSeconds)
   const res = $derived(lyrics.result)
-
-  function findActiveIndex(lines: LyricLine[], pos: number): number {
-    const t = pos + 0.05
-    let lo = 0
-    let hi = lines.length - 1
-    let ans = -1
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1
-      if (lines[mid].timeSeconds <= t) {
-        ans = mid
-        lo = mid + 1
-      } else {
-        hi = mid - 1
-      }
-    }
-    return ans
-  }
 
   const activeIndex = $derived.by(() => {
     if (!res || res.kind !== 'synced') return -1
