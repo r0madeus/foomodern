@@ -1,6 +1,7 @@
 <script lang="ts">
   import VirtualList from './VirtualList.svelte'
   import EmptyLibrary from './EmptyLibrary.svelte'
+  import SearchInput from './SearchInput.svelte'
   import { library, PagedRows, type Sort } from './library.svelte'
   import { player, formatTime } from './player.svelte'
 
@@ -13,13 +14,18 @@
   ]
   const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem] items-center gap-3 px-5'
 
-  // A fresh cache whenever the library version or the sort changes.
+  const q = $derived(library.debouncedQuery)
+  // A fresh cache whenever the library version, sort, or search query changes.
   const rows = $derived.by(() => {
     void library.stats.version
-    return new PagedRows(library.tracksPage(library.sort))
+    return new PagedRows(library.tracksPage(library.sort, q))
   })
-  $effect(() => () => rows.dispose())
+  $effect(() => {
+    rows.ensureRange(0, 1)
+    return () => rows.dispose()
+  })
 
+  const totalCount = $derived(rows.total ?? (q === '' ? library.stats.tracks : 0))
   const currentPath = $derived(player.snapshot.current?.path ?? null)
 </script>
 
@@ -27,29 +33,47 @@
   <EmptyLibrary />
 {:else}
   <div class="flex h-full flex-col">
-    <div class="flex items-center justify-between px-5 pb-2">
-      <label class="flex items-center gap-2 text-sm text-zinc-500">
-        Sort by
-        <select
-          class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-          bind:value={library.sort}
-        >
-          {#each SORTS as s (s.value)}
-            <option value={s.value}>{s.label}</option>
-          {/each}
-        </select>
-      </label>
+    <div class="flex items-center justify-between gap-3 px-5 pb-2">
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-zinc-500">
+          Sort by
+          <select
+            class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            bind:value={library.sort}
+          >
+            {#each SORTS as s (s.value)}
+              <option value={s.value}>{s.label}</option>
+            {/each}
+          </select>
+        </label>
+        {#if q !== '' && rows.total !== null}
+          <span class="text-xs text-zinc-500">{rows.total} matching</span>
+        {/if}
+      </div>
+      <SearchInput placeholder="Search songs, artists, albums…" />
     </div>
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
       <span class="text-right">#</span><span>Title</span><span>Artist</span><span>Album</span><span class="text-right">Time</span>
     </div>
-    {#key library.sort}
-      <VirtualList
-        class="min-h-0 flex-1"
-        count={library.stats.tracks}
-        rowHeight={ROW}
-        onRangeChange={(s, e) => rows.ensureRange(s, e)}
-      >
+    {#if q !== '' && rows.total === 0}
+      <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+        <p class="text-sm text-zinc-500">No songs match “{q}”.</p>
+        <button
+          type="button"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
+          onclick={() => library.setQuery('')}
+        >
+          Clear search
+        </button>
+      </div>
+    {:else}
+      {#key `${library.sort}\0${q}`}
+        <VirtualList
+          class="min-h-0 flex-1"
+          count={totalCount}
+          rowHeight={ROW}
+          onRangeChange={(s, e) => rows.ensureRange(s, e)}
+        >
         {#snippet row(i)}
           {@const t = rows.get(i)}
           {#if t}

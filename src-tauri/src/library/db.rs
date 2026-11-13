@@ -1,9 +1,10 @@
 //! SQLite schema and queries. All functions take a plain `&Connection` so
 //! they can be tested without the [`super::Library`] facade.
 
-use super::{AlbumDetail, AlbumRow, FolderInfo, Result, TrackMeta, TrackRow};
+use super::{AlbumDetail, AlbumRow, FolderInfo, Page, Result, TrackMeta, TrackRow};
 use crate::queue::Track;
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::types::Value;
+use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::path::PathBuf;
 
 const SCHEMA_VERSION: i64 = 1;
@@ -175,19 +176,106 @@ fn track_row(r: &Row<'_>) -> rusqlite::Result<TrackRow> {
     })
 }
 
+struct Filter {
+    where_sql: String,
+    params: Vec<String>,
+}
+
+fn build_filter(query: &str, clause_for_param: impl Fn(usize) -> String) -> Filter {
+    let params: Vec<String> = query
+        .split_whitespace()
+        .take(8)
+        .map(|tok| {
+            let escaped = tok
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            format!("%{escaped}%")
+        })
+        .collect();
+    if params.is_empty() {
+        return Filter {
+            where_sql: String::new(),
+            params,
+        };
+    }
+    let parts: Vec<String> = (1..=params.len()).map(clause_for_param).collect();
+    Filter {
+        where_sql: format!("WHERE {}", parts.join(" AND ")),
+        params,
+    }
+}
+
+fn track_filter(query: &str) -> Filter {
+    build_filter(query, |i| {
+        format!(
+            "(t.title LIKE ?{i} ESCAPE '\\' OR t.artist LIKE ?{i} ESCAPE '\\' \
+             OR COALESCE(a.title, '') LIKE ?{i} ESCAPE '\\')"
+        )
+    })
+}
+
+fn album_filter(query: &str) -> Filter {
+    build_filter(query, |i| {
+        format!(
+            "(a.title LIKE ?{i} ESCAPE '\\' OR a.album_artist LIKE ?{i} ESCAPE '\\' \
+             OR EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = a.id \
+             AND (t.title LIKE ?{i} ESCAPE '\\' OR t.artist LIKE ?{i} ESCAPE '\\')))"
+        )
+    })
+}
+
 pub fn tracks_page(
     conn: &Connection,
     offset: u64,
     limit: u64,
     sort: SortOrder,
 ) -> Result<Vec<TrackRow>> {
-    let sql = format!(
-        "{TRACK_SELECT} ORDER BY {} LIMIT ?1 OFFSET ?2",
-        sort.order_by()
+    Ok(search_tracks_page(conn, offset, limit, sort, "")?.items)
+}
+
+fn query_page<T>(
+    conn: &Connection,
+    count_sql: &str,
+    page_sql: &str,
+    filter_params: Vec<String>,
+    offset: u64,
+    limit: u64,
+    mapper: impl FnMut(&Row<'_>) -> rusqlite::Result<T>,
+) -> Result<Page<T>> {
+    let mut values: Vec<Value> = filter_params.into_iter().map(Value::Text).collect();
+    let total: i64 = conn.query_row(count_sql, params_from_iter(values.iter()), |r| r.get(0))?;
+    values.push(Value::Integer(limit as i64));
+    values.push(Value::Integer(offset as i64));
+    let mut st = conn.prepare(page_sql)?;
+    let rows = st.query_map(params_from_iter(values.iter()), mapper)?;
+    Ok(Page {
+        total: total.max(0) as u64,
+        items: rows.collect::<std::result::Result<_, _>>()?,
+    })
+}
+
+pub fn search_tracks_page(
+    conn: &Connection,
+    offset: u64,
+    limit: u64,
+    sort: SortOrder,
+    query: &str,
+) -> Result<Page<TrackRow>> {
+    let f = track_filter(query);
+    let n = f.params.len();
+    let count_sql = format!(
+        "SELECT COUNT(*) FROM tracks t LEFT JOIN albums a ON a.id = t.album_id {}",
+        f.where_sql
     );
-    let mut st = conn.prepare_cached(&sql)?;
-    let rows = st.query_map(params![limit as i64, offset as i64], track_row)?;
-    Ok(rows.collect::<std::result::Result<_, _>>()?)
+    let page_sql = format!(
+        "{TRACK_SELECT} {} ORDER BY {} LIMIT ?{} OFFSET ?{}",
+        f.where_sql,
+        sort.order_by(),
+        n + 1,
+        n + 2
+    );
+    query_page(conn, &count_sql, &page_sql, f.params, offset, limit, track_row)
 }
 
 /// Row → queue track (path, title, artist) for the three-column selects below.
@@ -200,12 +288,20 @@ fn queue_track(r: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
 }
 
 pub fn all_tracks(conn: &Connection, sort: SortOrder) -> Result<Vec<Track>> {
+    matching_tracks(conn, sort, "")
+}
+
+pub fn matching_tracks(conn: &Connection, sort: SortOrder, query: &str) -> Result<Vec<Track>> {
+    let f = track_filter(query);
     let sql = format!(
-        "SELECT t.path, t.title, t.artist FROM tracks t LEFT JOIN albums a ON a.id = t.album_id ORDER BY {}",
+        "SELECT t.path, t.title, t.artist FROM tracks t \
+         LEFT JOIN albums a ON a.id = t.album_id {} ORDER BY {}",
+        f.where_sql,
         sort.order_by()
     );
+    let values: Vec<Value> = f.params.into_iter().map(Value::Text).collect();
     let mut st = conn.prepare(&sql)?;
-    let rows = st.query_map([], queue_track)?;
+    let rows = st.query_map(params_from_iter(values.iter()), queue_track)?;
     Ok(rows.collect::<std::result::Result<_, _>>()?)
 }
 
@@ -227,10 +323,25 @@ fn album_row(r: &Row<'_>) -> rusqlite::Result<AlbumRow> {
 }
 
 pub fn albums_page(conn: &Connection, offset: u64, limit: u64) -> Result<Vec<AlbumRow>> {
-    let sql = format!("{ALBUM_SELECT} ORDER BY a.album_artist, a.title, a.id LIMIT ?1 OFFSET ?2");
-    let mut st = conn.prepare_cached(&sql)?;
-    let rows = st.query_map(params![limit as i64, offset as i64], album_row)?;
-    Ok(rows.collect::<std::result::Result<_, _>>()?)
+    Ok(search_albums_page(conn, offset, limit, "")?.items)
+}
+
+pub fn search_albums_page(
+    conn: &Connection,
+    offset: u64,
+    limit: u64,
+    query: &str,
+) -> Result<Page<AlbumRow>> {
+    let f = album_filter(query);
+    let n = f.params.len();
+    let count_sql = format!("SELECT COUNT(*) FROM albums a {}", f.where_sql);
+    let page_sql = format!(
+        "{ALBUM_SELECT} {} ORDER BY a.album_artist, a.title, a.id LIMIT ?{} OFFSET ?{}",
+        f.where_sql,
+        n + 1,
+        n + 2
+    );
+    query_page(conn, &count_sql, &page_sql, f.params, offset, limit, album_row)
 }
 
 const ALBUM_TRACK_ORDER: &str = "t.disc_no, t.track_no, t.title, t.id";

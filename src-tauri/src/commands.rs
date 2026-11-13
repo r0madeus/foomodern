@@ -109,7 +109,7 @@ pub fn player_snapshot(player: State<'_, Arc<Player>>) -> Res<PlayerSnapshot> {
 // ---------------------------------------------------------------------
 
 use crate::library::{
-    AlbumDetail, AlbumRow, FolderInfo, Library, LibraryStats, SortOrder, TrackRow,
+    AlbumDetail, AlbumRow, FolderInfo, Library, LibraryStats, Page, SortOrder, TrackRow,
 };
 
 fn le<T>(r: Result<T, crate::library::LibraryError>) -> Res<T> {
@@ -152,8 +152,14 @@ pub fn library_tracks_page(
     offset: u64,
     limit: u64,
     sort: String,
-) -> Res<Vec<TrackRow>> {
-    le(lib.tracks_page(offset, limit, SortOrder::parse(&sort)))
+    query: Option<String>,
+) -> Res<Page<TrackRow>> {
+    le(lib.search_tracks_page(
+        offset,
+        limit,
+        SortOrder::parse(&sort),
+        query.as_deref().unwrap_or(""),
+    ))
 }
 
 #[tauri::command]
@@ -161,8 +167,9 @@ pub fn library_albums_page(
     lib: State<'_, Arc<Library>>,
     offset: u64,
     limit: u64,
-) -> Res<Vec<AlbumRow>> {
-    le(lib.albums_page(offset, limit))
+    query: Option<String>,
+) -> Res<Page<AlbumRow>> {
+    le(lib.search_albums_page(offset, limit, query.as_deref().unwrap_or("")))
 }
 
 #[tauri::command]
@@ -187,8 +194,9 @@ pub fn library_play_all(
     player: State<'_, Arc<Player>>,
     sort: String,
     start_index: usize,
+    query: Option<String>,
 ) -> Res<PlayerSnapshot> {
-    let paths = le(lib.all_tracks(SortOrder::parse(&sort)))?;
+    let paths = le(lib.matching_tracks(SortOrder::parse(&sort), query.as_deref().unwrap_or("")))?;
     s(player.replace_queue(paths, start_index))
 }
 

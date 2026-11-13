@@ -41,6 +41,11 @@ export interface LibraryStats {
   scanning: boolean
 }
 
+export interface Page<T> {
+  total: number
+  items: T[]
+}
+
 interface ScanPayload {
   folder: string
   scanned: number
@@ -57,12 +62,13 @@ export const PAGE_SIZE = 200
 export class PagedRows<T> {
   /** Bumped whenever a page arrives so readers of `get` re-run. */
   #revision = $state(0)
+  total = $state<number | null>(null)
   #pages = new Map<number, T[]>()
   #inflight = new Map<number, Promise<void>>()
-  #fetcher: (offset: number, limit: number) => Promise<T[]>
+  #fetcher: (offset: number, limit: number) => Promise<Page<T>>
   #dead = false
 
-  constructor(fetcher: (offset: number, limit: number) => Promise<T[]>) {
+  constructor(fetcher: (offset: number, limit: number) => Promise<Page<T>>) {
     this.#fetcher = fetcher
   }
 
@@ -91,9 +97,10 @@ export class PagedRows<T> {
     const existing = this.#inflight.get(page)
     if (existing) return existing
     const job = this.#fetcher(page * PAGE_SIZE, PAGE_SIZE)
-      .then((rows) => {
+      .then((res) => {
         if (this.#dead) return
-        this.#pages.set(page, rows)
+        this.total = res.total
+        this.#pages.set(page, res.items)
         this.#revision++
       })
       .catch((e) => {
@@ -110,8 +117,25 @@ class LibraryStore {
   folders = $state<FolderInfo[]>([])
   scan = $state<{ folder: string; scanned: number } | null>(null)
   sort = $state<Sort>('artist')
+  query = $state('')
+  debouncedQuery = $state('')
+
+  #searchTimer: ReturnType<typeof setTimeout> | undefined
 
   scanning = $derived(this.stats.scanning || this.scan !== null)
+
+  setQuery(next: string): void {
+    this.query = next
+    clearTimeout(this.#searchTimer)
+    const trimmed = next.trim()
+    if (trimmed === '') {
+      this.debouncedQuery = ''
+      return
+    }
+    this.#searchTimer = setTimeout(() => {
+      this.debouncedQuery = trimmed
+    }, 150)
+  }
 
   async init(): Promise<void> {
     await listen<ScanPayload>('library://scan', (e) => {
@@ -167,14 +191,28 @@ class LibraryStore {
   }
 
   async playAll(startIndex: number): Promise<void> {
-    await this.#play('library_play_all', { sort: this.sort, startIndex })
+    const query = this.debouncedQuery
+    await this.#play('library_play_all', {
+      sort: this.sort,
+      startIndex,
+      query: query === '' ? null : query,
+    })
   }
 
-  tracksPage = (sort: Sort) => (offset: number, limit: number) =>
-    invoke<TrackRow[]>('library_tracks_page', { offset, limit, sort })
+  tracksPage = (sort: Sort, query: string) => (offset: number, limit: number) =>
+    invoke<Page<TrackRow>>('library_tracks_page', {
+      offset,
+      limit,
+      sort,
+      query: query === '' ? null : query,
+    })
 
-  albumsPage = (offset: number, limit: number) =>
-    invoke<AlbumRow[]>('library_albums_page', { offset, limit })
+  albumsPage = (query: string) => (offset: number, limit: number) =>
+    invoke<Page<AlbumRow>>('library_albums_page', {
+      offset,
+      limit,
+      query: query === '' ? null : query,
+    })
 
   async #play(command: string, args: Record<string, unknown>): Promise<void> {
     try {

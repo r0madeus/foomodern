@@ -469,3 +469,79 @@ fn add_folder_rejects_non_directories() {
     assert_eq!(again, e.folder_id);
     assert_eq!(e.lib.folders().unwrap().len(), 1);
 }
+
+#[test]
+fn search_filters_tracks_albums_and_escapes_wildcards() {
+    let e = env();
+    tagged_wav(
+        &e.music.join("1.wav"),
+        &Meta {
+            title: "Time",
+            artist: "Pink Floyd",
+            album: "Dark Side",
+            track: 1,
+            ..Default::default()
+        },
+    );
+    tagged_wav(
+        &e.music.join("2.wav"),
+        &Meta {
+            title: "Money",
+            artist: "Pink Floyd",
+            album: "Dark Side",
+            track: 2,
+            ..Default::default()
+        },
+    );
+    tagged_wav(
+        &e.music.join("3.wav"),
+        &Meta {
+            title: "100% Pure",
+            artist: "Miles Davis",
+            album: "Blue_Note",
+            track: 1,
+            ..Default::default()
+        },
+    );
+    e.scan();
+
+    // Multi-token AND query spans artist + title.
+    let res = e
+        .lib
+        .search_tracks_page(0, 10, SortOrder::Title, "  pink  money ")
+        .unwrap();
+    assert_eq!(res.total, 1);
+    assert_eq!(res.items[0].title, "Money");
+
+    // Empty query returns everything with accurate total and pagination.
+    let page = e
+        .lib
+        .search_tracks_page(1, 1, SortOrder::Title, "   ")
+        .unwrap();
+    assert_eq!(page.total, 3);
+    assert_eq!(page.items.len(), 1);
+
+    // Escaped wildcards only match literal `%` and `_`.
+    let pct = e
+        .lib
+        .search_tracks_page(0, 10, SortOrder::Title, "100%")
+        .unwrap();
+    assert_eq!(pct.total, 1);
+    assert_eq!(pct.items[0].title, "100% Pure");
+    let under = e
+        .lib
+        .search_tracks_page(0, 10, SortOrder::Title, "blue_note")
+        .unwrap();
+    assert_eq!(under.total, 1);
+    assert_eq!(under.items[0].artist, "Miles Davis");
+
+    // Albums search matches both album metadata and contained track titles.
+    let alb = e.lib.search_albums_page(0, 10, "money").unwrap();
+    assert_eq!(alb.total, 1);
+    assert_eq!(alb.items[0].title, "Dark Side");
+
+    // Filtered play list returns only matching tracks in sort order.
+    let queued = e.lib.matching_tracks(SortOrder::Title, "pink").unwrap();
+    let titles: Vec<_> = queued.iter().filter_map(|t| t.title.as_deref()).collect();
+    assert_eq!(titles, ["Money", "Time"]);
+}

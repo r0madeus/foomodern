@@ -97,6 +97,13 @@ pub struct AlbumDetail {
     pub tracks: Vec<TrackRow>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Page<T> {
+    pub total: u64,
+    pub items: Vec<T>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanProgress {
@@ -225,6 +232,16 @@ impl Library {
         db::tracks_page(&self.conn(), offset, limit.min(1000), sort)
     }
 
+    pub fn search_tracks_page(
+        &self,
+        offset: u64,
+        limit: u64,
+        sort: SortOrder,
+        query: &str,
+    ) -> Result<Page<TrackRow>> {
+        db::search_tracks_page(&self.conn(), offset, limit.min(1000), sort, query)
+    }
+
     pub fn track_meta(&self, path: &str) -> Result<Option<TrackMeta>> {
         let key = scan::display_path(Path::new(path));
         db::track_meta_by_path(&self.conn(), &key)
@@ -232,6 +249,15 @@ impl Library {
 
     pub fn albums_page(&self, offset: u64, limit: u64) -> Result<Vec<AlbumRow>> {
         db::albums_page(&self.conn(), offset, limit.min(1000))
+    }
+
+    pub fn search_albums_page(
+        &self,
+        offset: u64,
+        limit: u64,
+        query: &str,
+    ) -> Result<Page<AlbumRow>> {
+        db::search_albums_page(&self.conn(), offset, limit.min(1000), query)
     }
 
     pub fn album(&self, album_id: i64) -> Result<AlbumDetail> {
@@ -246,6 +272,11 @@ impl Library {
     /// The whole library in `sort` order, ready for the queue.
     pub fn all_tracks(&self, sort: SortOrder) -> Result<Vec<Track>> {
         db::all_tracks(&self.conn(), sort)
+    }
+
+    /// Tracks matching `query` in `sort` order, ready for the queue.
+    pub fn matching_tracks(&self, sort: SortOrder, query: &str) -> Result<Vec<Track>> {
+        db::matching_tracks(&self.conn(), sort, query)
     }
 
     /// Queues the given folders for scanning and starts the worker thread if
