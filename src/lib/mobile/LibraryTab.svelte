@@ -82,6 +82,20 @@
       {/if}
     {/each}
 
+    <button
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={async () => {
+        const made = await playlists.importM3u()
+        if (made) onOpenPlaylist(made.id)
+      }}
+    >
+      <Icon name="upload" class="size-6 text-zinc-400" />
+      <span class="min-w-0 flex-1">
+        <span class="block text-[15px]">Import playlist</span>
+        <span class="block text-[13px] text-zinc-400">An M3U file exported from FooModern on another device</span>
+      </span>
+    </button>
+
     <div class="mt-4 border-t border-zinc-800 pt-2">
       <button class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5" onclick={() => onOpenPage('folders')}>
         <Icon name="folder" class="size-6 text-zinc-400" />

@@ -682,6 +682,23 @@ pub fn track_ids_by_paths(conn: &Connection, paths: &[String]) -> Result<Vec<Opt
         .collect()
 }
 
+/// Every track, for matching imported playlists.
+pub fn match_candidates(conn: &Connection) -> Result<Vec<super::m3u::Candidate>> {
+    let mut st = conn.prepare("SELECT id, path, artist, title, duration_ms FROM tracks")?;
+    let rows = st.query_map([], |r| {
+        Ok(super::m3u::Candidate {
+            id: r.get(0)?,
+            path: r.get(1)?,
+            artist: r.get(2)?,
+            title: r.get(3)?,
+            duration_ms: r
+                .get::<_, Option<i64>>(4)?
+                .and_then(|n| u64::try_from(n).ok()),
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
 /// Id, path and folder of each existing track, in the order of `ids`.
 /// Unknown ids are skipped.
 pub fn track_files_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String, i64)>> {

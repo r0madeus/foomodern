@@ -174,14 +174,27 @@
       <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-col gap-0.5">
         <div class="flex items-center justify-between px-2">
           <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">Playlists</h2>
-          <button
-            class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            aria-label="New playlist"
-            title="New playlist"
-            onclick={() => (creatingPlaylist = !creatingPlaylist)}
-          >
-            <Icon name="plus" class="size-4" />
-          </button>
+          <span class="flex items-center gap-0.5">
+            <button
+              class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              aria-label="Import playlist (M3U)"
+              title="Import playlist (M3U)"
+              onclick={async () => {
+                const made = await playlists.importM3u()
+                if (made) openPlaylist(made.id)
+              }}
+            >
+              <Icon name="upload" class="size-4" />
+            </button>
+            <button
+              class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              aria-label="New playlist"
+              title="New playlist"
+              onclick={() => (creatingPlaylist = !creatingPlaylist)}
+            >
+              <Icon name="plus" class="size-4" />
+            </button>
+          </span>
         </div>
         {#if creatingPlaylist}
           <form

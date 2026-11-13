@@ -2,6 +2,8 @@
 // this module mirrors the list and sends commands.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { open, save } from '@tauri-apps/plugin-dialog'
+import { appSettings } from './appSettings.svelte'
 import type { TrackRow } from './library.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
 
@@ -15,6 +17,14 @@ interface SavedPlaylist {
   playlist: PlaylistInfo
   skipped: number
 }
+
+interface ImportedPlaylist {
+  playlist: PlaylistInfo
+  matched: number
+  missing: number
+}
+
+const M3U_FILTERS = [{ name: 'Playlist', extensions: ['m3u8', 'm3u'] }]
 
 /** Playlist rows are fetched in pages; never the whole list in one IPC call. */
 const PAGE_SIZE = 500
@@ -103,6 +113,44 @@ class PlaylistStore {
     this.flash(
       `Saved “${playlist.name}” with ${plural(playlist.trackCount, 'track')}` +
         (skipped > 0 ? ` (${skipped.toLocaleString()} not in the library, skipped)` : ''),
+    )
+    return playlist
+  }
+
+  /** Saves a playlist as an M3U file (to move it to another device). */
+  async exportM3u(p: PlaylistInfo): Promise<void> {
+    const fileName = `${p.name.replace(/[\\/:*?"<>|]/g, '_')}.m3u8`
+    const res = await this.#try(async () => {
+      if (appSettings.platform === 'android') {
+        const text = await invoke<string>('playlist_export_m3u', { id: p.id })
+        return invoke<boolean>('android_save_text', { name: fileName, text })
+      }
+      const path = await save({ defaultPath: fileName, filters: M3U_FILTERS })
+      if (!path) return false
+      await invoke('playlist_export_m3u_file', { id: p.id, path })
+      return true
+    })
+    if (res?.value) this.flash(`Exported “${p.name}”`)
+  }
+
+  /** Creates a playlist from an M3U file; songs are matched to this library. */
+  async importM3u(): Promise<PlaylistInfo | null> {
+    const res = await this.#try(async () => {
+      if (appSettings.platform === 'android') {
+        const file = await invoke<{ name: string | null; text: string | null }>('android_open_text')
+        if (file.text === null) return null
+        const name = (file.name ?? 'Imported').replace(/\.m3u8?$/i, '') || 'Imported'
+        return invoke<ImportedPlaylist>('playlist_import_m3u', { name, text: file.text })
+      }
+      const path = await open({ multiple: false, directory: false, filters: M3U_FILTERS })
+      if (!path || typeof path !== 'string') return null
+      return invoke<ImportedPlaylist>('playlist_import_m3u_file', { path })
+    })
+    if (!res?.value) return null
+    const { playlist, matched, missing } = res.value
+    this.flash(
+      `Imported “${playlist.name}” with ${plural(matched, 'track')}` +
+        (missing > 0 ? ` (${missing.toLocaleString()} not found in this library)` : ''),
     )
     return playlist
   }

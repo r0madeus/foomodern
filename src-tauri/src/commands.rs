@@ -525,6 +525,51 @@ pub fn playlist_play(
 
 /// Saves the current queue as a playlist. Queue entries that are not in the
 /// library are skipped; the result says how many.
+/// The playlist as M3U text (Android saves it through the system picker).
+#[tauri::command]
+pub fn playlist_export_m3u(lib: State<'_, Arc<Library>>, id: i64) -> Res<String> {
+    le(lib.export_m3u(id))
+}
+
+/// Writes the playlist as an M3U file (desktop, path from a save dialog).
+#[tauri::command]
+pub fn playlist_export_m3u_file(lib: State<'_, Arc<Library>>, id: i64, path: String) -> Res<()> {
+    let text = le(lib.export_m3u(id))?;
+    std::fs::write(&path, text).map_err(|e| format!("could not write {path}: {e}"))
+}
+
+/// Creates a playlist from M3U text (Android, read through the picker).
+#[tauri::command]
+pub fn playlist_import_m3u(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    name: String,
+    text: String,
+) -> Res<crate::library::ImportedPlaylist> {
+    let imported = le(lib.import_m3u(&name, &text, None))?;
+    playlists_changed(&app);
+    Ok(imported)
+}
+
+/// Creates a playlist from an M3U file (desktop); named after the file.
+#[tauri::command]
+pub fn playlist_import_m3u_file(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    path: String,
+) -> Res<crate::library::ImportedPlaylist> {
+    let p = std::path::Path::new(&path);
+    let bytes = std::fs::read(p).map_err(|e| format!("could not read {path}: {e}"))?;
+    let text = String::from_utf8_lossy(&bytes);
+    let name = p
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "Imported".into());
+    let imported = le(lib.import_m3u(&name, &text, p.parent()))?;
+    playlists_changed(&app);
+    Ok(imported)
+}
+
 #[tauri::command]
 pub fn playlist_from_queue(
     app: AppHandle,

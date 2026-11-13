@@ -148,6 +148,13 @@
             Rename
           </button>
           <button
+            class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            title="Save as an M3U file, e.g. to open on another device"
+            onclick={() => void playlists.exportM3u(info)}
+          >
+            Export…
+          </button>
+          <button
             class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
             onclick={() => (confirmingDelete = true)}
           >

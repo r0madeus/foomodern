@@ -1210,3 +1210,39 @@ mod tag_editing {
         assert_eq!(titles, ["Edited", "bad"]);
     }
 }
+
+#[test]
+fn m3u_export_and_import_into_another_library() {
+    let pc = env();
+    let ids = scanned_tracks(&pc, &["One", "Two", "Three"]);
+    let list = pc.lib.create_playlist("Trip", &[ids[2], ids[0]]).unwrap();
+    let text = pc.lib.export_m3u(list.id).unwrap();
+    assert!(text.starts_with("#EXTM3U\n#EXTINF:"), "{text}");
+
+    // The "phone": same files under a different root, plus one song the
+    // playlist does not know.
+    let phone = env();
+    scanned_tracks(&phone, &["One", "Two", "Three", "Four"]);
+    let imported = phone
+        .lib
+        .import_m3u("Trip", &(text + "#EXTINF:5,Z - Gone\n/x/gone.wav\n"), None)
+        .unwrap();
+    assert_eq!(imported.matched, 2);
+    assert_eq!(imported.missing, 1);
+    assert_eq!(imported.playlist.track_count, 2);
+    assert_eq!(
+        playlist_titles(&phone, imported.playlist.id),
+        ["Three", "One"]
+    );
+}
+
+#[test]
+fn m3u_relative_paths_use_the_playlist_folder() {
+    let e = env();
+    scanned_tracks(&e, &["Solo"]);
+    let imported = e
+        .lib
+        .import_m3u("Rel", "Solo.wav\n", Some(&e.music))
+        .unwrap();
+    assert_eq!(imported.matched, 1);
+}
