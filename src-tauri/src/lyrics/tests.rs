@@ -282,7 +282,11 @@ fn lrclib_get_caches_and_force_refreshes() {
         }
     );
     assert_eq!(server.requests().len(), 1);
-    assert!(server.requests()[0].contains("User-Agent: FooModern/"));
+    assert!(
+        server.requests()[0]
+            .to_ascii_lowercase()
+            .contains("user-agent: foomodern/")
+    );
     assert!(server.requests()[0].contains("/api/get?"));
 
     // Second call uses cache, no HTTP request.

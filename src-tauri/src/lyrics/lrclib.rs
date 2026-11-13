@@ -25,8 +25,13 @@ pub struct LrclibRecord {
 
 impl LrclibRecord {
     fn has_content(&self) -> bool {
-        self.synced_lyrics.as_deref().is_some_and(|s| !s.trim().is_empty())
-            || self.plain_lyrics.as_deref().is_some_and(|s| !s.trim().is_empty())
+        self.synced_lyrics
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty())
+            || self
+                .plain_lyrics
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty())
             || self.instrumental
     }
 
@@ -70,7 +75,10 @@ pub fn pick_best_match(
     records: Vec<LrclibRecord>,
     target_duration: Option<u64>,
 ) -> Option<LrclibRecord> {
-    let valid: Vec<LrclibRecord> = records.into_iter().filter(LrclibRecord::has_content).collect();
+    let valid: Vec<LrclibRecord> = records
+        .into_iter()
+        .filter(LrclibRecord::has_content)
+        .collect();
     if valid.is_empty() {
         return None;
     }
@@ -89,10 +97,7 @@ pub fn pick_best_match(
             if !exact.is_empty() {
                 exact
             } else {
-                valid
-                    .into_iter()
-                    .filter(|r| r.duration.is_none())
-                    .collect()
+                valid.into_iter().filter(|r| r.duration.is_none()).collect()
             }
         }
         None => valid,
@@ -104,9 +109,16 @@ pub fn pick_best_match(
 
     candidates.sort_by(|a, b| {
         let rank = |r: &LrclibRecord| -> u8 {
-            if r.synced_lyrics.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+            if r.synced_lyrics
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty())
+            {
                 2
-            } else if r.plain_lyrics.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+            } else if r
+                .plain_lyrics
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty())
+            {
                 1
             } else {
                 0

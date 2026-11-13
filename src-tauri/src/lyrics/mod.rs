@@ -167,7 +167,12 @@ impl LyricsService {
             LocalOrQuery::Query(None) => return Ok(LyricsResult::NotFound),
         };
 
-        let key = cache_key(&query.artist, &query.title, &query.album, query.duration_secs);
+        let key = cache_key(
+            &query.artist,
+            &query.title,
+            &query.album,
+            query.duration_secs,
+        );
         let now = now_unix_secs();
 
         if !force {
