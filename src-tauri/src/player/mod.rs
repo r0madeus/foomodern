@@ -341,9 +341,7 @@ impl Player {
     /// and completed listen records are always delivered.
     fn deliver(&self, seq: u64, event: PlayerEvent) {
         let mut last = self.delivered_seq.lock().unwrap_or_else(|e| e.into_inner());
-        if seq <= *last
-            && !matches!(event, PlayerEvent::Error(_) | PlayerEvent::Listen(_))
-        {
+        if seq <= *last && !matches!(event, PlayerEvent::Error(_) | PlayerEvent::Listen(_)) {
             return;
         }
         *last = (*last).max(seq);
@@ -1555,7 +1553,8 @@ mod tests {
     #[test]
     fn listen_tracking_records_skips_completions_and_ignores_short_taps() {
         let (p, _, events) = setup();
-        p.replace_queue(pbs(&["a.mp3", "b.mp3", "c.mp3"]), 0).unwrap();
+        p.replace_queue(pbs(&["a.mp3", "b.mp3", "c.mp3"]), 0)
+            .unwrap();
 
         // Short tap (< 3s) skipped immediately: must not emit Listen.
         p.next().unwrap();

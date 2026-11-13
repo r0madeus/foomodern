@@ -231,7 +231,10 @@ impl SessionStore {
     }
 
     pub fn pinned(&self) -> Vec<PinnedRef> {
-        self.pinned.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.pinned
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn toggle_pin(&self, item: PinnedRef) -> bool {

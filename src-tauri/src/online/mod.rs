@@ -244,10 +244,7 @@ impl OnlineService {
 
     pub fn remember_stream_cover(&self, url: &str, cover: Option<String>) {
         let Some(cover) = cover else { return };
-        let mut map = self
-            .stream_covers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut map = self.stream_covers.lock().unwrap_or_else(|e| e.into_inner());
         if map.len() > 64 {
             map.clear();
         }
@@ -263,20 +260,12 @@ impl OnlineService {
     }
 
     pub fn downloads(&self) -> Vec<DownloadJob> {
-        self.jobs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.jobs.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn clear_finished(&self) -> Vec<DownloadJob> {
         let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
-        jobs.retain(|j| {
-            matches!(
-                j.state,
-                DownloadState::Queued | DownloadState::Downloading
-            )
-        });
+        jobs.retain(|j| matches!(j.state, DownloadState::Queued | DownloadState::Downloading));
         jobs.clone()
     }
 
@@ -319,11 +308,7 @@ impl OnlineService {
     }
 
     #[cfg(not(target_os = "android"))]
-    pub async fn search(
-        &self,
-        query: &str,
-        ytdlp_bin: &str,
-    ) -> Result<SearchResults, OnlineError> {
+    pub async fn search(&self, query: &str, ytdlp_bin: &str) -> Result<SearchResults, OnlineError> {
         let q = query.trim();
         if q.is_empty() {
             return Ok(SearchResults {
@@ -346,9 +331,8 @@ impl OnlineService {
 
         let client = self.client.clone();
         let q_albums = q.to_owned();
-        let albums_handle = tokio::task::spawn(async move {
-            fetch_itunes_albums(&client, &q_albums).await
-        });
+        let albums_handle =
+            tokio::task::spawn(async move { fetch_itunes_albums(&client, &q_albums).await });
 
         let bin = ytdlp_bin.to_owned();
         let q_tracks = q.to_owned();
@@ -833,9 +817,10 @@ fn url_encode_segment(s: &str) -> String {
 #[cfg(not(target_os = "android"))]
 fn trim_finished_jobs(jobs: &mut Vec<DownloadJob>) {
     while jobs.len() > MAX_KEPT_JOBS {
-        if let Some(pos) = jobs.iter().rposition(|j| {
-            matches!(j.state, DownloadState::Done | DownloadState::Failed)
-        }) {
+        if let Some(pos) = jobs
+            .iter()
+            .rposition(|j| matches!(j.state, DownloadState::Done | DownloadState::Failed))
+        {
             jobs.remove(pos);
         } else {
             break;
@@ -891,13 +876,8 @@ fn download_worker(
             update_job(&jobs, &on_jobs, work.job_id, |j| {
                 j.current_track = Some(track.title.clone());
             });
-            let cover_bytes = resolve_cover_bytes(
-                track,
-                &covers_dir,
-                &client,
-                &rt,
-                &mut cached_covers,
-            );
+            let cover_bytes =
+                resolve_cover_bytes(track, &covers_dir, &client, &rt, &mut cached_covers);
             match download_one_track(
                 track,
                 &work.download_dir,
@@ -1191,7 +1171,12 @@ pub fn is_http_url(s: &str) -> bool {
 }
 
 pub fn yt_search_query(track: &OnlineTrack) -> String {
-    if let Some(url) = track.source_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(url) = track
+        .source_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         return url.to_owned();
     }
     if track.artist.trim().is_empty() {
@@ -1205,8 +1190,7 @@ pub fn safe_segment(raw: &str) -> String {
     let replaced: String = raw
         .chars()
         .map(|c| {
-            if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control()
-            {
+            if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() {
                 '_'
             } else {
                 c
@@ -1218,7 +1202,12 @@ pub fn safe_segment(raw: &str) -> String {
     if trimmed.is_empty() {
         return "Unknown".into();
     }
-    trimmed.chars().take(80).collect::<String>().trim_end_matches([' ', '.']).to_owned()
+    trimmed
+        .chars()
+        .take(80)
+        .collect::<String>()
+        .trim_end_matches([' ', '.'])
+        .to_owned()
 }
 
 pub fn target_track_stem(track: &OnlineTrack) -> (Vec<String>, String) {
@@ -1300,7 +1289,11 @@ pub fn write_downloaded_tags(
     if let Some(d) = track.disc_no {
         tag.set_disk(d);
     }
-    if let Some(y) = track.year.and_then(|y| u16::try_from(y).ok()).filter(|&y| y > 0) {
+    if let Some(y) = track
+        .year
+        .and_then(|y| u16::try_from(y).ok())
+        .filter(|&y| y > 0)
+    {
         tag.set_date(Timestamp {
             year: y,
             ..Timestamp::default()
@@ -1391,7 +1384,9 @@ pub fn parse_itunes_albums(json: &str) -> Result<Vec<OnlineAlbum>, OnlineError> 
     let env: ItunesEnvelope = serde_json::from_str(json)?;
     let mut out = Vec::new();
     for item in env.results {
-        let Some(id) = item.collection_id else { continue };
+        let Some(id) = item.collection_id else {
+            continue;
+        };
         let Some(title) = item.collection_name.filter(|s| !s.trim().is_empty()) else {
             continue;
         };
@@ -1417,7 +1412,11 @@ pub fn parse_itunes_album_detail(
     let env: ItunesEnvelope = serde_json::from_str(json)?;
     let mut album = fallback.clone();
     if let Some(col) = env.results.iter().find(|i| i.wrapper_type == "collection") {
-        if let Some(title) = col.collection_name.as_ref().filter(|s| !s.trim().is_empty()) {
+        if let Some(title) = col
+            .collection_name
+            .as_ref()
+            .filter(|s| !s.trim().is_empty())
+        {
             album.title = title.clone();
         }
         if let Some(artist) = col.artist_name.as_ref().filter(|s| !s.trim().is_empty()) {
@@ -1458,7 +1457,9 @@ pub fn parse_itunes_album_detail(
             album_artist: album.artist.clone(),
             track_no: item.track_number,
             disc_no: item.disc_number,
-            year: album.year.or_else(|| parse_year(item.release_date.as_deref())),
+            year: album
+                .year
+                .or_else(|| parse_year(item.release_date.as_deref())),
             duration_seconds: item.track_time_millis.map(|ms| ms as f64 / 1000.0),
             source_url: None,
             cover: album.cover.clone(),
@@ -1500,8 +1501,13 @@ struct YtNode {
 }
 
 fn clean_yt_artist(raw: Option<String>) -> String {
-    raw.map(|s| s.trim().strip_suffix(" - Topic").unwrap_or(s.trim()).to_owned())
-        .unwrap_or_default()
+    raw.map(|s| {
+        s.trim()
+            .strip_suffix(" - Topic")
+            .unwrap_or(s.trim())
+            .to_owned()
+    })
+    .unwrap_or_default()
 }
 
 fn pick_yt_thumb(node: &YtNode) -> Option<String> {
@@ -1536,8 +1542,8 @@ pub fn parse_ytdlp_flat_json(
 ) -> Result<SearchResults, OnlineError> {
     let root: YtNode = serde_json::from_str(json)?;
     if let Some(entries) = root.entries {
-        let is_playlist = pasted_url.is_some()
-            && (root.kind.as_deref() == Some("playlist") || entries.len() > 1);
+        let is_playlist =
+            pasted_url.is_some() && (root.kind.as_deref() == Some("playlist") || entries.len() > 1);
         let playlist_title = root
             .title
             .clone()
@@ -1603,9 +1609,8 @@ pub fn parse_ytdlp_flat_json(
                 year: root.release_year,
                 track_count: tracks.len() as u32,
                 cover: None,
-                cover_url: playlist_thumb.or_else(|| {
-                    tracks.first().and_then(|t| t.cover_url.clone())
-                }),
+                cover_url: playlist_thumb
+                    .or_else(|| tracks.first().and_then(|t| t.cover_url.clone())),
                 source_url: Some(url.to_owned()),
             }],
             _ => Vec::new(),

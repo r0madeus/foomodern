@@ -374,9 +374,8 @@ impl Scanner<'_> {
 /// Albums (lowercased title, album artist, year) whose cover file still exists.
 fn load_covered(conn: &rusqlite::Connection) -> Result<HashSet<(String, String, Option<i64>)>> {
     let mut covered = HashSet::new();
-    let mut st = conn.prepare(
-        "SELECT title, album_artist, year, cover FROM albums WHERE cover IS NOT NULL",
-    )?;
+    let mut st = conn
+        .prepare("SELECT title, album_artist, year, cover FROM albums WHERE cover IS NOT NULL")?;
     for row in st.query_map([], |r| {
         Ok((
             r.get::<_, String>(0)?,

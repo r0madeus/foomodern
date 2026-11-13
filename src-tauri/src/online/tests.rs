@@ -1,8 +1,8 @@
 use super::*;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use lofty::file::TaggedFileExt;
-use lofty::prelude::{Accessor, ItemKey};
 use lofty::picture::PictureType;
+use lofty::prelude::{Accessor, ItemKey};
 
 #[test]
 fn parses_itunes_album_search_and_upgrades_artwork() {
@@ -190,7 +190,10 @@ fn yt_search_query_prefers_source_url_else_artist_title() {
         cover: None,
         cover_url: None,
     };
-    assert_eq!(yt_search_query(&track), "https://www.youtube.com/watch?v=xyz");
+    assert_eq!(
+        yt_search_query(&track),
+        "https://www.youtube.com/watch?v=xyz"
+    );
     track.source_url = None;
     assert_eq!(yt_search_query(&track), "ytsearch1:Duman - Aman Aman");
 }

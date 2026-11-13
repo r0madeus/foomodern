@@ -517,8 +517,11 @@ impl Library {
             .resize_to_fill(600, 600, image::imageops::FilterType::Triangle)
             .into_rgb8();
         let mut buf = Vec::new();
-        rgb.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Jpeg)
-            .map_err(|e| LibraryError::Other(format!("failed to encode cover: {e}")))?;
+        rgb.write_to(
+            &mut std::io::Cursor::new(&mut buf),
+            image::ImageFormat::Jpeg,
+        )
+        .map_err(|e| LibraryError::Other(format!("failed to encode cover: {e}")))?;
 
         let dir = self.covers_dir().join("playlists");
         std::fs::create_dir_all(&dir)?;
@@ -616,9 +619,7 @@ impl Library {
         };
         let found = db::track_ids_by_paths(&conn, &keys)?;
         let Some(track_id) = found.into_iter().flatten().next() else {
-            return Err(LibraryError::Other(
-                "track is not in the library".into(),
-            ));
+            return Err(LibraryError::Other("track is not in the library".into()));
         };
         db::toggle_favorite(&conn, track_id, unix_now())
     }

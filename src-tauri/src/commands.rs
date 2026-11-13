@@ -873,10 +873,7 @@ pub async fn online_search(
     query: String,
 ) -> Res<SearchResults> {
     let bin = online.resolve_ytdlp_bin(&store);
-    online
-        .search(&query, &bin)
-        .await
-        .map_err(|e| e.to_string())
+    online.search(&query, &bin).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -923,7 +920,15 @@ pub fn online_download_track(
     let artist = track.artist.clone();
     let cover = track.cover.clone().or_else(|| track.cover_url.clone());
     online
-        .enqueue_download(DownloadKind::Track, title, artist, cover, vec![track], &store, &lib)
+        .enqueue_download(
+            DownloadKind::Track,
+            title,
+            artist,
+            cover,
+            vec![track],
+            &store,
+            &lib,
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -1062,11 +1067,7 @@ pub fn favorites_list(lib: State<'_, Arc<Library>>) -> Res<Vec<FavoriteRef>> {
 }
 
 #[tauri::command]
-pub fn favorites_toggle(
-    app: AppHandle,
-    lib: State<'_, Arc<Library>>,
-    track_id: i64,
-) -> Res<bool> {
+pub fn favorites_toggle(app: AppHandle, lib: State<'_, Arc<Library>>, track_id: i64) -> Res<bool> {
     let added = le(lib.toggle_favorite(track_id))?;
     favorites_changed(&app);
     Ok(added)

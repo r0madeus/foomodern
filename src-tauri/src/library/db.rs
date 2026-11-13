@@ -729,7 +729,9 @@ pub fn set_playlist_cover(
     cover: Option<&str>,
 ) -> Result<Option<String>> {
     let old: Option<String> = conn
-        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| r.get(0))
+        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| {
+            r.get(0)
+        })
         .optional()?
         .flatten();
     let n = conn.execute(
@@ -744,7 +746,9 @@ pub fn set_playlist_cover(
 
 pub fn delete_playlist(conn: &Connection, id: i64) -> Result<Option<String>> {
     let old: Option<String> = conn
-        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| r.get(0))
+        .query_row("SELECT cover FROM playlists WHERE id = ?1", [id], |r| {
+            r.get(0)
+        })
         .optional()?
         .flatten();
     let n = conn.execute("DELETE FROM playlists WHERE id = ?1", [id])?;
@@ -979,14 +983,7 @@ const LISTEN_RANGE: &str =
 const PLAY_EXPR: &str = "CASE WHEN e.completed = 1 OR e.listened_ms >= 15000 THEN 1 ELSE 0 END";
 
 pub fn record_listen_event(conn: &Connection, ev: &NewListenEvent) -> Result<()> {
-    let matched: Option<(
-        i64,
-        String,
-        String,
-        String,
-        String,
-        Option<i64>,
-    )> = conn
+    let matched: Option<(i64, String, String, String, String, Option<i64>)> = conn
         .query_row(
             "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''),
                     COALESCE(t.genre, ''), t.duration_ms
@@ -1034,8 +1031,8 @@ pub fn record_listen_event(conn: &Connection, ev: &NewListenEvent) -> Result<()>
         ),
     };
 
-    let duration_ms = lib_duration
-        .or_else(|| ev.duration_ms.map(|d| i64::try_from(d).unwrap_or(i64::MAX)));
+    let duration_ms =
+        lib_duration.or_else(|| ev.duration_ms.map(|d| i64::try_from(d).unwrap_or(i64::MAX)));
     let listened_ms = i64::try_from(ev.listened_ms).unwrap_or(i64::MAX);
     let source = if ev.path.starts_with("http://") || ev.path.starts_with("https://") {
         "online"
@@ -1089,7 +1086,11 @@ fn query_top_tracks(
     } else {
         "plays DESC, total_ms DESC, MIN(e.title) COLLATE NOCASE"
     };
-    let having = if order_by_time { "" } else { "HAVING plays > 0" };
+    let having = if order_by_time {
+        ""
+    } else {
+        "HAVING plays > 0"
+    };
     let sql = format!(
         "SELECT MAX(e.track_id), MAX(e.path), MAX(e.title), MAX(e.artist),
                 MAX(e.album), MAX(a.cover),
@@ -1569,24 +1570,16 @@ pub fn search_artists_page(
         n + 1,
         n + 2
     );
-    query_page(
-        conn,
-        &count_sql,
-        &page_sql,
-        f.params,
-        offset,
-        limit,
-        |r| {
-            Ok(ArtistRow {
-                name: r.get(0)?,
-                track_count: r.get::<_, i64>(1)?.max(0) as u32,
-                album_count: r.get::<_, i64>(2)?.max(0) as u32,
-                cover: r.get(3)?,
-                play_count: u64_col(r, 4)?,
-                listened_ms: u64_col(r, 5)?,
-            })
-        },
-    )
+    query_page(conn, &count_sql, &page_sql, f.params, offset, limit, |r| {
+        Ok(ArtistRow {
+            name: r.get(0)?,
+            track_count: r.get::<_, i64>(1)?.max(0) as u32,
+            album_count: r.get::<_, i64>(2)?.max(0) as u32,
+            cover: r.get(3)?,
+            play_count: u64_col(r, 4)?,
+            listened_ms: u64_col(r, 5)?,
+        })
+    })
 }
 
 pub fn artist_meta(conn: &Connection, name: &str) -> Result<Option<ArtistMeta>> {
@@ -1725,7 +1718,11 @@ pub fn artist_profile(conn: &Connection, name: &str) -> Result<ArtistProfile> {
     let meta = artist_meta(conn, name)?;
     let canonical = tracks
         .first()
-        .and_then(|t| split_artists(&t.artist).into_iter().find(|a| a.eq_ignore_ascii_case(name)))
+        .and_then(|t| {
+            split_artists(&t.artist)
+                .into_iter()
+                .find(|a| a.eq_ignore_ascii_case(name))
+        })
         .or_else(|| meta.as_ref().map(|m| m.name.clone()))
         .unwrap_or_else(|| name.to_owned());
 

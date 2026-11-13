@@ -221,8 +221,14 @@ fn same_title_and_artist_in_different_years_are_separate_albums() {
         picture,
         ..Default::default()
     };
-    tagged_wav(&e.music.join("y1995/1.wav"), &track("Old", 1995, Some(&png_a)));
-    tagged_wav(&e.music.join("y2020/1.wav"), &track("New 1", 2020, Some(&png_b)));
+    tagged_wav(
+        &e.music.join("y1995/1.wav"),
+        &track("Old", 1995, Some(&png_a)),
+    );
+    tagged_wav(
+        &e.music.join("y2020/1.wav"),
+        &track("New 1", 2020, Some(&png_b)),
+    );
     tagged_wav(&e.music.join("y2020/2.wav"), &track("New 2", 2020, None));
     tagged_wav(&e.music.join("noyear/1.wav"), &track("Undated 1", 0, None));
     tagged_wav(&e.music.join("noyear/2.wav"), &track("Undated 2", 0, None));
@@ -1544,7 +1550,11 @@ fn listening_history_aggregates_and_survives_track_removal() {
 
     assert_eq!(e.lib.clear_listen_history().unwrap(), 4);
     assert_eq!(
-        e.lib.listening_stats(None, None).unwrap().summary.raw_event_count,
+        e.lib
+            .listening_stats(None, None)
+            .unwrap()
+            .summary
+            .raw_event_count,
         0
     );
 }
