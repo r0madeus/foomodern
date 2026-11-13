@@ -5,6 +5,7 @@
   import ExtBadge from './ExtBadge.svelte'
   import Cover from './Cover.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import type { TrackRow } from './library.svelte'
   import { pinned } from './pinned.svelte'
@@ -14,7 +15,7 @@
   let { id, onDeleted }: { id: number; onDeleted: () => void } = $props()
 
   const ROW = 48
-  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_9rem] items-center gap-3 px-5'
+  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_11rem] items-center gap-3 px-5'
 
   const info = $derived(playlists.byId(id))
   let tracks = $state<TrackRow[]>([])
@@ -228,8 +229,10 @@
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
-              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-                <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+              <span class="flex items-center justify-end gap-0.5">
+                <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
+                <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
+                  <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
                 <button
                   type="button"
                   data-action="up"
@@ -264,6 +267,7 @@
                 >
                   <Icon name="close" class="size-4" />
                 </button>
+                </span>
               </span>
             </div>
           {/if}

@@ -1,13 +1,15 @@
 //! SQLite schema and queries. All functions take a plain `&Connection` so
 //! they can be tested without the [`super::Library`] facade.
 
-use super::{AlbumDetail, AlbumRow, FolderInfo, Page, PlaylistInfo, Result, TrackMeta, TrackRow};
+use super::{
+    AlbumDetail, AlbumRow, FavoriteRef, FolderInfo, Page, PlaylistInfo, Result, TrackMeta, TrackRow,
+};
 use crate::queue::Track;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::path::PathBuf;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -94,6 +96,14 @@ WHERE album_id IS NOT NULL
   );
 ";
 
+const SCHEMA_V4: &str = "
+CREATE TABLE favorites (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    added_at INTEGER NOT NULL
+);
+CREATE INDEX favorites_added ON favorites(added_at DESC);
+";
+
 /// Opens-time setup: pragmas and migrations.
 pub fn init(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -132,6 +142,12 @@ pub fn init(conn: &Connection) -> Result<()> {
         })();
         conn.pragma_update(None, "foreign_keys", true)?;
         res?;
+    }
+    if version < 4 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V4)?;
+        tx.pragma_update(None, "user_version", 4)?;
+        tx.commit()?;
     }
     Ok(())
 }
@@ -771,4 +787,68 @@ pub fn track_files_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, St
         }
     }
     Ok(out)
+}
+
+// ---------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------
+
+pub fn favorites(conn: &Connection) -> Result<Vec<FavoriteRef>> {
+    let mut st = conn.prepare(
+        "SELECT f.track_id, t.path
+         FROM favorites f
+         JOIN tracks t ON t.id = f.track_id
+         ORDER BY f.added_at DESC, t.title COLLATE NOCASE, f.track_id",
+    )?;
+    let rows = st.query_map([], |r| {
+        Ok(FavoriteRef {
+            track_id: r.get(0)?,
+            path: r.get(1)?,
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+pub fn toggle_favorite(conn: &Connection, track_id: i64, now: i64) -> Result<bool> {
+    let removed = conn.execute("DELETE FROM favorites WHERE track_id = ?1", [track_id])?;
+    if removed > 0 {
+        return Ok(false);
+    }
+    let inserted = conn.execute(
+        "INSERT INTO favorites(track_id, added_at)
+         SELECT id, ?2 FROM tracks WHERE id = ?1",
+        rusqlite::params![track_id, now],
+    )?;
+    if inserted == 0 {
+        return Err(super::LibraryError::Other(format!(
+            "track {track_id} not found"
+        )));
+    }
+    Ok(true)
+}
+
+pub fn favorites_page(conn: &Connection, offset: u64, limit: u64) -> Result<Page<TrackRow>> {
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
+    let mut st = conn.prepare(&format!(
+        "{TRACK_SELECT} JOIN favorites f ON f.track_id = t.id
+         ORDER BY f.added_at DESC, t.title COLLATE NOCASE, f.track_id
+         LIMIT ?1 OFFSET ?2"
+    ))?;
+    let rows = st.query_map(rusqlite::params![limit as i64, offset as i64], track_row)?;
+    let items = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(Page {
+        total: u64::try_from(total).unwrap_or(0),
+        items,
+    })
+}
+
+pub fn favorites_queue_tracks(conn: &Connection) -> Result<Vec<Track>> {
+    let mut st = conn.prepare(
+        "SELECT t.path, t.title, t.artist
+         FROM favorites f
+         JOIN tracks t ON t.id = f.track_id
+         ORDER BY f.added_at DESC, t.title COLLATE NOCASE, f.track_id",
+    )?;
+    let rows = st.query_map([], queue_track)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }

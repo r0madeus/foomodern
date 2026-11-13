@@ -1009,3 +1009,61 @@ pub fn pinned_toggle(
     }
     resolve_pinned(&store, &lib)
 }
+
+// ---------------------------------------------------------------------
+// Favorites (liked tracks)
+// ---------------------------------------------------------------------
+
+use crate::library::FavoriteRef;
+
+fn favorites_changed(app: &AppHandle) {
+    if let Err(e) = app.emit("favorites://changed", ()) {
+        log::warn!("failed to emit favorites change event: {e}");
+    }
+}
+
+#[tauri::command]
+pub fn favorites_list(lib: State<'_, Arc<Library>>) -> Res<Vec<FavoriteRef>> {
+    le(lib.favorites())
+}
+
+#[tauri::command]
+pub fn favorites_toggle(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    track_id: i64,
+) -> Res<bool> {
+    let added = le(lib.toggle_favorite(track_id))?;
+    favorites_changed(&app);
+    Ok(added)
+}
+
+#[tauri::command]
+pub fn favorites_toggle_by_path(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    path: String,
+) -> Res<bool> {
+    let added = le(lib.toggle_favorite_by_path(&path))?;
+    favorites_changed(&app);
+    Ok(added)
+}
+
+#[tauri::command]
+pub fn favorites_tracks_page(
+    lib: State<'_, Arc<Library>>,
+    offset: u64,
+    limit: u64,
+) -> Res<Page<TrackRow>> {
+    le(lib.favorites_page(offset, limit))
+}
+
+#[tauri::command]
+pub fn favorites_play(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let tracks = le(lib.favorites_queue_tracks())?;
+    s(player.replace_queue(tracks, start_index))
+}

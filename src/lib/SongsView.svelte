@@ -5,6 +5,7 @@
   import SearchInput from './SearchInput.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import Cover from './Cover.svelte'
   import { library, PagedRows, type Sort } from './library.svelte'
   import { player, formatTime } from './player.svelte'
@@ -16,7 +17,7 @@
     { value: 'album', label: 'Album' },
     { value: 'added', label: 'Recently added' },
   ]
-  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_2rem] items-center gap-3 px-5'
+  const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_4.25rem] items-center gap-3 px-5'
 
   const q = $derived(library.debouncedQuery)
   // A fresh cache whenever the library version, sort, or search query changes.
@@ -113,8 +114,11 @@
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
-              <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-                <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+              <span class="flex items-center justify-end gap-1">
+                <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
+                <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+                  <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+                </span>
               </span>
             </div>
           {:else}

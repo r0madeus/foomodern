@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
   import Cover from './Cover.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
   import { player } from './player.svelte'
@@ -42,8 +43,15 @@
           class="aspect-square max-h-[min(56vh,480px)] w-auto max-w-full self-center rounded-lg text-8xl shadow-2xl shadow-black/50"
         />
         <div class="mx-auto mt-6 w-full max-w-[480px]">
-          <h2 class="truncate text-3xl leading-tight font-bold">{snap.current.title}</h2>
-          <p class="mt-1 truncate text-lg text-white/70">{snap.current.artist || t('Unknown artist')}</p>
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-3xl leading-tight font-bold">{snap.current.title}</h2>
+              <p class="mt-1 truncate text-lg text-white/70">{snap.current.artist || t('Unknown artist')}</p>
+            </div>
+            {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
+              <FavoriteButton path={snap.current.path} title={snap.current.title} size="size-5" light />
+            {/if}
+          </div>
           {#if !hasLyrics}
             <p class="mt-4 text-sm text-white/50">
               {lyrics.loading ? t('Looking for lyrics…') : lyrics.result?.kind === 'instrumental' ? t('♪ Instrumental') : t('No lyrics for this song.')}

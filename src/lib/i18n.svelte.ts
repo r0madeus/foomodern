@@ -348,4 +348,11 @@ const TR: Record<string, string> = {
   'No online results for “{q}”.': '“{q}” için çevrimiçi sonuç yok.',
   'In library': 'Kütüphanede',
   'Press Enter to search online for “{q}”.': '“{q}” için internette aramak üzere Enter’a bas.',
+
+  // Favorites
+  Favorites: 'Favoriler',
+  'Add “{title}” to favorites': '“{title}” parçasını favorilere ekle',
+  'Remove “{title}” from favorites': '“{title}” parçasını favorilerden kaldır',
+  'No favorite tracks yet. Click the star on any song to save it here.':
+    'Henüz favori şarkı yok. Buraya eklemek için herhangi bir şarkının yıldızına tıkla.',
 }

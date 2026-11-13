@@ -103,6 +103,13 @@ pub struct PlaylistInfo {
     pub track_count: u32,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteRef {
+    pub track_id: i64,
+    pub path: String,
+}
+
 /// Result of importing an M3U playlist.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -359,6 +366,41 @@ impl Library {
 
     pub fn playlist_move(&self, id: i64, from: usize, to: usize) -> Result<()> {
         db::playlist_move(&mut self.conn(), id, from, to)
+    }
+
+    pub fn favorites(&self) -> Result<Vec<FavoriteRef>> {
+        db::favorites(&self.conn())
+    }
+
+    pub fn toggle_favorite(&self, track_id: i64) -> Result<bool> {
+        db::toggle_favorite(&self.conn(), track_id, unix_now())
+    }
+
+    pub fn toggle_favorite_by_path(&self, path: &str) -> Result<bool> {
+        let p = Path::new(path);
+        let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let key = scan::display_path(&canonical);
+        let conn = self.conn();
+        let keys = if key == path {
+            vec![key]
+        } else {
+            vec![key, path.to_owned()]
+        };
+        let found = db::track_ids_by_paths(&conn, &keys)?;
+        let Some(track_id) = found.into_iter().flatten().next() else {
+            return Err(LibraryError::Other(
+                "track is not in the library".into(),
+            ));
+        };
+        db::toggle_favorite(&conn, track_id, unix_now())
+    }
+
+    pub fn favorites_page(&self, offset: u64, limit: u64) -> Result<Page<TrackRow>> {
+        db::favorites_page(&self.conn(), offset, limit.min(500))
+    }
+
+    pub fn favorites_queue_tracks(&self) -> Result<Vec<Track>> {
+        db::favorites_queue_tracks(&self.conn())
     }
 
     /// Creates a playlist from file paths (e.g. the queue). Files that are

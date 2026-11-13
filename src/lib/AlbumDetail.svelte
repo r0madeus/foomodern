@@ -5,6 +5,7 @@
   import Icon from './Icon.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import { tagEditor } from './tags.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import { pinned } from './pinned.svelte'
@@ -115,8 +116,11 @@
               {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
             </span>
           </button>
-          <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-            <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+          <span class="flex items-center gap-1">
+            <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
+            <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
+              <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+            </span>
           </span>
         </li>
       {/each}

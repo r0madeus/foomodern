@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 3);
+    assert_eq!(v, 4);
 }
 
 #[test]
@@ -656,7 +656,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 3);
+    assert_eq!(v, 4);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -697,7 +697,7 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 3);
+        assert_eq!(v, 4);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -1395,4 +1395,28 @@ fn m3u_relative_paths_use_the_playlist_folder() {
         .import_m3u("Rel", "Solo.wav\n", Some(&e.music))
         .unwrap();
     assert_eq!(imported.matched, 1);
+}
+
+#[test]
+fn favorites_toggle_paging_and_cascade() {
+    let e = env();
+    scanned_tracks(&e, &["Alpha", "Beta", "Gamma"]);
+    let tracks = e.lib.tracks_page(0, 10, SortOrder::Title).unwrap();
+    let a = &tracks[0];
+    let b = &tracks[1];
+
+    assert!(e.lib.toggle_favorite(a.id).unwrap());
+    assert!(e.lib.toggle_favorite_by_path(&b.path).unwrap());
+    assert_eq!(e.lib.favorites().unwrap().len(), 2);
+
+    let page = e.lib.favorites_page(0, 10).unwrap();
+    assert_eq!(page.total, 2);
+    let q = e.lib.favorites_queue_tracks().unwrap();
+    assert_eq!(q.len(), 2);
+
+    assert!(!e.lib.toggle_favorite(a.id).unwrap());
+    assert_eq!(e.lib.favorites().unwrap().len(), 1);
+
+    e.lib.remove_folder(e.lib.folders().unwrap()[0].id).unwrap();
+    assert_eq!(e.lib.favorites().unwrap().len(), 0);
 }

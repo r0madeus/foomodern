@@ -2,6 +2,7 @@
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import Cover from './Cover.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import { nowCover } from './nowCover.svelte'
   import { lyrics } from './lyrics.svelte'
   import { player, formatTime } from './player.svelte'
@@ -50,10 +51,10 @@
 <footer
   class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-6 border-t border-zinc-200 bg-white/80 px-5 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80"
 >
-  <div class="min-w-0">
+  <div class="flex min-w-0 items-center gap-2">
     {#if snap.current}
       <button
-        class="group flex max-w-full items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+        class="group flex min-w-0 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
         onclick={onToggleNowPlaying}
         aria-pressed={nowPlaying}
         title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
@@ -73,6 +74,9 @@
           </span>
         </span>
       </button>
+      {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
+        <FavoriteButton path={snap.current.path} title={snap.current.title} />
+      {/if}
     {:else}
       <p class="text-sm text-zinc-400">{t("Nothing playing")}</p>
     {/if}

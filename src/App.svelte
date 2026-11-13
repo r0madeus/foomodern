@@ -7,6 +7,7 @@
   import Icon from './lib/Icon.svelte'
   import SongsView from './lib/SongsView.svelte'
   import AlbumsView from './lib/AlbumsView.svelte'
+  import FavoritesView from './lib/FavoritesView.svelte'
   import QueueView from './lib/QueueView.svelte'
   import SearchView from './lib/SearchView.svelte'
   import SettingsView from './lib/SettingsView.svelte'
@@ -17,6 +18,7 @@
   import { library } from './lib/library.svelte'
   import { lyrics } from './lib/lyrics.svelte'
   import { playlists } from './lib/playlists.svelte'
+  import { favorites } from './lib/favorites.svelte'
   import { pinned } from './lib/pinned.svelte'
   import { appSettings } from './lib/appSettings.svelte'
   import { online } from './lib/online.svelte'
@@ -31,12 +33,12 @@
     'wma', 'aif', 'aiff', 'dsf', 'dff', 'mka', 'mpc', 'tta', 'alac',
   ]
 
-  type View = 'songs' | 'albums' | 'search' | 'queue' | 'settings' | 'playlist'
+  type View = 'songs' | 'albums' | 'search' | 'favorites' | 'queue' | 'settings' | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
   // section, Queue is toggled from the bottom bar, and Settings sits at the bottom.
   type NavView = 'songs' | 'albums' | 'search'
   const NAV: NavView[] = ['songs', 'albums', 'search']
-  const VIEWS: View[] = [...NAV, 'queue', 'settings']
+  const VIEWS: View[] = [...NAV, 'favorites', 'queue', 'settings']
   const LABELS: Record<NavView, string> = {
     songs: 'Songs',
     albums: 'Albums',
@@ -147,6 +149,7 @@
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
+    favorites.init().catch((e) => (player.error = String(e)))
     pinned.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
@@ -341,6 +344,29 @@
           </form>
         {/if}
         <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+          <button
+            type="button"
+            class={[
+              'flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+              view === 'favorites'
+                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800',
+            ]}
+            aria-current={view === 'favorites' ? 'page' : undefined}
+            onclick={() => go('favorites')}
+          >
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="flex size-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+                <Icon name="star" class="size-3" />
+              </span>
+              <span class="truncate">{t('Favorites')}</span>
+            </span>
+            {#if favorites.ids.size > 0}
+              <span class="text-xs tabular-nums text-zinc-400">
+                {favorites.ids.size.toLocaleString()}
+              </span>
+            {/if}
+          </button>
           {#each playlists.list as p (p.id)}
             {@const active = view === 'playlist' && playlistId === p.id}
             {@const isPinned = pinned.isPinned('playlist', p.id)}
@@ -422,6 +448,8 @@
             onOpenSettings={() => go('settings')}
             onOpenLocalAlbum={(id) => openAlbum(id)}
           />
+        {:else if view === 'favorites'}
+          <FavoritesView />
         {:else if view === 'queue'}
           <QueueView onOpenFiles={pickFiles} onSaved={openPlaylist} />
         {:else if view === 'playlist' && playlistId !== null}

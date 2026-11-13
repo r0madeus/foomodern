@@ -274,6 +274,11 @@ pub fn run() {
             commands::online_clear_finished,
             commands::pinned_list,
             commands::pinned_toggle,
+            commands::favorites_list,
+            commands::favorites_toggle,
+            commands::favorites_toggle_by_path,
+            commands::favorites_tracks_page,
+            commands::favorites_play,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

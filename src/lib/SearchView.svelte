@@ -2,6 +2,7 @@
   import AddToPlaylist from './AddToPlaylist.svelte'
   import Cover from './Cover.svelte'
   import ExtBadge from './ExtBadge.svelte'
+  import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import OnlineAlbumDetail from './OnlineAlbumDetail.svelte'
   import { count, t } from './i18n.svelte'
@@ -250,6 +251,7 @@
                           {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
                         </span>
                       </button>
+                      <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
                       <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                         <AddToPlaylist
                           trackIds={[track.id]}
