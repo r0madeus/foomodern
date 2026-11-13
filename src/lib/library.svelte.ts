@@ -7,6 +7,19 @@ import { player, type PlayerSnapshot } from './player.svelte'
 
 export type Sort = 'artist' | 'title' | 'album' | 'added'
 
+const SORT_KEY = 'foomodern.library.sort'
+const SORTS: Sort[] = ['artist', 'title', 'album', 'added']
+
+function loadSort(): Sort {
+  try {
+    const v = localStorage.getItem(SORT_KEY)
+    if (SORTS.includes(v as Sort)) return v as Sort
+  } catch {
+    // storage unavailable: fall through
+  }
+  return 'artist'
+}
+
 export interface FolderInfo {
   id: number
   path: string
@@ -116,9 +129,22 @@ class LibraryStore {
   stats = $state<LibraryStats>({ tracks: 0, albums: 0, version: 0, scanning: false })
   folders = $state<FolderInfo[]>([])
   scan = $state<{ folder: string; scanned: number } | null>(null)
-  sort = $state<Sort>('artist')
+  #sort = $state<Sort>(loadSort())
   query = $state('')
   debouncedQuery = $state('')
+
+  get sort(): Sort {
+    return this.#sort
+  }
+
+  set sort(next: Sort) {
+    this.#sort = next
+    try {
+      localStorage.setItem(SORT_KEY, next)
+    } catch {
+      // ignore
+    }
+  }
 
   #searchTimer: ReturnType<typeof setTimeout> | undefined
 

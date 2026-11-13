@@ -338,6 +338,23 @@ impl Queue {
         self.entries.is_empty()
     }
 
+    /// Restore saved entries alongside shuffle and repeat modes.
+    pub fn restore<T: Into<Track>>(
+        &mut self,
+        tracks: Vec<T>,
+        current: Option<usize>,
+        shuffle: bool,
+        repeat: RepeatMode,
+    ) {
+        self.shuffle = shuffle;
+        self.repeat = repeat;
+        self.replace(tracks, current);
+    }
+
+    pub fn entries(&self) -> &[QueueEntry] {
+        &self.entries
+    }
+
     pub fn page(&self, offset: usize, limit: usize) -> &[QueueEntry] {
         let start = offset.min(self.entries.len());
         let end = start.saturating_add(limit).min(self.entries.len());

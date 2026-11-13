@@ -14,6 +14,7 @@
 
 use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
 use crate::queue::{EntryId, Queue, RepeatMode, Track};
+use crate::session::{SavedTrack, SessionState};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -85,6 +86,10 @@ struct Inner {
     /// An auto-advance reported in that window happened before our load and
     /// is stale: the load replaces it anyway.
     pending_load: bool,
+    /// Saved position from the previous session waiting for the first `play`.
+    resume_position: Option<f64>,
+    /// Seek deferred until the engine finishes opening the loaded file.
+    pending_load_seek: Option<f64>,
 }
 
 pub struct Player {
@@ -138,6 +143,8 @@ impl Inner {
         self.engine_next = None; // `load` clears the next slot
         self.position = 0.0;
         self.duration = None;
+        self.resume_position = None;
+        self.pending_load_seek = None;
         self.status = Status::Playing;
         self.pending_load = true;
         self.engine.load(&path)?;
@@ -147,6 +154,8 @@ impl Inner {
 
     fn stop_engine(&mut self) -> Result<(), PlayerError> {
         self.pending_load = false;
+        self.resume_position = None;
+        self.pending_load_seek = None;
         self.status = Status::Stopped;
         self.position = 0.0;
         self.engine_next = None;
@@ -181,6 +190,8 @@ impl Player {
                 volume: 100.0,
                 engine_next: None,
                 pending_load: false,
+                resume_position: None,
+                pending_load_seek: None,
             }),
             observer,
         }
@@ -207,6 +218,62 @@ impl Player {
 
     pub fn snapshot(&self) -> PlayerSnapshot {
         self.lock().snapshot()
+    }
+
+    pub fn restore_session(&self, state: SessionState) {
+        let state = state.normalized();
+        let mut s = self.lock();
+        if let Err(e) = s.engine.set_volume(state.volume) {
+            log::warn!("failed to restore volume: {e}");
+        }
+        s.volume = state.volume;
+        let tracks: Vec<Track> = state
+            .queue
+            .into_iter()
+            .map(|t| Track {
+                path: t.path,
+                title: t.title,
+                artist: t.artist,
+            })
+            .collect();
+        s.queue
+            .restore(tracks, state.current_index, state.shuffle, state.repeat);
+        let pos = if s.queue.current_index().is_some() && state.position_seconds > 0.0 {
+            Some(state.position_seconds)
+        } else {
+            None
+        };
+        s.position = pos.unwrap_or(0.0);
+        s.resume_position = pos;
+        s.pending_load_seek = None;
+    }
+
+    pub fn export_session(&self) -> SessionState {
+        let s = self.lock();
+        let queue = s
+            .queue
+            .entries()
+            .iter()
+            .map(|e| SavedTrack {
+                path: e.path.clone(),
+                title: e.title.clone(),
+                artist: e.artist.clone(),
+            })
+            .collect();
+        let current_index = s.queue.current_index();
+        let position_seconds = if current_index.is_some() {
+            s.position.max(0.0)
+        } else {
+            0.0
+        };
+        SessionState {
+            volume: s.volume,
+            shuffle: s.queue.shuffle(),
+            repeat: s.queue.repeat(),
+            queue,
+            current_index,
+            position_seconds,
+        }
     }
 
     pub fn queue_page(&self, offset: usize, limit: usize) -> Vec<TrackInfo> {
@@ -290,7 +357,13 @@ impl Player {
             }
             Status::Stopped => {
                 if let Some(idx) = s.queue.current_index().or_else(|| s.queue.first_index()) {
-                    s.start_index(idx)
+                    let resume = s.resume_position.take();
+                    s.start_index(idx)?;
+                    if let Some(pos) = resume {
+                        s.position = pos;
+                        s.pending_load_seek = Some(pos);
+                    }
+                    Ok(())
                 } else {
                     Ok(())
                 }
@@ -367,6 +440,8 @@ impl Player {
                 0.0
             };
             if s.status != Status::Stopped {
+                s.resume_position = None;
+                s.pending_load_seek = None;
                 s.engine.seek(seconds)?;
                 s.position = seconds;
             }
@@ -443,6 +518,14 @@ impl Player {
                 }
                 EngineEvent::Duration { seconds } => {
                     s.duration = Some(seconds);
+                    if let Some(pos) = s.pending_load_seek.take() {
+                        let target = pos.min(seconds.max(0.0));
+                        if let Err(e) = s.engine.seek(target) {
+                            log::warn!("failed to seek to saved position: {e}");
+                        } else {
+                            s.position = target;
+                        }
+                    }
                     Out::State
                 }
                 EngineEvent::Position { seconds } => {
@@ -989,5 +1072,95 @@ mod tests {
         let snap = p.set_shuffle(false).unwrap();
         assert!(!snap.shuffle);
         assert_eq!(snap.current_index, Some(0));
+    }
+
+    #[test]
+    fn restore_and_export_session_preserves_state_and_seeks_on_play() {
+        let (p, calls, _) = setup();
+        let saved = SessionState {
+            volume: 37.0,
+            shuffle: true,
+            repeat: RepeatMode::All,
+            queue: vec![
+                SavedTrack {
+                    path: pb("a"),
+                    title: Some("Title A".into()),
+                    artist: Some("Artist A".into()),
+                },
+                SavedTrack {
+                    path: pb("b"),
+                    title: None,
+                    artist: None,
+                },
+            ],
+            current_index: Some(1),
+            position_seconds: 42.5,
+        };
+        p.restore_session(saved.clone());
+
+        let snap = p.snapshot();
+        assert_eq!(snap.status, Status::Stopped);
+        assert_eq!(snap.volume, 37.0);
+        assert!(snap.shuffle);
+        assert_eq!(snap.repeat, RepeatMode::All);
+        assert_eq!(snap.current_index, Some(1));
+        assert_eq!(snap.position_seconds, 42.5);
+        assert_eq!(snap.queue_length, 2);
+        assert_eq!(p.export_session(), saved);
+        assert_eq!(calls.take(), [Call::Volume(37.0)]);
+
+        // Playing from stopped loads the saved track and seeks once Duration arrives.
+        let snap = p.play().unwrap();
+        assert_eq!(snap.status, Status::Playing);
+        assert_eq!(snap.position_seconds, 42.5);
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Load(pb("b")),
+                Call::Play,
+                Call::SetNext(Some(pb("a")))
+            ]
+        );
+
+        p.handle_engine_event(EngineEvent::TrackStarted {
+            path: pb("b"),
+            auto_advanced: false,
+        });
+        p.handle_engine_event(EngineEvent::Duration { seconds: 120.0 });
+        assert_eq!(calls.take(), [Call::Seek(42.5)]);
+        assert_eq!(p.snapshot().position_seconds, 42.5);
+    }
+
+    #[test]
+    fn switching_track_before_play_clears_saved_resume_position() {
+        let (p, calls, _) = setup();
+        p.restore_session(SessionState {
+            volume: 80.0,
+            shuffle: false,
+            repeat: RepeatMode::Off,
+            queue: vec![
+                SavedTrack {
+                    path: pb("a"),
+                    title: None,
+                    artist: None,
+                },
+                SavedTrack {
+                    path: pb("b"),
+                    title: None,
+                    artist: None,
+                },
+            ],
+            current_index: Some(0),
+            position_seconds: 30.0,
+        });
+        calls.take();
+
+        let snap = p.play_index(1).unwrap();
+        assert_eq!(snap.position_seconds, 0.0);
+        p.handle_engine_event(EngineEvent::Duration { seconds: 90.0 });
+        assert!(
+            !calls.take().iter().any(|c| matches!(c, Call::Seek(_))),
+            "explicit track selection must start from 0.0"
+        );
     }
 }

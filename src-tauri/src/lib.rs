@@ -5,12 +5,14 @@ pub mod lyrics;
 pub mod media_keys;
 pub mod player;
 pub mod queue;
+pub mod session;
 
 use audio::mpv::{MpvEngine, MpvOptions};
 use library::{Hooks, Library};
 use lyrics::LyricsService;
 use player::{Player, PlayerEvent};
 use serde::Serialize;
+use session::SessionStore;
 use std::sync::{Arc, mpsc};
 use tauri::{Emitter, Manager};
 
@@ -34,6 +36,10 @@ pub fn run() {
                 )?;
             }
 
+            let data_dir = app.path().app_data_dir()?;
+            let cache_dir = app.path().app_cache_dir()?;
+            let session_store = Arc::new(SessionStore::new(data_dir.join("session.json")));
+
             let (tx, rx) = mpsc::channel();
             let engine = MpvEngine::new(MpvOptions::default(), tx).map_err(|e| {
                 log::error!("failed to start audio engine: {e}");
@@ -41,12 +47,21 @@ pub fn run() {
             })?;
 
             let handle = app.handle().clone();
+            let observer_session = Arc::clone(&session_store);
             let player = Arc::new(Player::new(
                 Box::new(engine),
                 Box::new(move |event| {
                     let result = match event {
-                        PlayerEvent::State(snap) => handle.emit("player://state", snap),
+                        PlayerEvent::State(snap) => {
+                            if let Some(p) = handle.try_state::<Arc<Player>>() {
+                                observer_session.on_player_state(&snap, || p.export_session());
+                            }
+                            handle.emit("player://state", snap)
+                        }
                         PlayerEvent::Position { seconds, duration } => {
+                            if let Some(p) = handle.try_state::<Arc<Player>>() {
+                                observer_session.maybe_save_position(|| p.export_session());
+                            }
                             handle.emit("player://position", PositionPayload { seconds, duration })
                         }
                         PlayerEvent::Error(message) => handle.emit("player://error", message),
@@ -56,6 +71,8 @@ pub fn run() {
                     }
                 }),
             ));
+
+            player.restore_session(session_store.load());
 
             let worker = player.clone();
             std::thread::Builder::new()
@@ -67,9 +84,8 @@ pub fn run() {
                 })?;
 
             app.manage(player);
+            app.manage(session_store);
 
-            let data_dir = app.path().app_data_dir()?;
-            let cache_dir = app.path().app_cache_dir()?;
             let (progress_handle, changed_handle) = (app.handle().clone(), app.handle().clone());
             let library = Arc::new(
                 Library::open(
@@ -132,6 +148,16 @@ pub fn run() {
             commands::lyrics_for_track,
             commands::lyrics_attach_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while building tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let (Some(player), Some(session)) = (
+                    app_handle.try_state::<Arc<Player>>(),
+                    app_handle.try_state::<Arc<SessionStore>>(),
+                )
+            {
+                session.save_now(&player.export_session());
+            }
+        });
 }
