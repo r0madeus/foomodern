@@ -82,10 +82,6 @@ contributors and agents.
      MusicBrainz Picard.
 
 ## Known limitations
-- Linux desktops without a StatusNotifier host (e.g. GNOME without the
-  AppIndicator extension): the tray is created but invisible, so with
-  close-to-tray on a closed window can't be brought back. Candidate fix:
-  single-instance plugin that shows the window on a second launch.
 - Linux MPRIS state lags ~1–2 s (souvlaki's D-Bus loop).
 - UI text is English only.
 - Android: not yet tried on a device; ReplayGain is not applied; only the
