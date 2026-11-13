@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0; empty uses v<version> from tauri.conf.json)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark release as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-release:
+    name: Windows Release (test + installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Fetch LGPL libmpv
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/fetch-libmpv.ps1
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Build NSIS installer
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $env:GITHUB_REF_NAME
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:INPUT_TAG)) {
+            $env:INPUT_TAG.Trim()
+          } else {
+            $conf = Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
+            "v$($conf.version)"
+          }
+
+          $installers = Get-ChildItem -Path 'src-tauri/target/release/bundle/nsis' -Filter '*.exe'
+          if (-not $installers) {
+            throw 'No NSIS .exe installer found in src-tauri/target/release/bundle/nsis'
+          }
+
+          $staging = Join-Path $env:RUNNER_TEMP 'release-assets'
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          $assets = @()
+          $hashes = @()
+          foreach ($file in $installers) {
+            $dest = Join-Path $staging $file.Name
+            Copy-Item -Path $file.FullName -Destination $dest -Force
+            $hash = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hashes += "$hash  $($file.Name)"
+            $assets += $dest
+          }
+
+          $checksumFile = Join-Path $staging 'SHA256SUMS.txt'
+          Set-Content -Path $checksumFile -Value ($hashes -join "`n") -Encoding utf8
+          $assets += $checksumFile
+
+          $ErrorActionPreference = 'Continue'
+          gh release view $tag 2>&1 | Out-Null
+          $exists = ($LASTEXITCODE -eq 0)
+          $ErrorActionPreference = 'Stop'
+
+          if ($exists) {
+            gh release upload $tag @assets --clobber
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            $isPrerelease = ($env:INPUT_PRERELEASE -eq 'true') -or ($tag -match '-')
+            $releaseArgs = @('release', 'create', $tag) + $assets + @(
+              '--title', "FooModern $tag",
+              '--target', $env:GITHUB_SHA,
+              '--generate-notes'
+            )
+            if ($isPrerelease) {
+              $releaseArgs += '--prerelease'
+            }
+            & gh @releaseArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
