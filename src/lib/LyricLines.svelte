@@ -74,7 +74,7 @@
 <div class={['relative min-h-0', className]}>
   <div
     bind:this={box}
-    class={['relative h-full overflow-y-auto overscroll-contain', scrollClass]}
+    class={['no-scrollbar relative h-full overflow-y-auto overscroll-contain', scrollClass]}
     role="region"
     aria-label={t("Lyrics")}
     {@attach watchManualScroll}
