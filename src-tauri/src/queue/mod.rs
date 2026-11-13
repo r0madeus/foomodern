@@ -3,7 +3,7 @@
 //! engine's "next" slot in sync with it.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -289,6 +289,28 @@ impl Queue {
     }
 
     /// First entry index to start playback from when no current entry is set.
+    /// Updates the cached title/artist of every entry whose path matches
+    /// `is_path`. Returns how many entries changed.
+    pub fn update_meta(
+        &mut self,
+        is_path: impl Fn(&Path) -> bool,
+        title: &str,
+        artist: &str,
+    ) -> usize {
+        let mut changed = 0;
+        for e in self.entries.iter_mut().filter(|e| is_path(&e.path)) {
+            if e.title.as_deref() != Some(title) || e.artist.as_deref() != Some(artist) {
+                e.title = Some(title.to_owned());
+                e.artist = Some(artist.to_owned());
+                changed += 1;
+            }
+        }
+        if changed > 0 {
+            self.version += 1;
+        }
+        changed
+    }
+
     pub fn first_index(&self) -> Option<usize> {
         if self.entries.is_empty() {
             return None;

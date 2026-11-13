@@ -1,11 +1,13 @@
 //! Persistent playback settings and session queue/position state.
 
+use crate::audio::ReplayGain;
 use crate::library::scan::write_atomic;
 use crate::player::PlayerSnapshot;
 use crate::queue::RepeatMode;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const POSITION_SAVE_INTERVAL: Duration = Duration::from_secs(5);
@@ -13,6 +15,10 @@ const VOLUME_SAVE_INTERVAL: Duration = Duration::from_secs(1);
 
 fn default_volume() -> f64 {
     100.0
+}
+
+fn default_close_to_tray() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +41,11 @@ pub struct SessionState {
     pub queue: Vec<SavedTrack>,
     pub current_index: Option<usize>,
     pub position_seconds: f64,
+    pub replaygain: ReplayGain,
+    /// Closing the window hides it to the tray instead of quitting. Owned by
+    /// [`SessionStore`], which fills it in on every save.
+    #[serde(default = "default_close_to_tray")]
+    pub close_to_tray: bool,
 }
 
 impl Default for SessionState {
@@ -46,6 +57,8 @@ impl Default for SessionState {
             queue: Vec::new(),
             current_index: None,
             position_seconds: 0.0,
+            replaygain: ReplayGain::default(),
+            close_to_tray: default_close_to_tray(),
         }
     }
 }
@@ -118,6 +131,7 @@ struct GuardState {
 pub struct SessionStore {
     path: PathBuf,
     guard: Mutex<GuardState>,
+    close_to_tray: AtomicBool,
 }
 
 impl SessionStore {
@@ -125,15 +139,29 @@ impl SessionStore {
         Self {
             path,
             guard: Mutex::new(GuardState::default()),
+            close_to_tray: AtomicBool::new(default_close_to_tray()),
         }
     }
 
+    /// Loads the saved state and adopts its window settings.
     pub fn load(&self) -> SessionState {
-        load(&self.path)
+        let state = load(&self.path);
+        self.close_to_tray
+            .store(state.close_to_tray, Ordering::SeqCst);
+        state
     }
 
-    fn write_locked(&self, g: &mut GuardState, state: &SessionState, now: Instant) {
-        if let Err(e) = save(&self.path, state) {
+    pub fn close_to_tray(&self) -> bool {
+        self.close_to_tray.load(Ordering::SeqCst)
+    }
+
+    pub fn set_close_to_tray(&self, enabled: bool) {
+        self.close_to_tray.store(enabled, Ordering::SeqCst);
+    }
+
+    fn write_locked(&self, g: &mut GuardState, mut state: SessionState, now: Instant) {
+        state.close_to_tray = self.close_to_tray();
+        if let Err(e) = save(&self.path, &state) {
             log::warn!("failed to save session state: {e}");
         } else {
             g.last_written_at = Some(now);
@@ -142,7 +170,7 @@ impl SessionStore {
 
     pub fn save_now(&self, state: &SessionState) {
         let mut g = self.guard.lock().unwrap_or_else(|e| e.into_inner());
-        self.write_locked(&mut g, state, Instant::now());
+        self.write_locked(&mut g, state.clone(), Instant::now());
     }
 
     pub fn on_player_state(&self, snap: &PlayerSnapshot, build: impl FnOnce() -> SessionState) {
@@ -156,7 +184,7 @@ impl SessionStore {
         if !structure_changed && !due {
             return;
         }
-        self.write_locked(&mut g, &build(), now);
+        self.write_locked(&mut g, build(), now);
         g.last_structure = Some(key);
     }
 
@@ -169,7 +197,7 @@ impl SessionStore {
         if !due {
             return;
         }
-        self.write_locked(&mut g, &build(), now);
+        self.write_locked(&mut g, build(), now);
     }
 }
 
@@ -206,6 +234,8 @@ mod tests {
             }],
             current_index: Some(0),
             position_seconds: 18.25,
+            replaygain: ReplayGain::Track,
+            close_to_tray: false,
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);
@@ -217,10 +247,62 @@ mod tests {
             queue: vec![],
             current_index: Some(3),
             position_seconds: 99.0,
+            replaygain: ReplayGain::Off,
+            ..SessionState::default()
         }
         .normalized();
         assert_eq!(clamped.volume, 100.0);
         assert_eq!(clamped.current_index, None);
         assert_eq!(clamped.position_seconds, 0.0);
+    }
+
+    #[test]
+    fn old_session_files_without_replaygain_still_load() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+        std::fs::write(&file, r#"{"volume":55.0,"shuffle":true}"#).unwrap();
+        let s = load(&file);
+        assert_eq!(s.volume, 55.0);
+        assert!(s.shuffle);
+        assert_eq!(s.replaygain, ReplayGain::Album);
+
+        let json = serde_json::to_value(SessionState {
+            replaygain: ReplayGain::Off,
+            ..SessionState::default()
+        })
+        .unwrap();
+        assert_eq!(json["replaygain"], "off");
+    }
+
+    #[test]
+    fn close_to_tray_defaults_on_and_is_persisted_by_the_store() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+
+        // Old files without the field, and missing files, default to on.
+        std::fs::write(&file, r#"{"volume":55.0}"#).unwrap();
+        assert!(load(&file).close_to_tray);
+        assert!(SessionState::default().close_to_tray);
+        assert!(SessionStore::new(file.clone()).close_to_tray());
+        assert!(SessionStore::new(file.clone()).load().close_to_tray);
+
+        // The store writes its own value, whatever the state it is given says.
+        let store = SessionStore::new(file.clone());
+        store.set_close_to_tray(false);
+        store.save_now(&SessionState::default());
+        assert!(!load(&file).close_to_tray);
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(json["closeToTray"], false);
+
+        // ...and a new store picks it up on load.
+        let again = SessionStore::new(file.clone());
+        assert!(again.close_to_tray());
+        assert!(!again.load().close_to_tray);
+        assert!(!again.close_to_tray());
+
+        // Later saves driven by player events keep the value.
+        again.maybe_save_position(SessionState::default);
+        assert!(!load(&file).close_to_tray);
     }
 }

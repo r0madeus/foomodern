@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event'
 
 export type Status = 'playing' | 'paused' | 'stopped'
 export type RepeatMode = 'off' | 'all' | 'one'
+export type ReplayGain = 'off' | 'track' | 'album'
 
 export interface TrackInfo {
   id: number
@@ -26,6 +27,7 @@ export interface PlayerSnapshot {
   volume: number
   shuffle: boolean
   repeat: RepeatMode
+  replaygain: ReplayGain
 }
 
 interface PositionPayload {
@@ -44,6 +46,7 @@ const EMPTY: PlayerSnapshot = {
   volume: 100,
   shuffle: false,
   repeat: 'off',
+  replaygain: 'album',
 }
 
 /** Queue rows are fetched in pages; never the whole list in one IPC call. */
@@ -99,6 +102,7 @@ class PlayerStore {
     const next = order[(order.indexOf(this.snapshot.repeat) + 1) % order.length]
     return this.setRepeat(next)
   }
+  setReplayGain = (mode: ReplayGain) => this.#run('player_set_replaygain', { mode })
   seek = (seconds: number) => {
     this.#setAnchor(seconds)
     return this.#run('player_seek', { seconds })

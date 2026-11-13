@@ -7,9 +7,35 @@
 //! "next" slot in sync with it (decision K3). This is what makes gapless
 //! playback work without a second, competing playlist inside mpv.
 
+#[cfg(target_os = "android")]
+pub mod android;
+mod android_events;
+#[cfg(not(target_os = "android"))]
 pub mod mpv;
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+/// ReplayGain normalisation mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplayGain {
+    Off,
+    Track,
+    #[default]
+    Album,
+}
+
+impl ReplayGain {
+    /// Value of mpv's `replaygain` property.
+    pub fn mpv_value(self) -> &'static str {
+        match self {
+            Self::Off => "no",
+            Self::Track => "track",
+            Self::Album => "album",
+        }
+    }
+}
 
 /// Why a track stopped playing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +71,16 @@ pub enum EngineEvent {
     Idle,
     /// A non-fatal error worth showing or logging.
     Error(String),
+    /// The OS asked for a queue move (Android media notification or headset
+    /// button). ExoPlayer only holds two items, so the player handles it.
+    Remote(RemoteCommand),
+}
+
+/// Queue moves requested from outside the app, see [`EngineEvent::Remote`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteCommand {
+    Next,
+    Previous,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -73,4 +109,6 @@ pub trait AudioEngine: Send + Sync {
     fn seek(&self, seconds: f64) -> EngineResult<()>;
     /// Volume in percent, 0.0..=100.0.
     fn set_volume(&self, percent: f64) -> EngineResult<()>;
+    /// Choose the ReplayGain mode. Takes effect for the current and later tracks.
+    fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()>;
 }

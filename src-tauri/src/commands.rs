@@ -1,5 +1,6 @@
 //! Tauri commands. Thin wrappers around [`Player`]; Rust owns all state.
 
+use crate::audio::ReplayGain;
 use crate::player::{Player, PlayerSnapshot, TrackInfo};
 use crate::queue::RepeatMode;
 use std::path::PathBuf;
@@ -100,6 +101,14 @@ pub fn player_set_repeat(player: State<'_, Arc<Player>>, mode: RepeatMode) -> Re
 }
 
 #[tauri::command]
+pub fn player_set_replaygain(
+    player: State<'_, Arc<Player>>,
+    mode: ReplayGain,
+) -> Res<PlayerSnapshot> {
+    s(player.set_replaygain(mode))
+}
+
+#[tauri::command]
 pub fn player_snapshot(player: State<'_, Arc<Player>>) -> Res<PlayerSnapshot> {
     Ok(player.snapshot())
 }
@@ -122,6 +131,101 @@ pub fn library_add_folder(lib: State<'_, Arc<Library>>, path: String) -> Res<Vec
     let folders = le(lib.folders())?;
     lib.start_scan(folders.iter().filter(|f| f.id == id).cloned().collect());
     Ok(folders)
+}
+
+/// Cached cover of the album containing `path` (the playing track in the UI).
+#[tauri::command]
+pub fn library_track_cover(lib: State<'_, Arc<Library>>, path: String) -> Res<Option<String>> {
+    le(lib.track_cover(&path))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct WindowInsets {
+    top: f64,
+    bottom: f64,
+}
+
+/// Space covered by the Android status and navigation bars (CSS pixels);
+/// zero on desktop.
+#[tauri::command]
+pub async fn app_window_insets(app: tauri::AppHandle) -> Res<WindowInsets> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let handle = app
+            .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+            .0
+            .clone();
+        handle
+            .run_mobile_plugin_async("windowInsets", ())
+            .await
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Ok(WindowInsets::default())
+    }
+}
+
+/// Dominant colour of a cached cover (phone UI tint). Only files in the
+/// cover cache are read.
+#[tauri::command]
+pub async fn library_cover_color(app: tauri::AppHandle, cover: String) -> Res<Option<[u8; 3]>> {
+    use tauri::Manager;
+    let covers = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("covers");
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::path::Path::new(&cover);
+        let inside = match (path.canonicalize(), covers.canonicalize()) {
+            (Ok(p), Ok(dir)) => p.starts_with(dir),
+            _ => false,
+        };
+        if !inside {
+            return Ok(None);
+        }
+        Ok(crate::library::cover_color::cover_color(path).ok())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Android has no folder picker for plain file paths: ask for read access to
+/// the music library and return the shared Music folder to add.
+#[tauri::command]
+pub async fn library_android_music_folder(app: tauri::AppHandle) -> Res<String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        #[derive(serde::Deserialize)]
+        struct Access {
+            granted: bool,
+        }
+        let handle = app
+            .state::<tauri_plugin_android_audio::AndroidAudio<tauri::Wry>>()
+            .0
+            .clone();
+        let access: Access = handle
+            .run_mobile_plugin_async("requestAudioAccess", ())
+            .await
+            .map_err(|e| e.to_string())?;
+        if !access.granted {
+            return Err("Permission to read music was denied.".into());
+        }
+        const MUSIC: &str = "/storage/emulated/0/Music";
+        if !std::path::Path::new(MUSIC).is_dir() {
+            return Err(format!("{MUSIC} does not exist."));
+        }
+        Ok(MUSIC.into())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("only available on Android".into())
+    }
 }
 
 #[tauri::command]
@@ -198,6 +302,289 @@ pub fn library_play_all(
 ) -> Res<PlayerSnapshot> {
     let paths = le(lib.matching_tracks(SortOrder::parse(&sort), query.as_deref().unwrap_or("")))?;
     s(player.replace_queue(paths, start_index))
+}
+
+// ---------------------------------------------------------------------
+// Playlists
+// ---------------------------------------------------------------------
+
+use crate::library::{PlaylistInfo, SavedPlaylist};
+use tauri::{AppHandle, Emitter};
+
+fn playlists_changed(app: &AppHandle) {
+    if let Err(e) = app.emit("playlists://changed", ()) {
+        log::warn!("failed to emit playlists change event: {e}");
+    }
+}
+
+#[tauri::command]
+pub fn playlists_list(lib: State<'_, Arc<Library>>) -> Res<Vec<PlaylistInfo>> {
+    le(lib.playlists())
+}
+
+#[tauri::command]
+pub fn playlist_create(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    name: String,
+    track_ids: Option<Vec<i64>>,
+) -> Res<PlaylistInfo> {
+    let info = le(lib.create_playlist(&name, &track_ids.unwrap_or_default()))?;
+    playlists_changed(&app);
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn playlist_rename(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    name: String,
+) -> Res<()> {
+    le(lib.rename_playlist(id, &name))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_delete(app: AppHandle, lib: State<'_, Arc<Library>>, id: i64) -> Res<()> {
+    le(lib.delete_playlist(id))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_tracks(
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    offset: u64,
+    limit: u64,
+) -> Res<Vec<TrackRow>> {
+    le(lib.playlist_tracks(id, offset, limit))
+}
+
+#[tauri::command]
+pub fn playlist_add_tracks(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    track_ids: Vec<i64>,
+) -> Res<()> {
+    le(lib.playlist_add_tracks(id, &track_ids))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_add_album(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    album_id: i64,
+) -> Res<()> {
+    le(lib.playlist_add_album(id, album_id))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_remove(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    positions: Vec<usize>,
+) -> Res<()> {
+    le(lib.playlist_remove(id, &positions))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_move(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    id: i64,
+    from: usize,
+    to: usize,
+) -> Res<()> {
+    le(lib.playlist_move(id, from, to))?;
+    playlists_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn playlist_play(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    id: i64,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let tracks = le(lib.playlist_queue_tracks(id))?;
+    s(player.replace_queue(tracks, start_index))
+}
+
+/// Saves the current queue as a playlist. Queue entries that are not in the
+/// library are skipped; the result says how many.
+#[tauri::command]
+pub fn playlist_from_queue(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    name: String,
+) -> Res<SavedPlaylist> {
+    let paths: Vec<String> = player
+        .queue_page(0, usize::MAX)
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
+    let saved = le(lib.playlist_from_paths(&name, &paths))?;
+    playlists_changed(&app);
+    Ok(saved)
+}
+
+// ---------------------------------------------------------------------
+// App settings
+// ---------------------------------------------------------------------
+
+use crate::session::SessionStore;
+use crate::tray::TrayStatus;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    /// The user's choice: closing the window keeps the app in the tray.
+    close_to_tray: bool,
+    /// False when no tray icon could be created in this run; closing the
+    /// window then quits whatever the setting says.
+    tray_available: bool,
+    /// `"android"` or `"desktop"`; the UI adapts its layout and dialogs.
+    platform: &'static str,
+}
+
+fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
+    AppSettings {
+        close_to_tray: store.close_to_tray(),
+        tray_available: tray.available(),
+        platform: if cfg!(target_os = "android") {
+            "android"
+        } else {
+            "desktop"
+        },
+    }
+}
+
+#[tauri::command]
+pub fn app_settings(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+) -> AppSettings {
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_close_to_tray(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_close_to_tray(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+// ---------------------------------------------------------------------
+// Tag editing
+// ---------------------------------------------------------------------
+
+use crate::library::tags::{self, EditableTags, TagChanges, TagFailure};
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackTags {
+    id: i64,
+    path: String,
+    #[serde(flatten)]
+    tags: EditableTags,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagsRead {
+    tracks: Vec<TrackTags>,
+    /// Value shared by all tracks per field; null when empty or mixed.
+    common: EditableTags,
+    /// Names of the fields whose values differ between the tracks.
+    mixed: Vec<&'static str>,
+    failed: Vec<TagFailure>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagsWritten {
+    updated: usize,
+    failed: Vec<TagFailure>,
+}
+
+#[tauri::command]
+pub async fn tags_read(lib: State<'_, Arc<Library>>, track_ids: Vec<i64>) -> Res<TagsRead> {
+    let lib = Arc::clone(&lib);
+    tokio::task::spawn_blocking(move || {
+        let (read, failed) = le(tags::read_for_tracks(&lib, &track_ids))?;
+        let all: Vec<EditableTags> = read.iter().map(|t| t.tags.clone()).collect();
+        let common = tags::common_tags(&all);
+        Ok(TagsRead {
+            tracks: read
+                .into_iter()
+                .map(|t| TrackTags {
+                    id: t.id,
+                    path: t.path,
+                    tags: t.tags,
+                })
+                .collect(),
+            common: common.values,
+            mixed: common.mixed,
+            failed,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn tags_write(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    track_ids: Vec<i64>,
+    changes: TagChanges,
+) -> Res<TagsWritten> {
+    let lib = Arc::clone(&lib);
+    let player = Arc::clone(&player);
+    tokio::task::spawn_blocking(move || {
+        let current = player.current_path();
+        let outcome = le(tags::write_for_tracks(
+            &lib,
+            &track_ids,
+            &changes,
+            current.as_deref(),
+        ))?;
+        // Show the edit in the player bar and queue as well.
+        for path in &outcome.updated {
+            match lib.track_meta(path) {
+                Ok(Some(meta)) => {
+                    player.update_track_meta(path, &meta.title, &meta.artist);
+                }
+                Ok(None) => {}
+                Err(e) => log::warn!("could not read back {path}: {e}"),
+            }
+        }
+        Ok(TagsWritten {
+            updated: outcome.updated.len(),
+            failed: outcome.failed,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ---------------------------------------------------------------------

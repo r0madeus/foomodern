@@ -18,19 +18,33 @@ tauri-build = { version = "=2.7.4", features = [] }
 # Versions are pinned on purpose (see AGENTS.md). Check docs.rs for the
 # pinned version before writing code against these crates.
 [dependencies]
-tauri = { version = "=2.12.5", features = ["protocol-asset"] }
+tauri = { version = "=2.12.5", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-log = "=2.10.2"
 tauri-plugin-dialog = "=2.8.4"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 log = "=0.4.35"
 thiserror = "=2.0.21"
-libmpv2 = "=7.0.1"
 rusqlite = { version = "=0.42.0", features = ["bundled"] }
 lofty = "=0.25.5"
 walkdir = "=2.5.0"
-reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "json", "query"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "query"] }
 tokio = { version = "=1.54.1", features = ["rt"] }
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+
+# Desktop only: libmpv audio, OS media controls (SMTC / MPRIS), system TLS.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+libmpv2 = "=7.0.1"
+souvlaki = "=0.9.3"
+reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls"] }
+
+# Android: audio through Media3/ExoPlayer (Kotlin plugin), rustls with the
+# Mozilla root store (no OpenSSL to cross-compile, no JNI verifier setup).
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-audio = { path = "plugins/android-audio" }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "=1.0.10"
 
 [dev-dependencies]
 hound = "=3.5.1"

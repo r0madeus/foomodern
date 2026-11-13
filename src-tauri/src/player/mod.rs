@@ -12,7 +12,7 @@
 //! Known benign race: engine events are asynchronous, so an event produced
 //! just before a user command (e.g. a late `Idle`) can be applied after it.
 
-use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
+use crate::audio::{AudioEngine, EndReason, EngineError, EngineEvent, RemoteCommand, ReplayGain};
 use crate::queue::{EntryId, Queue, RepeatMode, Track};
 use crate::session::{SavedTrack, SessionState};
 use serde::Serialize;
@@ -58,6 +58,7 @@ pub struct PlayerSnapshot {
     pub volume: f64,
     pub shuffle: bool,
     pub repeat: RepeatMode,
+    pub replaygain: ReplayGain,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +81,7 @@ struct Inner {
     position: f64,
     duration: Option<f64>,
     volume: f64,
+    replaygain: ReplayGain,
     /// The entry currently sitting in the engine's "next" slot.
     engine_next: Option<EntryId>,
     /// True between `engine.load` and the matching non-auto `TrackStarted`.
@@ -90,11 +92,22 @@ struct Inner {
     resume_position: Option<f64>,
     /// Seek deferred until the engine finishes opening the loaded file.
     pending_load_seek: Option<f64>,
+    /// Sequence number of the last observer event built under this lock.
+    event_seq: u64,
 }
 
 pub struct Player {
     inner: Mutex<Inner>,
     observer: Observer,
+    /// Sequence number of the last event handed to the observer.
+    ///
+    /// Events are built under `inner` but delivered after it is released,
+    /// so two threads (a user command and the engine-event thread) can
+    /// deliver out of order. Delivery is serialised here and an event older
+    /// than one already delivered is dropped: the newer snapshot supersedes
+    /// it. Without this a stale "playing" snapshot could overwrite a newer
+    /// "paused" one in the UI and the OS media controls.
+    delivered_seq: Mutex<u64>,
 }
 
 fn track_info(e: &crate::queue::QueueEntry) -> TrackInfo {
@@ -116,6 +129,12 @@ fn track_info(e: &crate::queue::QueueEntry) -> TrackInfo {
 }
 
 impl Inner {
+    /// Next observer event sequence number (always increasing).
+    fn next_seq(&mut self) -> u64 {
+        self.event_seq += 1;
+        self.event_seq
+    }
+
     fn snapshot(&self) -> PlayerSnapshot {
         PlayerSnapshot {
             status: self.status,
@@ -128,6 +147,7 @@ impl Inner {
             volume: self.volume,
             shuffle: self.queue.shuffle(),
             repeat: self.queue.repeat(),
+            replaygain: self.replaygain,
         }
     }
 
@@ -188,13 +208,28 @@ impl Player {
                 position: 0.0,
                 duration: None,
                 volume: 100.0,
+                replaygain: ReplayGain::default(),
                 engine_next: None,
                 pending_load: false,
                 resume_position: None,
                 pending_load_seek: None,
+                event_seq: 0,
             }),
             observer,
+            delivered_seq: Mutex::new(0),
         }
+    }
+
+    /// Hand `event` (built under the lock with sequence `seq`) to the
+    /// observer, in order. Stale state/position events are dropped; errors
+    /// are always delivered.
+    fn deliver(&self, seq: u64, event: PlayerEvent) {
+        let mut last = self.delivered_seq.lock().unwrap_or_else(|e| e.into_inner());
+        if seq <= *last && !matches!(event, PlayerEvent::Error(_)) {
+            return;
+        }
+        *last = (*last).max(seq);
+        (self.observer)(event);
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -207,12 +242,13 @@ impl Player {
     where
         F: FnOnce(&mut Inner) -> Result<(), PlayerError>,
     {
-        let (result, snap) = {
+        let (result, snap, seq) = {
             let mut inner = self.lock();
             let r = f(&mut inner);
-            (r, inner.snapshot())
+            let seq = inner.next_seq();
+            (r, inner.snapshot(), seq)
         };
-        (self.observer)(PlayerEvent::State(snap.clone()));
+        self.deliver(seq, PlayerEvent::State(snap.clone()));
         result.map(|()| snap)
     }
 
@@ -227,6 +263,10 @@ impl Player {
             log::warn!("failed to restore volume: {e}");
         }
         s.volume = state.volume;
+        if let Err(e) = s.engine.set_replaygain(state.replaygain) {
+            log::warn!("failed to restore replaygain mode: {e}");
+        }
+        s.replaygain = state.replaygain;
         let tracks: Vec<Track> = state
             .queue
             .into_iter()
@@ -273,7 +313,34 @@ impl Player {
             queue,
             current_index,
             position_seconds,
+            replaygain: s.replaygain,
+            ..SessionState::default()
         }
+    }
+
+    /// The path of the loaded (current) queue entry, if any.
+    pub fn current_path(&self) -> Option<String> {
+        self.lock()
+            .queue
+            .current()
+            .map(|e| e.path.to_string_lossy().into_owned())
+    }
+
+    /// Refreshes the title/artist shown for queue entries playing `path`
+    /// (after its tags were edited) and publishes a new state. Returns how
+    /// many entries changed.
+    pub fn update_track_meta(&self, path: &str, title: &str, artist: &str) -> usize {
+        let key = crate::library::scan::display_path(Path::new(path));
+        let mut changed = 0;
+        let _ = self.run(|s| {
+            changed = s.queue.update_meta(
+                |p| crate::library::scan::display_path(p) == key,
+                title,
+                artist,
+            );
+            Ok(())
+        });
+        changed
     }
 
     pub fn queue_page(&self, offset: usize, limit: usize) -> Vec<TrackInfo> {
@@ -462,15 +529,33 @@ impl Player {
         })
     }
 
+    pub fn set_replaygain(&self, mode: ReplayGain) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.engine.set_replaygain(mode)?;
+            s.replaygain = mode;
+            Ok(())
+        })
+    }
+
     /// Apply an event coming from the audio engine.
     pub fn handle_engine_event(&self, event: EngineEvent) {
+        if let EngineEvent::Remote(command) = event {
+            let result = match command {
+                RemoteCommand::Next => self.next(),
+                RemoteCommand::Previous => self.previous(),
+            };
+            if let Err(e) = result {
+                log::warn!("remote {command:?} failed: {e}");
+            }
+            return;
+        }
         enum Out {
             None,
             State,
             Position(f64, Option<f64>),
             Error(String),
         }
-        let (out, snap) = {
+        let (out, snap, seq) = {
             let mut s = self.lock();
             let out = match event {
                 EngineEvent::TrackStarted {
@@ -542,16 +627,18 @@ impl Player {
                     log::warn!("audio engine: {msg}");
                     Out::Error(msg)
                 }
+                EngineEvent::Remote(_) => Out::None, // handled above
             };
-            (out, s.snapshot())
+            let seq = s.next_seq();
+            (out, s.snapshot(), seq)
         };
         match out {
             Out::None => {}
-            Out::State => (self.observer)(PlayerEvent::State(snap)),
+            Out::State => self.deliver(seq, PlayerEvent::State(snap)),
             Out::Position(seconds, duration) => {
-                (self.observer)(PlayerEvent::Position { seconds, duration })
+                self.deliver(seq, PlayerEvent::Position { seconds, duration })
             }
-            Out::Error(msg) => (self.observer)(PlayerEvent::Error(msg)),
+            Out::Error(msg) => self.deliver(seq, PlayerEvent::Error(msg)),
         }
     }
 
@@ -562,7 +649,11 @@ impl Player {
     fn on_auto_advance(s: &mut Inner, path: &Path) -> Result<(), PlayerError> {
         s.position = 0.0;
         s.duration = None;
-        s.status = Status::Playing;
+        // The track change may have been reported after the user paused at
+        // the boundary: mpv stays paused, so the player must too.
+        if s.status != Status::Paused {
+            s.status = Status::Playing;
+        }
         let idx = s
             .engine_next
             .and_then(|id| s.queue.index_of(id))
@@ -596,6 +687,7 @@ mod tests {
         Stop,
         Seek(f64),
         Volume(f64),
+        ReplayGain(ReplayGain),
     }
 
     #[derive(Clone, Default)]
@@ -637,6 +729,9 @@ mod tests {
         }
         fn set_volume(&self, v: f64) -> Result<(), EngineError> {
             self.rec(Call::Volume(v))
+        }
+        fn set_replaygain(&self, m: ReplayGain) -> Result<(), EngineError> {
+            self.rec(Call::ReplayGain(m))
         }
     }
 
@@ -833,6 +928,98 @@ mod tests {
     }
 
     #[test]
+    fn update_track_meta_changes_matching_entries_and_publishes_state() {
+        let (p, _, events) = setup();
+        let tracks = vec![
+            Track {
+                path: pb("/music/a.mp3"),
+                title: Some("Old".into()),
+                artist: Some("Old Artist".into()),
+            },
+            Track::from(pb("/music/b.mp3")),
+            Track {
+                path: pb("/music/a.mp3"),
+                title: Some("Old".into()),
+                artist: None,
+            },
+        ];
+        p.replace_queue(tracks, 1).unwrap();
+        let before = p.snapshot().queue_version;
+        events.lock().unwrap().clear();
+
+        assert_eq!(p.update_track_meta("/music/a.mp3", "New", "New Artist"), 2);
+        let page = p.queue_page(0, 3);
+        assert_eq!(
+            page.iter()
+                .map(|t| (t.title.as_str(), t.artist.as_str()))
+                .collect::<Vec<_>>(),
+            [("New", "New Artist"), ("b", ""), ("New", "New Artist")]
+        );
+        assert!(p.snapshot().queue_version > before);
+        assert!(matches!(
+            events.lock().unwrap().last(),
+            Some(PlayerEvent::State(_))
+        ));
+        assert_eq!(p.current_path().as_deref(), Some("/music/b.mp3"));
+
+        // Nothing matches: nothing changes.
+        assert_eq!(p.update_track_meta("/music/zzz.mp3", "X", "Y"), 0);
+        assert_eq!(p.update_track_meta("/music/a.mp3", "New", "New Artist"), 0);
+    }
+
+    #[test]
+    fn concurrent_updates_never_leave_a_stale_snapshot_last() {
+        // A user command and the engine-event thread build snapshots under
+        // the lock but deliver them after releasing it. The observer must
+        // still end up with the newest state (regression: the OS media
+        // controls kept showing "playing" after a pause).
+        for _ in 0..200 {
+            let (p, _, events) = setup();
+            p.replace_queue(pbs(&["a", "b"]), 0).unwrap();
+            p.handle_engine_event(started("a", false));
+            std::thread::scope(|sc| {
+                sc.spawn(|| {
+                    for _ in 0..25 {
+                        p.toggle_pause().unwrap();
+                    }
+                });
+                sc.spawn(|| {
+                    for i in 0..25 {
+                        p.handle_engine_event(EngineEvent::Duration {
+                            seconds: 100.0 + f64::from(i),
+                        });
+                    }
+                });
+            });
+            let last = events
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    PlayerEvent::State(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(last, p.snapshot());
+        }
+    }
+
+    #[test]
+    fn pausing_right_at_a_track_change_stays_paused() {
+        let (p, _, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c"]), 0).unwrap();
+        p.handle_engine_event(started("a", false));
+        p.pause().unwrap();
+        // mpv had already moved to b when the pause arrived; the event
+        // reporting it is handled afterwards.
+        p.handle_engine_event(started("b", true));
+        let snap = p.snapshot();
+        assert_eq!(snap.status, Status::Paused);
+        assert_eq!(snap.current_index, Some(1));
+    }
+
+    #[test]
     fn engine_errors_reach_the_observer() {
         let (p, _, events) = setup();
         p.handle_engine_event(EngineEvent::Error("Could not play a.mp3".into()));
@@ -924,6 +1111,25 @@ mod tests {
     }
 
     #[test]
+    fn remote_commands_move_through_the_rust_queue() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c"]), 0).unwrap();
+        calls.take();
+        p.handle_engine_event(EngineEvent::Remote(RemoteCommand::Next));
+        assert_eq!(p.snapshot().current_index, Some(1));
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Load(pb("b")),
+                Call::Play,
+                Call::SetNext(Some(pb("c")))
+            ]
+        );
+        p.handle_engine_event(EngineEvent::Remote(RemoteCommand::Previous));
+        assert_eq!(p.snapshot().current_index, Some(0));
+    }
+
+    #[test]
     fn idle_stops_but_keeps_current() {
         let (p, calls, events) = setup();
         p.replace_queue(pbs(&["a"]), 0).unwrap();
@@ -976,6 +1182,18 @@ mod tests {
         assert_eq!(p.set_volume(150.0).unwrap().volume, 100.0);
         assert_eq!(p.set_volume(-5.0).unwrap().volume, 0.0);
         assert_eq!(calls.take(), [Call::Volume(100.0), Call::Volume(0.0)]);
+    }
+
+    #[test]
+    fn replaygain_defaults_to_album_and_is_set_on_engine() {
+        let (p, calls, _) = setup();
+        assert_eq!(p.snapshot().replaygain, ReplayGain::Album);
+        let snap = p.set_replaygain(ReplayGain::Off).unwrap();
+        assert_eq!(snap.replaygain, ReplayGain::Off);
+        assert_eq!(p.export_session().replaygain, ReplayGain::Off);
+        assert_eq!(calls.take(), [Call::ReplayGain(ReplayGain::Off)]);
+        let v = serde_json::to_value(p.snapshot()).unwrap();
+        assert_eq!(v["replaygain"], "off");
     }
 
     #[test]
@@ -1095,6 +1313,8 @@ mod tests {
             ],
             current_index: Some(1),
             position_seconds: 42.5,
+            replaygain: ReplayGain::Track,
+            ..SessionState::default()
         };
         p.restore_session(saved.clone());
 
@@ -1107,7 +1327,11 @@ mod tests {
         assert_eq!(snap.position_seconds, 42.5);
         assert_eq!(snap.queue_length, 2);
         assert_eq!(p.export_session(), saved);
-        assert_eq!(calls.take(), [Call::Volume(37.0)]);
+        assert_eq!(snap.replaygain, ReplayGain::Track);
+        assert_eq!(
+            calls.take(),
+            [Call::Volume(37.0), Call::ReplayGain(ReplayGain::Track)]
+        );
 
         // Playing from stopped loads the saved track and seeks once Duration arrives.
         let snap = p.play().unwrap();
@@ -1152,6 +1376,8 @@ mod tests {
             ],
             current_index: Some(0),
             position_seconds: 30.0,
+            replaygain: ReplayGain::Album,
+            ..SessionState::default()
         });
         calls.take();
 

@@ -1,8 +1,14 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
+  import Icon from './Icon.svelte'
+  import AddToPlaylist from './AddToPlaylist.svelte'
+  import ExtBadge from './ExtBadge.svelte'
+  import { tagEditor } from './tags.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import { player, formatTime } from './player.svelte'
+  import { tintFrom } from './tint'
+  import type { Rgb } from './nowCover.svelte'
 
   let { albumId, onBack }: { albumId: number; onBack: () => void } = $props()
 
@@ -20,6 +26,22 @@
   })
 
   const currentPath = $derived(player.snapshot.current?.path ?? null)
+
+  // Header on the album cover's colour.
+  let color = $state<Rgb | null>(null)
+  $effect(() => {
+    const cover = data?.album.cover ?? null
+    color = null
+    if (cover === null) return
+    let stale = false
+    invoke<Rgb | null>('library_cover_color', { cover })
+      .then((c) => {
+        if (!stale) color = c
+      })
+      .catch(() => {})
+    return () => (stale = true)
+  })
+  const tint = $derived(tintFrom(color))
 </script>
 
 <div class="h-full overflow-y-auto px-5 pb-6">
@@ -27,29 +49,43 @@
     ← Albums
   </button>
   {#if data}
-    <div class="mb-6 flex items-end gap-6">
-      <Cover cover={data.album.cover} title={data.album.title} class="size-48 shrink-0 rounded-xl text-6xl shadow" />
+    <div
+      class="mb-6 flex items-end gap-6 rounded-2xl p-6 text-white transition-[background] duration-700"
+      style:background="linear-gradient(135deg, {tint.top}, {tint.surface})"
+    >
+      <Cover cover={data.album.cover} title={data.album.title} class="size-48 shrink-0 rounded-lg text-6xl shadow-2xl shadow-black/40" />
       <div class="min-w-0">
-        <h2 class="truncate text-2xl font-semibold tracking-tight">{data.album.title}</h2>
-        <p class="truncate text-zinc-500">{data.album.albumArtist}</p>
-        <p class="mt-1 text-sm text-zinc-400">
+        <p class="text-xs font-semibold tracking-widest text-white/70 uppercase">Album</p>
+        <h2 class="mt-1 truncate text-4xl font-bold tracking-tight">{data.album.title}</h2>
+        <p class="mt-2 truncate font-medium text-white/90">{data.album.albumArtist}</p>
+        <p class="mt-1 text-sm text-white/60">
           {data.album.year ? `${data.album.year} · ` : ''}{data.album.trackCount}
           {data.album.trackCount === 1 ? 'track' : 'tracks'}
         </p>
-        <button
-          class="mt-4 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
-          onclick={() => library.playAlbum(albumId, 0)}
-        >
-          Play
-        </button>
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400"
+            onclick={() => library.playAlbum(albumId, 0)}
+          >
+            <Icon name="play" class="size-5" /> Play
+          </button>
+          <AddToPlaylist {albumId} label="Add to playlist" text class="whitespace-nowrap text-white! hover:bg-white/10!" />
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-white/90 outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60"
+            onclick={() => tagEditor.open(data!.tracks.map((t) => t.id), 'Edit album tags')}
+          >
+            Edit tags…
+          </button>
+        </div>
       </div>
     </div>
     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
       {#each data.tracks as t, i (t.id)}
-        <li>
+        <li class="group flex items-center gap-1">
           <button
             class={[
-              'flex h-10 w-full items-center gap-3 px-3 text-left text-sm',
+              'flex h-10 min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm',
               t.path === currentPath
                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
@@ -57,11 +93,16 @@
             onclick={() => library.playAlbum(albumId, i)}
           >
             <span class="w-8 text-right text-xs tabular-nums text-zinc-400">{t.trackNo ?? i + 1}</span>
-            <span class="min-w-0 flex-1 truncate font-medium">{t.title}</span>
+            <span class="flex min-w-0 flex-1 items-center">
+              <span class="truncate font-medium">{t.title}</span><ExtBadge path={t.path} />
+            </span>
             <span class="text-xs tabular-nums text-zinc-500">
               {formatTime(t.durationMs === null ? null : t.durationMs / 1000)}
             </span>
           </button>
+          <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
+            <AddToPlaylist trackIds={[t.id]} editTags label="More actions for “{t.title}”" />
+          </span>
         </li>
       {/each}
     </ol>

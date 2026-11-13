@@ -15,9 +15,30 @@
     | 'repeatOne'
     | 'search'
     | 'upload'
+    | 'plus'
+    | 'more'
+    | 'up'
+    | 'down'
+    | 'trash'
+    | 'album'
+    | 'music'
+    | 'library'
+    | 'back'
+    | 'chevronRight'
+    | 'queue'
+    | 'settings'
+    | 'expand'
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
+    expand: 'M14 3h7v7h-2V6.41l-5.29 5.3-1.42-1.42L17.59 5H14V3ZM10 21H3v-7h2v3.59l5.29-5.3 1.42 1.42L6.41 19H10v2Z',
+    album: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 14.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-5.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z',
+    music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z',
+    library: 'M20 2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-2 5h-3v5.5a2.5 2.5 0 1 1-2.5-2.5c.57 0 1.08.19 1.5.51V5h4v2ZM4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6Z',
+    back: 'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59Z',
+    chevronRight: 'M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6Z',
+    queue: 'M15 6H3v2h12V6Zm0 4H3v2h12v-2ZM3 16h8v-2H3v2ZM17 6v8.18A3 3 0 1 0 19 17V8h3V6h-5Z',
+    settings: 'M3 17v2h6v-2H3ZM3 5v2h10V5H3Zm10 16v-2h8v-2h-8v-2h-2v6h2ZM7 9v2H3v2h4v2h2V9H7Zm14 4v-2H11v2h10Zm-6-4h2V7h4V5h-4V3h-2v6Z',
     play: 'M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14Z',
     pause: 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z',
     prev: 'M6 5h2v14H6zM19 6.2v11.6a.8.8 0 0 1-1.24.67L9.5 13a1.2 1.2 0 0 1 0-2l8.26-5.47A.8.8 0 0 1 19 6.2Z',
@@ -33,6 +54,11 @@
     repeatOne: 'M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Zm-4-2V9h-1l-2 1v1h1.5v4H13Z',
     search: 'M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
     upload: 'M12 4 7 9h3v6h4V9h3l-5-5Zm-7 13v2h14v-2H5Z',
+    plus: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z',
+    more: 'M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z',
+    up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41Z',
+    down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z',
+    trash: 'M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z',
   }
 </script>
 

@@ -1,7 +1,7 @@
 //! Integration tests against real libmpv with the `null` audio output.
 
 use foomodern_lib::audio::mpv::{MpvEngine, MpvOptions};
-use foomodern_lib::audio::{AudioEngine, EndReason, EngineError, EngineEvent};
+use foomodern_lib::audio::{AudioEngine, EndReason, EngineError, EngineEvent, ReplayGain};
 use foomodern_lib::player::{Player, PlayerEvent, Status};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -103,6 +103,22 @@ impl Log {
             })
             .collect()
     }
+}
+
+#[test]
+fn replaygain_mode_can_be_changed_at_runtime() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = write_wav(dir.path(), "rg.wav", 440.0, 2.0);
+    let (eng, rx) = engine();
+    for mode in [ReplayGain::Off, ReplayGain::Track, ReplayGain::Album] {
+        eng.set_replaygain(mode).unwrap();
+    }
+    eng.load(&a).unwrap();
+    // Changing the mode while a file is playing must not error either.
+    for mode in [ReplayGain::Track, ReplayGain::Off, ReplayGain::Album] {
+        eng.set_replaygain(mode).unwrap();
+    }
+    drop(rx);
 }
 
 #[test]
@@ -247,6 +263,9 @@ impl AudioEngine for Gated {
     }
     fn set_volume(&self, v: f64) -> Result<(), EngineError> {
         self.inner.set_volume(v)
+    }
+    fn set_replaygain(&self, m: ReplayGain) -> Result<(), EngineError> {
+        self.inner.set_replaygain(m)
     }
 }
 
