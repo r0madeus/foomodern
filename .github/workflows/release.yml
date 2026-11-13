@@ -207,24 +207,14 @@ jobs:
       - name: Generate Android project
         run: npm run tauri -- android init --ci
 
-      # With the signing secrets set, a release APK is built and signed with
-      # the same key every time, so new versions install over old ones.
-      # Without them a debug APK is published instead: its key changes on
-      # every run, so it has to be uninstalled before the next install.
+      # Always an optimised release build (a debug build is ~10x larger).
       - name: Build APK
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          set -euo pipefail
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
-            echo "APK_KIND=release" >> "$GITHUB_ENV"
-            npm run tauri -- android build --apk --target aarch64 --ci
-          else
-            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; publishing a debug APK (cannot be updated in place)."
-            echo "APK_KIND=debug" >> "$GITHUB_ENV"
-            npm run tauri -- android build --apk --target aarch64 --debug --ci
-          fi
+        run: npm run tauri -- android build --apk --target aarch64 --ci
 
+      # With the signing secrets set, the APK is signed with the same key
+      # every time, so new versions install over old ones. Without them it is
+      # signed with a throwaway key made for this run: it installs, but has
+      # to be uninstalled before the next version can be installed.
       - name: Sign APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -237,27 +227,34 @@ jobs:
           staging="$RUNNER_TEMP/android-assets"
           mkdir -p "$staging"
           name="FooModern-${RELEASE_TAG}-android-arm64"
-          if [ "$APK_KIND" = "release" ]; then
-            unsigned="$(find "$out_dir" -name '*release*.apk' | head -n 1)"
-            [ -n "$unsigned" ] || { echo "No release APK found in $out_dir"; exit 1; }
-            tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
-            ks="$RUNNER_TEMP/release.jks"
+          unsigned="$(find "$out_dir" -name '*release*.apk' | head -n 1)"
+          [ -n "$unsigned" ] || { echo "No release APK found in $out_dir"; exit 1; }
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          ks="$RUNNER_TEMP/release.jks"
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
             echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ks"
-            "$tools/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
-            "$tools/apksigner" sign \
-              --ks "$ks" \
-              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-              --ks-key-alias "$ANDROID_KEY_ALIAS" \
-              --key-pass env:ANDROID_KEY_PASSWORD \
-              --out "$staging/$name.apk" \
-              "$RUNNER_TEMP/aligned.apk"
-            "$tools/apksigner" verify "$staging/$name.apk"
-            rm -f "$ks"
+            out="$staging/$name.apk"
           else
-            debug="$(find "$out_dir" -name '*debug*.apk' | head -n 1)"
-            [ -n "$debug" ] || { echo "No debug APK found in $out_dir"; exit 1; }
-            cp "$debug" "$staging/$name-debug.apk"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; signing with a throwaway key (this APK cannot be updated in place)."
+            export ANDROID_KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
+            export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
+            export ANDROID_KEY_ALIAS=throwaway
+            keytool -genkeypair -keystore "$ks" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+              -keypass "$ANDROID_KEY_PASSWORD" -alias "$ANDROID_KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=FooModern test" >/dev/null
+            out="$staging/$name-testkey.apk"
           fi
+          "$tools/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign \
+            --ks "$ks" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$out" \
+            "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" verify "$out"
+          rm -f "$ks"
+          ls -lh "$staging"
           (cd "$staging" && sha256sum *.apk > SHA256SUMS-android.txt)
           echo "ANDROID_ASSETS=$staging" >> "$GITHUB_ENV"
 
