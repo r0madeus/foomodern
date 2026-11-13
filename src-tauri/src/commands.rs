@@ -180,3 +180,25 @@ pub fn library_play_all(
     let paths = le(lib.all_tracks(SortOrder::parse(&sort)))?;
     s(player.replace_queue(paths, start_index))
 }
+
+// ---------------------------------------------------------------------
+// Lyrics
+// ---------------------------------------------------------------------
+
+use crate::lyrics::{LyricsResult, LyricsService};
+
+#[tauri::command]
+pub async fn lyrics_for_track(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    path: String,
+    duration_seconds: Option<f64>,
+    force: bool,
+) -> Res<LyricsResult> {
+    let lib = Arc::clone(&lib);
+    let lyrics = Arc::clone(&lyrics);
+    lyrics
+        .for_track(lib, path, duration_seconds, force)
+        .await
+        .map_err(|e| e.to_string())
+}

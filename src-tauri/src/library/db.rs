@@ -1,7 +1,7 @@
 //! SQLite schema and queries. All functions take a plain `&Connection` so
 //! they can be tested without the [`super::Library`] facade.
 
-use super::{AlbumDetail, AlbumRow, FolderInfo, Result, TrackRow};
+use super::{AlbumDetail, AlbumRow, FolderInfo, Result, TrackMeta, TrackRow};
 use crate::queue::Track;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use std::path::PathBuf;
@@ -259,4 +259,25 @@ pub fn album_tracks(conn: &Connection, album_id: i64) -> Result<Vec<Track>> {
     ))?;
     let rows = st.query_map([album_id], queue_track)?;
     Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+pub fn track_meta_by_path(conn: &Connection, path: &str) -> Result<Option<TrackMeta>> {
+    conn.query_row(
+        "SELECT t.title, t.artist, COALESCE(a.title, ''), t.duration_ms
+         FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
+         WHERE t.path = ?1",
+        [path],
+        |r| {
+            Ok(TrackMeta {
+                title: r.get(0)?,
+                artist: r.get(1)?,
+                album: r.get(2)?,
+                duration_ms: r
+                    .get::<_, Option<i64>>(3)?
+                    .and_then(|n| u64::try_from(n).ok()),
+            })
+        },
+    )
+    .optional()
+    .map_err(Into::into)
 }

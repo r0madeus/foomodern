@@ -150,7 +150,7 @@ fn sniff_image_ext(data: &[u8]) -> &'static str {
     }
 }
 
-fn write_atomic(dest: &Path, data: &[u8]) -> std::io::Result<()> {
+pub fn write_atomic(dest: &Path, data: &[u8]) -> std::io::Result<()> {
     let tmp = dest.with_extension("tmp");
     std::fs::write(&tmp, data)?;
     std::fs::rename(&tmp, dest)
@@ -166,6 +166,20 @@ fn find_cover_file(dir: &Path) -> Option<PathBuf> {
         }
     }
     found.into_iter().min_by_key(|(r, _)| *r).map(|(_, p)| p)
+}
+
+pub fn read_track_meta(path: &Path) -> Option<super::TrackMeta> {
+    let tags = read_tags(path, false).ok()?;
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Some(super::TrackMeta {
+        title: tags.title.unwrap_or(stem),
+        artist: tags.artist.unwrap_or_default(),
+        album: tags.album.unwrap_or_default(),
+        duration_ms: tags.duration_ms.and_then(|ms| u64::try_from(ms).ok()),
+    })
 }
 
 struct Scanner<'a> {

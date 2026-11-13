@@ -55,6 +55,14 @@ pub struct LibraryStats {
     pub scanning: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrackMeta {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration_ms: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackRow {
@@ -215,6 +223,11 @@ impl Library {
 
     pub fn tracks_page(&self, offset: u64, limit: u64, sort: SortOrder) -> Result<Vec<TrackRow>> {
         db::tracks_page(&self.conn(), offset, limit.min(1000), sort)
+    }
+
+    pub fn track_meta(&self, path: &str) -> Result<Option<TrackMeta>> {
+        let key = scan::display_path(Path::new(path));
+        db::track_meta_by_path(&self.conn(), &key)
     }
 
     pub fn albums_page(&self, offset: u64, limit: u64) -> Result<Vec<AlbumRow>> {

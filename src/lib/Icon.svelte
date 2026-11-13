@@ -1,5 +1,15 @@
 <script lang="ts">
-  type Name = 'play' | 'pause' | 'prev' | 'next' | 'volume' | 'mute' | 'close' | 'folder'
+  type Name =
+    | 'play'
+    | 'pause'
+    | 'prev'
+    | 'next'
+    | 'volume'
+    | 'mute'
+    | 'close'
+    | 'folder'
+    | 'lyrics'
+    | 'refresh'
   let { name, class: className = 'size-5' }: { name: Name; class?: string } = $props()
 
   const paths: Record<Name, string> = {
@@ -11,6 +21,8 @@
     mute: 'M4 9.5v5h3.5L12 19V5L7.5 9.5H4Zm12.3-1.2L15 9.6l2.4 2.4-2.4 2.4 1.3 1.3 2.4-2.4 2.4 2.4 1.3-1.3-2.4-2.4 2.4-2.4-1.3-1.3-2.4 2.4-2.4-2.4Z',
     close: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6 6.4 5Z',
     folder: 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4.38l2 2H19.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11Z',
+    lyrics: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-4.5 3.5V16H5.5A1.5 1.5 0 0 1 4 14.5v-9Zm3 2v1.5h10V7.5H7Zm0 3.5v1.5h7V11H7Z',
+    refresh: 'M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z',
   }
 </script>
 

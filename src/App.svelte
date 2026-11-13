@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import PlayerBar from './lib/PlayerBar.svelte'
   import SongsView from './lib/SongsView.svelte'
   import AlbumsView from './lib/AlbumsView.svelte'
   import QueueView from './lib/QueueView.svelte'
   import FoldersView from './lib/FoldersView.svelte'
+  import LyricsPanel from './lib/LyricsPanel.svelte'
   import { player } from './lib/player.svelte'
   import { library } from './lib/library.svelte'
+  import { lyrics } from './lib/lyrics.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -50,6 +52,15 @@
   onMount(() => {
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
+  })
+
+  $effect(() => {
+    const isOpen = lyrics.open
+    const path = player.snapshot.current?.path ?? null
+    const dur = untrack(() => player.snapshot.durationSeconds)
+    untrack(() => {
+      if (isOpen || path === null) void lyrics.load(path, dur)
+    })
   })
 
   async function pickFiles(append: boolean) {
@@ -113,6 +124,10 @@
         {/if}
       </main>
     </div>
+
+    {#if lyrics.open}
+      <LyricsPanel />
+    {/if}
   </div>
 
   <PlayerBar />

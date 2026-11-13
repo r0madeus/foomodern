@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
+  import { lyrics } from './lyrics.svelte'
   import { player, formatTime } from './player.svelte'
 
   // While the user drags the seek bar we show the drag value and only send
@@ -91,6 +92,20 @@
   </div>
 
   <div class="flex items-center justify-end gap-2">
+    <button
+      class={[
+        'rounded-full p-2 transition-colors',
+        lyrics.open
+          ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950'
+          : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white',
+      ]}
+      onclick={() => lyrics.toggle()}
+      aria-pressed={lyrics.open}
+      aria-label="Lyrics"
+      title="Lyrics"
+    >
+      <Icon name="lyrics" />
+    </button>
     <button
       class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
       onclick={toggleMute}
