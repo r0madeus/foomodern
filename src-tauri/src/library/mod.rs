@@ -349,9 +349,16 @@ impl Library {
     /// Creates a playlist from file paths (e.g. the queue). Files that are
     /// not in the library are skipped and counted.
     pub fn playlist_from_paths(&self, name: &str, paths: &[String]) -> Result<SavedPlaylist> {
+        // Library paths are canonical (folders are canonicalized when added),
+        // so canonicalize here too: on Windows a path can differ only by
+        // 8.3 short names (e.g. `RUNNER~1`) or case and would not match.
         let keys: Vec<String> = paths
             .iter()
-            .map(|p| scan::display_path(Path::new(p)))
+            .map(|p| {
+                let p = Path::new(p);
+                let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+                scan::display_path(&canonical)
+            })
             .collect();
         let mut conn = self.conn();
         let found = db::track_ids_by_paths(&conn, &keys)?;
