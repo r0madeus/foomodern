@@ -1520,14 +1520,20 @@ pub async fn artist_enrich(
 }
 
 #[tauri::command]
-pub fn artist_enrich_all(
+pub async fn artist_enrich_all(
     app: AppHandle,
     lib: State<'_, Arc<Library>>,
     online: State<'_, Arc<OnlineService>>,
     force: bool,
     lang: Option<String>,
 ) -> Res<crate::online::ArtistScanProgress> {
-    online.start_artist_scan(app, Arc::clone(&lib), force, lang.as_deref() == Some("tr"))
+    let lib = Arc::clone(&lib);
+    let online = Arc::clone(&online);
+    tokio::task::spawn_blocking(move || {
+        online.start_artist_scan(app, lib, force, lang.as_deref() == Some("tr"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1547,27 +1553,43 @@ pub fn artist_enrich_cancel(online: State<'_, Arc<OnlineService>>) {
 // ---------------------------------------------------------------------
 
 #[tauri::command]
-pub fn library_home(lib: State<'_, Arc<Library>>) -> Res<crate::library::HomeFeed> {
-    le(lib.home_feed())
+pub async fn library_home(lib: State<'_, Arc<Library>>) -> Res<crate::library::HomeFeed> {
+    let lib = Arc::clone(&lib);
+    tokio::task::spawn_blocking(move || le(lib.home_feed()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn library_home_mix(
+pub async fn library_home_mix(
     lib: State<'_, Arc<Library>>,
     mix_id: String,
 ) -> Res<Option<crate::library::HomeMixDetail>> {
-    le(lib.home_mix_detail(&mix_id))
+    let lib = Arc::clone(&lib);
+    tokio::task::spawn_blocking(move || le(lib.home_mix_detail(&mix_id)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
+/// Plays a home mix. The mix is recomputed here, so the UI names the track
+/// it showed (`start_path`) instead of an index; the queue is only replaced
+/// when the mix is still available and contains that track.
 #[tauri::command]
-pub fn library_play_mix(
+pub async fn library_play_mix(
     lib: State<'_, Arc<Library>>,
     player: State<'_, Arc<Player>>,
     mix_id: String,
-    start_index: usize,
+    start_path: Option<String>,
 ) -> Res<PlayerSnapshot> {
-    let tracks = le(lib.home_mix_queue_tracks(&mix_id))?;
-    s(player.replace_queue(tracks, start_index))
+    let lib = Arc::clone(&lib);
+    let player = Arc::clone(&player);
+    tokio::task::spawn_blocking(move || {
+        let tracks = le(lib.home_mix_queue_tracks(&mix_id))?;
+        let start = crate::library::db::resolve_mix_start(&tracks, start_path.as_deref())?;
+        s(player.replace_queue(tracks, start))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

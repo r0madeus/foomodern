@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 9);
+    assert_eq!(v, 10);
 }
 
 #[test]
@@ -466,11 +466,7 @@ fn track_sort_orders_and_paging() {
 
     let rev_titles: Vec<String> = e
         .lib
-        .tracks_page(
-            0,
-            10,
-            super::SortSpec::parse("title", Some("desc")),
-        )
+        .tracks_page(0, 10, super::SortSpec::parse("title", Some("desc")))
         .unwrap()
         .into_iter()
         .map(|t| t.title)
@@ -696,7 +692,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 9);
+    assert_eq!(v, 10);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -737,7 +733,7 @@ fn migrates_a_v2_database_and_keeps_a_folder_album_whole() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -1773,7 +1769,7 @@ fn migrating_to_v8_merges_year_split_albums_and_resplits_artists() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 9);
+    assert_eq!(v, 10);
     let albums = lib.albums_page(0, 10).unwrap();
     assert_eq!(albums.len(), 1);
     assert_eq!((albums[0].year, albums[0].track_count), (Some(1994), 4));
@@ -1816,7 +1812,7 @@ fn migrating_a_v8_database_adds_tag_history() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 9);
+    assert_eq!(v, 10);
     assert_eq!(lib.folders().unwrap().len(), 1);
     let cols: Vec<String> = lib
         .conn()
@@ -1954,4 +1950,65 @@ fn home_feed_builds_dynamic_mixes_and_saves_playlist() {
     };
     assert_eq!(saved.name, "My Repeat");
     assert_eq!(saved.track_count, 3);
+}
+
+#[test]
+fn resolve_mix_start_picks_the_clicked_track_or_fails() {
+    use super::db::resolve_mix_start;
+    use crate::queue::Track;
+    let track = |p: &str| Track {
+        path: PathBuf::from(p),
+        title: None,
+        artist: None,
+    };
+    let mix = [track("/m/a.flac"), track("/m/b.flac"), track("/m/c.flac")];
+
+    assert!(resolve_mix_start(&[], None).is_err());
+    assert!(resolve_mix_start(&[], Some("/m/a.flac")).is_err());
+    assert_eq!(resolve_mix_start(&mix, None), Ok(0));
+    assert_eq!(resolve_mix_start(&mix, Some("/m/c.flac")), Ok(2));
+    assert!(resolve_mix_start(&mix, Some("/m/gone.flac")).is_err());
+}
+
+#[test]
+fn migrating_a_v9_database_adds_the_listen_path_index() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db_path = tmp.path().join("library.sqlite3");
+    let covers = tmp.path().join("covers");
+    {
+        let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+        lib.conn()
+            .execute_batch("DROP INDEX listen_events_path; PRAGMA user_version = 9;")
+            .unwrap();
+    }
+    let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+    let n: i64 = lib
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_index_list('listen_events') WHERE name = 'listen_events_path'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(n, 1);
+}
+
+#[test]
+fn all_artist_names_merges_spellings_that_differ_only_in_case() {
+    let e = env();
+    let conn = e.lib.conn();
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO folders(id, path) VALUES (1, '/m');
+         INSERT INTO tracks(id, folder_id, path, title, artist, added_at, mtime, size)
+         VALUES (9001, 1, '/m/case1', 'a', 'Foo', 0, 0, 0), (9002, 1, '/m/case2', 'b', 'foo', 0, 0, 0);
+         INSERT INTO track_artists(track_id, artist, position) VALUES (9001, 'Foo', 0), (9002, 'foo', 0);",
+    )
+    .unwrap();
+    drop(conn);
+    let names = e.lib.all_artist_names().unwrap();
+    let foos = names
+        .iter()
+        .filter(|n| n.eq_ignore_ascii_case("foo"))
+        .count();
+    assert_eq!(foos, 1, "{names:?}");
 }

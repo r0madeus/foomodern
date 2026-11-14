@@ -734,7 +734,7 @@ impl OnlineService {
                 .unwrap_or_default()
         });
 
-        let (image, bio) = self
+        let (image, bio, _complete) = self
             .fetch_artist_image_and_bio(&client, q, prefer_tr, need_image, need_bio)
             .await;
         let raw_albums = h_alb.await.ok().unwrap_or_default();
@@ -760,6 +760,9 @@ impl OnlineService {
         }
     }
 
+    /// Returns `(image, bio, complete)`. `complete` is false when a lookup
+    /// hit a transport error, a rate limit or a server error, so the absence
+    /// of a result says nothing about the artist.
     async fn fetch_artist_image_and_bio(
         &self,
         client: &reqwest::Client,
@@ -767,7 +770,7 @@ impl OnlineService {
         prefer_tr: bool,
         need_image: bool,
         need_bio: bool,
-    ) -> (Option<String>, Option<String>) {
+    ) -> (Option<String>, Option<String>, bool) {
         let c1 = client.clone();
         let c2 = client.clone();
         let q1 = q.to_owned();
@@ -775,24 +778,29 @@ impl OnlineService {
 
         let h_img = tokio::task::spawn(async move {
             if !need_image {
-                return None;
+                return Ok(None);
             }
             fetch_deezer_artist_image(&c1, &q1).await
         });
         let h_bio = tokio::task::spawn(async move {
             if !need_bio {
-                return None;
+                return (None, true);
             }
             fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
         });
 
-        let img_url = h_img.await.ok().flatten();
-        let bio = h_bio.await.ok().flatten();
-        let image = match img_url {
-            Some(url) => ensure_cached_cover(client, &self.covers_dir, &url).await,
-            None => None,
+        let img_lookup = h_img.await.unwrap_or(Err(()));
+        let (bio, bio_complete) = h_bio.await.unwrap_or((None, false));
+        let mut complete = bio_complete && img_lookup.is_ok();
+        let image = match img_lookup {
+            Ok(Some(url)) => {
+                let cached = ensure_cached_cover(client, &self.covers_dir, &url).await;
+                complete &= cached.is_some();
+                cached
+            }
+            _ => None,
         };
-        (image, bio)
+        (image, bio, complete)
     }
 
     pub fn artist_scan_status(&self) -> ArtistScanProgress {
@@ -819,16 +827,32 @@ impl OnlineService {
         self.net
             .require(Feature::ArtistInfo)
             .map_err(str::to_owned)?;
+        // Check and claim under one lock acquisition so two quick calls
+        // cannot both start a scan.
         {
-            let guard = self.artist_scan_status.lock().unwrap();
-            if guard.scanning {
-                return Ok(guard.clone());
+            let mut status = self
+                .artist_scan_status
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if status.scanning {
+                return Ok(status.clone());
             }
+            *status = ArtistScanProgress {
+                scanning: true,
+                ..ArtistScanProgress::default()
+            };
+            self.artist_scan_cancel.store(false, Ordering::SeqCst);
         }
+        // Resets `scanning` (and publishes the final state) however this
+        // function or the spawned task ends, including a panic.
+        let guard = ScanGuard {
+            status: Arc::clone(&self.artist_scan_status),
+            app: app.clone(),
+        };
 
         let names = lib.all_artist_names().map_err(|e| e.to_string())?;
         let now = unix_now();
-        let mut targets: Vec<(String, Option<String>, Option<String>, bool, bool)> = Vec::new();
+        let mut targets: Vec<ScanTarget> = Vec::new();
         for name in names {
             let trimmed = name.trim();
             if trimmed.is_empty() {
@@ -845,42 +869,36 @@ impl OnlineService {
             let need_image = force || image_missing || (cached_image.is_none() && !fresh);
             let need_bio = force || (cached_bio.is_none() && !fresh);
             if need_image || need_bio {
-                targets.push((
-                    trimmed.to_owned(),
+                targets.push(ScanTarget {
+                    name: trimmed.to_owned(),
                     cached_image,
                     cached_bio,
                     need_image,
                     need_bio,
-                ));
+                });
             }
         }
 
         if targets.is_empty() {
             let done = ArtistScanProgress::default();
-            if let Ok(mut guard) = self.artist_scan_status.lock() {
-                *guard = done.clone();
-            }
-            let _ = app.emit("artist://scan", &done);
+            self.publish_artist_scan(&app, done.clone());
             return Ok(done);
         }
 
-        self.artist_scan_cancel.store(false, Ordering::SeqCst);
         let initial = ArtistScanProgress {
             scanning: true,
             done: 0,
             total: targets.len() as u32,
             updated: 0,
-            current_artist: Some(targets[0].0.clone()),
+            current_artist: Some(targets[0].name.clone()),
             cancelled: false,
             error: None,
         };
-        if let Ok(mut guard) = self.artist_scan_status.lock() {
-            *guard = initial.clone();
-        }
-        let _ = app.emit("artist://scan", &initial);
+        self.publish_artist_scan(&app, initial.clone());
 
         let service = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
+            let _guard = guard;
             service.run_artist_scan(app, lib, targets, prefer_tr).await;
         });
 
@@ -891,7 +909,7 @@ impl OnlineService {
         &self,
         app: AppHandle,
         lib: Arc<Library>,
-        targets: Vec<(String, Option<String>, Option<String>, bool, bool)>,
+        targets: Vec<ScanTarget>,
         prefer_tr: bool,
     ) {
         let total = targets.len() as u32;
@@ -900,9 +918,14 @@ impl OnlineService {
         let mut cancelled = false;
         let mut error: Option<String> = None;
 
-        for (idx, (name, cached_image, cached_bio, need_img, need_bio)) in
-            targets.into_iter().enumerate()
-        {
+        for (idx, target) in targets.into_iter().enumerate() {
+            let ScanTarget {
+                name,
+                cached_image,
+                cached_bio,
+                need_image: need_img,
+                need_bio,
+            } = target;
             if self.artist_scan_cancel.load(Ordering::SeqCst) {
                 cancelled = true;
                 break;
@@ -924,13 +947,17 @@ impl OnlineService {
                 },
             );
 
-            let (img, bio) = self
+            let (img, bio, complete) = self
                 .fetch_artist_image_and_bio(&client, &name, prefer_tr, need_img, need_bio)
                 .await;
             let got_new = img.is_some() || bio.is_some();
             let final_image = img.or(cached_image);
             let final_bio = bio.or(cached_bio);
-            let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
+            // Saving stamps `fetched_at`; only do that when the lookups
+            // really completed, so failures are retried by the next scan.
+            if complete {
+                let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
+            }
 
             done += 1;
             if got_new {
@@ -975,6 +1002,37 @@ impl OnlineService {
             *guard = progress.clone();
         }
         let _ = app.emit("artist://scan", &progress);
+    }
+}
+
+/// One artist queued for the background scan.
+struct ScanTarget {
+    name: String,
+    cached_image: Option<String>,
+    cached_bio: Option<String>,
+    need_image: bool,
+    need_bio: bool,
+}
+
+/// Ends a scan: if the status still says `scanning` when this drops (early
+/// return or panic), it is reset and a final `artist://scan` event goes out.
+struct ScanGuard {
+    status: Arc<Mutex<ArtistScanProgress>>,
+    app: AppHandle,
+}
+
+impl Drop for ScanGuard {
+    fn drop(&mut self) {
+        let final_state = {
+            let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
+            if !status.scanning {
+                return;
+            }
+            status.scanning = false;
+            status.current_artist = None;
+            status.clone()
+        };
+        let _ = self.app.emit("artist://scan", &final_state);
     }
 }
 
@@ -1065,36 +1123,45 @@ fn trim_bio(text: &str, max_chars: usize) -> String {
     format!("{}…", prefix.trim_end())
 }
 
-async fn fetch_deezer_artist_image(client: &reqwest::Client, artist: &str) -> Option<String> {
+/// `Err(())` means the lookup did not complete (transport or HTTP failure);
+/// `Ok(None)` is a genuine "nothing found" answer.
+async fn fetch_deezer_artist_image(
+    client: &reqwest::Client,
+    artist: &str,
+) -> Result<Option<String>, ()> {
     let resp = client
         .get("https://api.deezer.com/search/artist")
         .query(&[("q", artist), ("limit", "5")])
         .send()
         .await
-        .ok()?;
+        .map_err(|_| ())?;
     if !resp.status().is_success() {
-        return None;
+        return Err(());
     }
-    let text = resp.text().await.ok()?;
-    parse_deezer_artist_image(&text, artist)
+    let text = resp.text().await.map_err(|_| ())?;
+    Ok(parse_deezer_artist_image(&text, artist))
 }
 
+/// Returns the bio and whether every lookup that mattered completed.
 async fn fetch_wikipedia_bio(
     client: &reqwest::Client,
     artist: &str,
     prefer_tr: bool,
-) -> Option<String> {
+) -> (Option<String>, bool) {
     let langs: &[(&str, &str)] = if prefer_tr {
         &[("tr", "müzik"), ("en", "musician band singer")]
     } else {
         &[("en", "musician band singer")]
     };
+    let mut complete = true;
     for (lang, hint) in langs {
-        if let Some(bio) = fetch_wiki_for_lang(client, lang, artist, hint).await {
-            return Some(bio);
+        let (bio, ok) = fetch_wiki_for_lang(client, lang, artist, hint).await;
+        if bio.is_some() {
+            return (bio, true);
         }
+        complete &= ok;
     }
-    None
+    (None, complete)
 }
 
 async fn fetch_wiki_for_lang(
@@ -1102,11 +1169,12 @@ async fn fetch_wiki_for_lang(
     lang: &str,
     artist: &str,
     hint: &str,
-) -> Option<String> {
+) -> (Option<String>, bool) {
+    let mut complete = true;
     // First try direct summary; if ambiguous/non-musician, fall back to Wiki search + hint.
     let mut candidates = vec![artist.to_owned()];
     let search_q = format!("{artist} {hint}");
-    if let Ok(resp) = client
+    let search = client
         .get(format!("https://{lang}.wikipedia.org/w/api.php"))
         .query(&[
             ("action", "query"),
@@ -1116,38 +1184,50 @@ async fn fetch_wiki_for_lang(
             ("format", "json"),
         ])
         .send()
-        .await
-        && resp.status().is_success()
-        && let Ok(text) = resp.text().await
-        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
-        && let Some(items) = val.pointer("/query/search").and_then(|v| v.as_array())
-    {
-        for item in items {
-            if let Some(title) = item.get("title").and_then(|v| v.as_str())
-                && !candidates.iter().any(|c| c.eq_ignore_ascii_case(title))
+        .await;
+    match search {
+        Ok(resp) if resp.status().is_success() => {
+            if let Ok(text) = resp.text().await
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
+                && let Some(items) = val.pointer("/query/search").and_then(|v| v.as_array())
             {
-                candidates.push(title.to_owned());
+                for item in items {
+                    if let Some(title) = item.get("title").and_then(|v| v.as_str())
+                        && !candidates.iter().any(|c| c.eq_ignore_ascii_case(title))
+                    {
+                        candidates.push(title.to_owned());
+                    }
+                }
+            } else {
+                complete = false;
             }
         }
+        _ => complete = false,
     }
 
     for title in candidates.into_iter().take(4) {
         let slug = url_encode_segment(&title.replace(' ', "_"));
         let url = format!("https://{lang}.wikipedia.org/api/rest_v1/page/summary/{slug}");
         let Ok(resp) = client.get(&url).send().await else {
+            complete = false;
             continue;
         };
         if !resp.status().is_success() {
+            // 404 is a genuine "no such page"; anything else (429, 5xx) is not.
+            if resp.status() != reqwest::StatusCode::NOT_FOUND {
+                complete = false;
+            }
             continue;
         }
         let Ok(body) = resp.text().await else {
+            complete = false;
             continue;
         };
         if let Some(bio) = parse_wikipedia_bio(&body) {
-            return Some(bio);
+            return (Some(bio), true);
         }
     }
-    None
+    (None, complete)
 }
 
 fn url_encode_segment(s: &str) -> String {
