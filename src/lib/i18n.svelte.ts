@@ -530,4 +530,28 @@ const TR: Record<string, string> = {
   'Albums in library': 'Kütüphanendeki albümler',
   'More albums (Online)': 'Diğer albümler (Çevrimiçi)',
   'All tracks': 'Tüm şarkılar',
+  Home: 'Ana Menü',
+  'Daily Mixes': 'Senin İçin Karışımlar',
+  'Weekly Favorites': 'Haftanın Favorileri',
+  'Most played and finished over the last 7 days':
+    'Son 7 günde en çok dinlenen ve tamamlananlar',
+  'On Repeat': 'Tekrar Tekrar',
+  'Songs you kept coming back to this month': 'Bu ay dönüp dönüp çaldığın şarkılar',
+  Rediscover: 'Yeniden Keşfet',
+  "Favorites and past listens you haven't played lately":
+    'Son zamanlarda çalmadığın favoriler ve eski dinlemelerin',
+  '{name} Mix': '{name} Karışımı',
+  'Inspired by what you played most lately': 'Son günlerde en çok dinlediklerinden esinlendi',
+  'Recently played': 'Son çalınanlar',
+  'Recently played tracks': 'Son çalınan şarkılar',
+  'See all': 'Tümünü gör',
+  'Mix saved as playlist “{name}”': 'Karışım “{name}” adıyla kaydedildi',
+  'Mix could not be loaded.': 'Karışım yüklenemedi.',
+  'Start playing some songs to unlock personalized mixes and recent history.':
+    'Kişisel karışımların ve son dinlediklerinin oluşması için birkaç şarkı çal.',
+  'Quick access': 'Hızlı erişim',
+  'Dynamic mix': 'Dinamik karışım',
+  'Good morning': 'Günaydın',
+  'Good afternoon': 'İyi günler',
+  'Good evening': 'İyi akşamlar',
 }

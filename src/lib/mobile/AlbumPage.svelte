@@ -72,7 +72,7 @@
     {/if}
   </header>
 
-  <div class="min-h-0 flex-1 overflow-y-auto pb-6" onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}>
+  <div class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]" onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}>
     {#if data}
       <div class="relative isolate overflow-hidden px-4 pt-16 pb-4">
         <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)" />

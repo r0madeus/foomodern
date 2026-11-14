@@ -8,6 +8,8 @@
   import { library, PagedRows, type Sort } from '../library.svelte'
   import { player } from '../player.svelte'
 
+  let { onBack }: { onBack?: () => void } = $props()
+
   const ROW = 64
   const SORTS: { value: Sort; label: string }[] = [
     { value: 'artist', label: 'Artist' },
@@ -41,7 +43,7 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <PageHeader title={t("Songs")}>
+  <PageHeader title={t("Songs")} {onBack}>
     {#snippet actions()}
       {#if total > 0}
         <button
@@ -70,7 +72,7 @@
       {/each}
     </div>
     {#key sort}
-      <VirtualList class="min-h-0 flex-1 pb-2" count={total} rowHeight={ROW} onRangeChange={(s, e) => rows.ensureRange(s, e)}>
+      <VirtualList class="min-h-0 flex-1 pb-[var(--mobile-bar-clear,5rem)]" count={total} rowHeight={ROW} onRangeChange={(s, e) => rows.ensureRange(s, e)}>
         {#snippet row(i)}
           {@const track = rows.get(i)}
           {#if track}

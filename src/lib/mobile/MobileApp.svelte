@@ -6,12 +6,13 @@
   import Icon from '../Icon.svelte'
   import { motionDuration } from '../motion'
   import MobileSheet from './MobileSheet.svelte'
-  import EmptyLibrary from '../EmptyLibrary.svelte'
   import FoldersView from '../FoldersView.svelte'
   import SettingsView from '../SettingsView.svelte'
   import LyricsScreen from './LyricsScreen.svelte'
   import PageHeader from './PageHeader.svelte'
-  import AlbumGrid from './AlbumGrid.svelte'
+  import HomeTab from './HomeTab.svelte'
+  import AlbumsPage from './AlbumsPage.svelte'
+  import MixPage from './MixPage.svelte'
   import AlbumPage from './AlbumPage.svelte'
   import ArtistPage from './ArtistPage.svelte'
   import ArtistsPage from './ArtistsPage.svelte'
@@ -28,16 +29,20 @@
   import { updates } from '../updates.svelte'
   import { pushLayer, popLayer, clearLayers, replaceTopLayers } from './layers'
   import { artists } from '../artists.svelte'
+  import { home } from '../home.svelte'
   import { player } from '../player.svelte'
   import { library } from '../library.svelte'
   import { lyrics } from '../lyrics.svelte'
   import { playlists } from '../playlists.svelte'
 
-  // The phone UI: four tabs, pages pushed on top of them, a mini player and
-  // a full-screen player. Every pushed screen is a history entry so the
-  // Android back button closes it.
-  type Tab = 'home' | 'songs' | 'search' | 'library'
+  // The phone UI: three primary tabs, pages pushed on top of them, a
+  // floating translucent bottom bar with mini player, and full-screen player.
+  // Every pushed screen is a history entry so the Android back button closes it.
+  type Tab = 'home' | 'search' | 'library'
   type Sheet =
+    | { type: 'albums' }
+    | { type: 'songs' }
+    | { type: 'mix'; id: string }
     | { type: 'album'; id: number }
     | { type: 'artist'; name: string }
     | { type: 'playlist'; id: number }
@@ -46,9 +51,8 @@
     | { type: 'stats' }
     | { type: 'page'; page: 'folders' | 'settings' }
 
-  const TABS: { id: Tab; label: string; icon: 'album' | 'music' | 'search' | 'library' }[] = [
-    { id: 'home', label: 'Albums', icon: 'album' },
-    { id: 'songs', label: 'Songs', icon: 'music' },
+  const TABS: { id: Tab; label: string; icon: 'home' | 'search' | 'library' }[] = [
+    { id: 'home', label: 'Home', icon: 'home' },
     { id: 'search', label: 'Search', icon: 'search' },
     { id: 'library', label: 'Library', icon: 'library' },
   ]
@@ -76,6 +80,9 @@
       sheets = sheets.slice(0, -1)
     })
   }
+  const openAlbums = () => pushSheet({ type: 'albums' })
+  const openSongs = () => pushSheet({ type: 'songs' })
+  const openMix = (id: string) => pushSheet({ type: 'mix', id })
   const openAlbum = (id: number) => pushSheet({ type: 'album', id })
   const openArtist = (name: string) => pushSheet({ type: 'artist', name })
   const openPlaylist = (id: number) => pushSheet({ type: 'playlist', id })
@@ -123,13 +130,20 @@
 
   onMount(() => {
     lyrics.setOpen(false) // the desktop side panel state is not a phone screen
+    home.init().catch((e) => (player.error = String(e)))
     void applyInsets()
     window.addEventListener('resize', applyInsets)
     return () => window.removeEventListener('resize', applyInsets)
   })
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-50" style:padding-top="var(--inset-top)">
+<div
+  class="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-50"
+  style:padding-top="var(--inset-top)"
+  style:--mobile-bar-clear={player.snapshot.current
+    ? 'calc(8.75rem + var(--inset-bottom, 0px))'
+    : 'calc(4.75rem + var(--inset-bottom, 0px))'}
+>
   {#if updates.available}
     <div class="mx-3 mt-2 shrink-0"><UpdateBanner /></div>
   {/if}
@@ -143,22 +157,23 @@
     {#key tab}
       <div class="animate-view-enter h-full">
         {#if tab === 'home'}
-          <div class="flex h-full flex-col">
-            <PageHeader title={t('Albums')} />
-            {#if library.stats.albums === 0}
-              <EmptyLibrary />
-            {:else}
-              <AlbumGrid onOpen={openAlbum} />
-            {/if}
-          </div>
-        {:else if tab === 'songs'}
-          <SongsTab />
+          <HomeTab
+            onOpenAlbum={openAlbum}
+            onOpenPlaylist={openPlaylist}
+            onOpenMix={openMix}
+            onOpenFavorites={openFavorites}
+            onOpenAlbums={openAlbums}
+            onOpenSongs={openSongs}
+            onOpenStats={openStats}
+          />
         {:else if tab === 'search'}
           <SearchTab onOpenAlbum={openAlbum} />
         {:else}
           <LibraryTab
             onOpenPlaylist={openPlaylist}
             onOpenFavorites={openFavorites}
+            onOpenSongs={openSongs}
+            onOpenAlbums={openAlbums}
             onOpenArtists={openArtists}
             onOpenStats={openStats}
             onOpenPage={openPage}
@@ -172,10 +187,18 @@
         {#if sheet.type === 'page'}
           <div class="absolute inset-0 flex flex-col bg-zinc-950">
             <PageHeader title={t(sheet.page === 'folders' ? 'Music folders' : 'Settings')} onBack={popLayer} />
-            <div class="min-h-0 flex-1 overflow-y-auto">
+            <div class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]">
               {#if sheet.page === 'folders'}<FoldersView />{:else}<SettingsView />{/if}
             </div>
           </div>
+        {:else if sheet.type === 'albums'}
+          <AlbumsPage onBack={popLayer} onOpenAlbum={openAlbum} />
+        {:else if sheet.type === 'songs'}
+          <div class="absolute inset-0 flex flex-col bg-zinc-950">
+            <SongsTab onBack={popLayer} />
+          </div>
+        {:else if sheet.type === 'mix'}
+          <MixPage id={sheet.id} onBack={popLayer} />
         {:else if sheet.type === 'favorites'}
           <FavoritesPage onBack={popLayer} />
         {:else if sheet.type === 'artists'}
@@ -196,28 +219,37 @@
       <p
         role="status"
         transition:fly={{ y: 12, duration: motionDuration(180) }}
-        class="pointer-events-none absolute inset-x-4 bottom-3 z-30 rounded-lg bg-zinc-100 px-3 py-2.5 text-sm text-zinc-900 shadow-lg"
+        style:bottom="calc(var(--mobile-bar-clear, 4.75rem) + 0.5rem)"
+        class="pointer-events-none absolute inset-x-4 z-30 rounded-lg bg-zinc-100 px-3 py-2.5 text-sm text-zinc-900 shadow-lg"
       >
         {playlists.notice}
       </p>
     {/if}
-  </main>
 
-  <div class="shrink-0 bg-gradient-to-t from-black via-black/95 to-black/0 pt-1" style:padding-bottom="var(--inset-bottom)">
-    <MiniPlayer onOpen={openPlayer} />
-    <nav aria-label="Main" class="grid grid-cols-4">
-      {#each TABS as entry (entry.id)}
-        <button
-          class={['flex flex-col items-center gap-1 pt-2 pb-2.5 text-[11px]', tab === entry.id ? 'text-white' : 'text-zinc-400']}
-          aria-current={tab === entry.id ? 'page' : undefined}
-          onclick={() => selectTab(entry.id)}
+    <div
+      class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-zinc-950 via-zinc-950/90 via-60% to-transparent pt-8"
+      style:padding-bottom="var(--inset-bottom)"
+    >
+      <div class="pointer-events-auto">
+        <MiniPlayer onOpen={openPlayer} />
+        <nav
+          aria-label="Main"
+          class="grid grid-cols-3 bg-gradient-to-t from-black/85 via-black/55 to-transparent backdrop-blur-md"
         >
-          <Icon name={entry.icon} class="size-6" />
-          {t(entry.label)}
-        </button>
-      {/each}
-    </nav>
-  </div>
+          {#each TABS as entry (entry.id)}
+            <button
+              class={['flex flex-col items-center gap-1 pt-2 pb-2.5 text-[11px] transition-colors', tab === entry.id ? 'text-white' : 'text-zinc-400']}
+              aria-current={tab === entry.id ? 'page' : undefined}
+              onclick={() => selectTab(entry.id)}
+            >
+              <Icon name={entry.icon} class="size-6" />
+              {t(entry.label)}
+            </button>
+          {/each}
+        </nav>
+      </div>
+    </div>
+  </main>
 
   {#if playerOpen}
     <NowPlaying onClose={popLayer} onQueue={openQueue} onLyrics={openLyrics} />

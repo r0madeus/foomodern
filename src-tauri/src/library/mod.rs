@@ -229,6 +229,44 @@ pub struct ListeningStats {
     pub available_years: Vec<i32>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicMix {
+    pub id: String,
+    pub kind: String,
+    pub title_key: String,
+    pub subject: Option<String>,
+    pub subtitle_key: String,
+    pub track_count: u32,
+    pub album_covers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentTrack {
+    pub track: TrackRow,
+    pub started_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeFeed {
+    pub recently_played_albums: Vec<AlbumRow>,
+    pub recently_played_tracks: Vec<RecentTrack>,
+    pub recently_added_albums: Vec<AlbumRow>,
+    pub favorite_tracks: Vec<TrackRow>,
+    pub favorite_count: u64,
+    pub mixes: Vec<DynamicMix>,
+    pub has_history: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeMixDetail {
+    pub mix: DynamicMix,
+    pub tracks: Vec<TrackRow>,
+}
+
 /// Result of importing an M3U playlist.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -787,6 +825,24 @@ impl Library {
 
     pub fn delete_tag_history_row(&self, id: i64) -> Result<()> {
         db::delete_tag_history_row(&self.conn(), id)
+    }
+
+    /// Home overview feed: recent albums & tracks, favorites, recently added,
+    /// and local rule-based dynamic mixes.
+    pub fn home_feed(&self) -> Result<HomeFeed> {
+        db::home_feed(&self.conn(), unix_now())
+    }
+
+    pub fn home_mix_detail(&self, mix_id: &str) -> Result<Option<HomeMixDetail>> {
+        db::home_mix_detail(&self.conn(), mix_id, unix_now())
+    }
+
+    pub fn home_mix_queue_tracks(&self, mix_id: &str) -> Result<Vec<Track>> {
+        db::home_mix_queue_tracks(&self.conn(), mix_id, unix_now())
+    }
+
+    pub fn save_mix_as_playlist(&self, mix_id: &str, name: &str) -> Result<PlaylistInfo> {
+        db::save_mix_as_playlist(&mut self.conn(), mix_id, name, unix_now())
     }
 
     pub fn tag_history_batch(&self, batch_id: i64) -> Result<Vec<db::TagHistoryRow>> {

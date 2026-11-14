@@ -42,7 +42,7 @@
       {/if}
     {/snippet}
   </PageHeader>
-  <div class="min-h-0 flex-1 overflow-y-auto pb-6">
+  <div class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]">
     {#if info}
       <div class="flex flex-col items-center px-4 pt-2 pb-4">
         <button

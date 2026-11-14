@@ -3,9 +3,9 @@
 
 use super::{
     AlbumDetail, AlbumRow, ArtistMeta, ArtistProfile, ArtistRow, ArtistTopTrack, BucketStat,
-    FavoriteRef, FolderInfo, ListeningStats, NewListenEvent, Page, PlaylistInfo, RecentListen,
-    Result, StatsSummary, TopAlbumStat, TopArtistStat, TopGenreStat, TopTrackStat, TrackMeta,
-    TrackRow,
+    DynamicMix, FavoriteRef, FolderInfo, HomeFeed, HomeMixDetail, ListeningStats, NewListenEvent,
+    Page, PlaylistInfo, RecentListen, RecentTrack, Result, StatsSummary, TopAlbumStat,
+    TopArtistStat, TopGenreStat, TopTrackStat, TrackMeta, TrackRow,
 };
 use crate::queue::Track;
 use rusqlite::types::Value;
@@ -2064,4 +2064,429 @@ pub fn set_album_cover(conn: &Connection, album_id: i64, cover: &str) -> Result<
         rusqlite::params![cover, album_id],
     )?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------
+// Home feed & local rule-based dynamic mixes
+// ---------------------------------------------------------------------
+
+const SECS_PER_DAY: i64 = 86_400;
+const MIN_MIX_TRACKS: usize = 3;
+const MIX_LIMIT: i64 = 25;
+
+const MIX_WEEKLY_FAVORITES: &str = "weekly-favorites";
+const MIX_ON_REPEAT: &str = "on-repeat";
+const MIX_REDISCOVER: &str = "rediscover";
+const MIX_FOCUS: &str = "focus-mix";
+
+fn mix_album_covers(tracks: &[TrackRow]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut covers = Vec::with_capacity(4);
+    for t in tracks {
+        if let Some(c) = t.cover.as_deref()
+            && !c.is_empty()
+            && seen.insert(c.to_string())
+        {
+            covers.push(c.to_string());
+            if covers.len() == 4 {
+                break;
+            }
+        }
+    }
+    covers
+}
+
+fn build_mix_meta(
+    id: &str,
+    kind: &str,
+    title_key: &str,
+    subject: Option<String>,
+    subtitle_key: &str,
+    tracks: &[TrackRow],
+) -> DynamicMix {
+    DynamicMix {
+        id: id.to_string(),
+        kind: kind.to_string(),
+        title_key: title_key.to_string(),
+        subject,
+        subtitle_key: subtitle_key.to_string(),
+        track_count: u32::try_from(tracks.len()).unwrap_or(u32::MAX),
+        album_covers: mix_album_covers(tracks),
+    }
+}
+
+fn daily_rank(track_id: i64, day_seed: i64) -> u64 {
+    let mut x = (track_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        ^ (day_seed as u64).wrapping_add(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+fn has_listen_history(conn: &Connection) -> Result<bool> {
+    let exists: bool = conn.query_row(
+        &format!("SELECT EXISTS(SELECT 1 FROM listen_events e WHERE {PLAY_EXPR} = 1)"),
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(exists)
+}
+
+fn recently_played_tracks(conn: &Connection, limit: i64) -> Result<Vec<RecentTrack>> {
+    let sql = format!(
+        "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''), t.album_id,
+                t.track_no, t.disc_no, t.year, t.duration_ms, t.path, a.cover,
+                MAX(e.started_at) AS last_started
+         FROM listen_events e
+         LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+         JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+         LEFT JOIN albums a ON a.id = t.album_id
+         WHERE {PLAY_EXPR} = 1
+         GROUP BY t.id
+         ORDER BY last_started DESC, t.id DESC
+         LIMIT ?1"
+    );
+    let mut st = conn.prepare(&sql)?;
+    let rows = st.query_map([limit], |r| {
+        Ok(RecentTrack {
+            track: track_row(r)?,
+            started_at: r.get(11)?,
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+fn recently_played_albums(conn: &Connection, limit: i64) -> Result<Vec<AlbumRow>> {
+    let mut st = conn.prepare(&format!(
+        "SELECT a.id, a.title, a.album_artist, a.year,
+                (SELECT COUNT(*) FROM tracks WHERE album_id = a.id), a.cover
+         FROM listen_events e
+         LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+         JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+         JOIN albums a ON a.id = t.album_id
+         WHERE {PLAY_EXPR} = 1
+         GROUP BY a.id
+         ORDER BY MAX(e.started_at) DESC, a.id DESC
+         LIMIT ?1"
+    ))?;
+    let rows = st.query_map([limit], album_row)?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+fn recently_added_albums(conn: &Connection, limit: i64) -> Result<Vec<AlbumRow>> {
+    let mut st = conn.prepare(&format!(
+        "{ALBUM_SELECT}
+         ORDER BY (SELECT COALESCE(MAX(t.added_at), 0) FROM tracks t WHERE t.album_id = a.id) DESC,
+                  a.id DESC
+         LIMIT ?1"
+    ))?;
+    let rows = st.query_map([limit], album_row)?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+fn weekly_favorites_tracks(conn: &Connection, now: i64) -> Result<Vec<TrackRow>> {
+    let since = now.saturating_sub(7 * SECS_PER_DAY);
+    let sql = format!(
+        "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''), t.album_id,
+                t.track_no, t.disc_no, t.year, t.duration_ms, t.path, a.cover
+         FROM listen_events e
+         LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+         JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+         LEFT JOIN albums a ON a.id = t.album_id
+         WHERE e.started_at >= ?1
+         GROUP BY t.id
+         HAVING SUM(
+             e.completed * 3.0
+             + MIN(e.listened_ms, 600000) / 30000.0
+             - e.skipped * 2.0
+         ) > 0
+           AND SUM({PLAY_EXPR}) >= 1
+         ORDER BY SUM(
+             e.completed * 3.0
+             + MIN(e.listened_ms, 600000) / 30000.0
+             - e.skipped * 2.0
+         ) DESC,
+         MAX(e.started_at) DESC,
+         t.id ASC
+         LIMIT ?2"
+    );
+    let mut st = conn.prepare(&sql)?;
+    let rows = st.query_map(rusqlite::params![since, MIX_LIMIT], track_row)?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+fn on_repeat_tracks(conn: &Connection, now: i64) -> Result<Vec<TrackRow>> {
+    let since = now.saturating_sub(30 * SECS_PER_DAY);
+    let sql = format!(
+        "SELECT t.id, t.title, t.artist, COALESCE(a.title, ''), t.album_id,
+                t.track_no, t.disc_no, t.year, t.duration_ms, t.path, a.cover
+         FROM listen_events e
+         LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+         JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+         LEFT JOIN albums a ON a.id = t.album_id
+         WHERE e.started_at >= ?1
+         GROUP BY t.id
+         HAVING SUM({PLAY_EXPR}) >= 2
+         ORDER BY SUM({PLAY_EXPR}) DESC, SUM(e.listened_ms) DESC, MAX(e.started_at) DESC, t.id ASC
+         LIMIT ?2"
+    );
+    let mut st = conn.prepare(&sql)?;
+    let rows = st.query_map(rusqlite::params![since, MIX_LIMIT], track_row)?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+fn rediscover_tracks(conn: &Connection, now: i64) -> Result<Vec<TrackRow>> {
+    let recent_cutoff = now.saturating_sub(30 * SECS_PER_DAY);
+    let sql = format!(
+        "{TRACK_SELECT}
+         WHERE (
+             EXISTS (SELECT 1 FROM favorites f WHERE f.track_id = t.id)
+             OR EXISTS (
+                 SELECT 1 FROM listen_events e
+                 WHERE (e.track_id = t.id OR (e.track_id IS NULL AND e.path = t.path))
+                   AND (e.completed = 1 OR e.listened_ms >= 30000)
+             )
+         )
+         AND NOT EXISTS (
+             SELECT 1 FROM listen_events e
+             WHERE (e.track_id = t.id OR (e.track_id IS NULL AND e.path = t.path))
+               AND e.started_at >= ?1
+               AND {PLAY_EXPR} = 1
+         )"
+    );
+    let mut st = conn.prepare(&sql)?;
+    let mut items = st
+        .query_map([recent_cutoff], track_row)?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let day_seed = now.div_euclid(SECS_PER_DAY);
+    items.sort_by_key(|tr| daily_rank(tr.id, day_seed));
+    items.truncate(MIX_LIMIT as usize);
+    Ok(items)
+}
+
+fn focus_mix_data(conn: &Connection, now: i64) -> Result<Option<(String, Vec<TrackRow>)>> {
+    let since = now.saturating_sub(14 * SECS_PER_DAY);
+    let top_artist: Option<String> = conn
+        .query_row(
+            "SELECT ta.artist
+             FROM listen_events e
+             LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+             JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+             JOIN track_artists ta ON ta.track_id = t.id
+             WHERE e.started_at >= ?1
+               AND e.skipped = 0
+               AND TRIM(ta.artist) != ''
+               AND (
+                   SELECT COUNT(DISTINCT ta2.track_id)
+                   FROM track_artists ta2
+                   WHERE ta2.artist = ta.artist
+               ) >= ?2
+             GROUP BY ta.artist COLLATE NOCASE
+             ORDER BY SUM(e.listened_ms) DESC, COUNT(*) DESC
+             LIMIT 1",
+            rusqlite::params![since, MIN_MIX_TRACKS as i64],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    if let Some(artist) = top_artist {
+        let mut st = conn.prepare(&format!(
+            "{TRACK_SELECT}
+             WHERE EXISTS (
+                 SELECT 1 FROM track_artists ta
+                 WHERE ta.track_id = t.id AND ta.artist = ?1 COLLATE NOCASE
+             )
+             ORDER BY COALESCE((
+                 SELECT SUM(e.completed * 2 + e.listened_ms / 30000.0 - e.skipped)
+                 FROM listen_events e
+                 WHERE (e.track_id = t.id OR (e.track_id IS NULL AND e.path = t.path))
+                   AND e.started_at >= ?2
+             ), 0) DESC, t.added_at DESC, t.id ASC
+             LIMIT ?3"
+        ))?;
+        let rows = st.query_map(rusqlite::params![&artist, since, MIX_LIMIT], track_row)?;
+        let tracks = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+        if tracks.len() >= MIN_MIX_TRACKS {
+            return Ok(Some((artist, tracks)));
+        }
+    }
+
+    let top_genre: Option<String> = conn
+        .query_row(
+            "SELECT TRIM(t.genre)
+             FROM listen_events e
+             LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
+             JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+             WHERE e.started_at >= ?1
+               AND e.skipped = 0
+               AND t.genre IS NOT NULL AND TRIM(t.genre) != ''
+               AND (
+                   SELECT COUNT(*)
+                   FROM tracks t2
+                   WHERE TRIM(COALESCE(t2.genre, '')) = TRIM(t.genre) COLLATE NOCASE
+               ) >= ?2
+             GROUP BY TRIM(t.genre) COLLATE NOCASE
+             ORDER BY SUM(e.listened_ms) DESC, COUNT(*) DESC
+             LIMIT 1",
+            rusqlite::params![since, MIN_MIX_TRACKS as i64],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    if let Some(genre) = top_genre {
+        let mut st = conn.prepare(&format!(
+            "{TRACK_SELECT}
+             WHERE TRIM(COALESCE(t.genre, '')) = ?1 COLLATE NOCASE
+             ORDER BY COALESCE((
+                 SELECT SUM(e.completed * 2 + e.listened_ms / 30000.0 - e.skipped)
+                 FROM listen_events e
+                 WHERE (e.track_id = t.id OR (e.track_id IS NULL AND e.path = t.path))
+                   AND e.started_at >= ?2
+             ), 0) DESC, t.added_at DESC, t.id ASC
+             LIMIT ?3"
+        ))?;
+        let rows = st.query_map(rusqlite::params![&genre, since, MIX_LIMIT], track_row)?;
+        let tracks = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+        if tracks.len() >= MIN_MIX_TRACKS {
+            return Ok(Some((genre, tracks)));
+        }
+    }
+
+    Ok(None)
+}
+
+fn mix_detail_for_id(conn: &Connection, mix_id: &str, now: i64) -> Result<Option<HomeMixDetail>> {
+    match mix_id {
+        MIX_WEEKLY_FAVORITES => {
+            let tracks = weekly_favorites_tracks(conn, now)?;
+            if tracks.len() < MIN_MIX_TRACKS {
+                return Ok(None);
+            }
+            let mix = build_mix_meta(
+                MIX_WEEKLY_FAVORITES,
+                MIX_WEEKLY_FAVORITES,
+                "Weekly Favorites",
+                None,
+                "Most played and finished over the last 7 days",
+                &tracks,
+            );
+            Ok(Some(HomeMixDetail { mix, tracks }))
+        }
+        MIX_ON_REPEAT => {
+            let tracks = on_repeat_tracks(conn, now)?;
+            if tracks.len() < MIN_MIX_TRACKS {
+                return Ok(None);
+            }
+            let mix = build_mix_meta(
+                MIX_ON_REPEAT,
+                MIX_ON_REPEAT,
+                "On Repeat",
+                None,
+                "Songs you kept coming back to this month",
+                &tracks,
+            );
+            Ok(Some(HomeMixDetail { mix, tracks }))
+        }
+        MIX_REDISCOVER => {
+            let tracks = rediscover_tracks(conn, now)?;
+            if tracks.len() < MIN_MIX_TRACKS {
+                return Ok(None);
+            }
+            let mix = build_mix_meta(
+                MIX_REDISCOVER,
+                MIX_REDISCOVER,
+                "Rediscover",
+                None,
+                "Favorites and past listens you haven't played lately",
+                &tracks,
+            );
+            Ok(Some(HomeMixDetail { mix, tracks }))
+        }
+        MIX_FOCUS => {
+            let Some((subject, tracks)) = focus_mix_data(conn, now)? else {
+                return Ok(None);
+            };
+            let mix = build_mix_meta(
+                MIX_FOCUS,
+                MIX_FOCUS,
+                "{name} Mix",
+                Some(subject),
+                "Inspired by what you played most lately",
+                &tracks,
+            );
+            Ok(Some(HomeMixDetail { mix, tracks }))
+        }
+        _ => Ok(None),
+    }
+}
+
+pub fn home_mix_detail(conn: &Connection, mix_id: &str, now: i64) -> Result<Option<HomeMixDetail>> {
+    mix_detail_for_id(conn, mix_id, now)
+}
+
+pub fn home_mix_queue_tracks(conn: &Connection, mix_id: &str, now: i64) -> Result<Vec<Track>> {
+    let Some(detail) = mix_detail_for_id(conn, mix_id, now)? else {
+        return Ok(Vec::new());
+    };
+    Ok(detail
+        .tracks
+        .into_iter()
+        .map(|t| Track {
+            path: PathBuf::from(t.path),
+            title: Some(t.title),
+            artist: Some(t.artist),
+        })
+        .collect())
+}
+
+pub fn save_mix_as_playlist(
+    conn: &mut Connection,
+    mix_id: &str,
+    name: &str,
+    now: i64,
+) -> Result<PlaylistInfo> {
+    let detail = mix_detail_for_id(conn, mix_id, now)?
+        .ok_or_else(|| super::LibraryError::Other(format!("mix '{mix_id}' is unavailable")))?;
+    let ids: Vec<i64> = detail.tracks.iter().map(|t| t.id).collect();
+    create_playlist(conn, name, &ids, now)
+}
+
+pub fn home_feed(conn: &Connection, now: i64) -> Result<HomeFeed> {
+    let has_history = has_listen_history(conn)?;
+    let recently_played_albums = if has_history {
+        recently_played_albums(conn, 12)?
+    } else {
+        Vec::new()
+    };
+    let recently_played_tracks = if has_history {
+        recently_played_tracks(conn, 8)?
+    } else {
+        Vec::new()
+    };
+    let recently_added_albums = recently_added_albums(conn, 12)?;
+    let favs = favorites_page(conn, 0, 8)?;
+
+    let mut mixes = Vec::new();
+    for id in [
+        MIX_WEEKLY_FAVORITES,
+        MIX_ON_REPEAT,
+        MIX_REDISCOVER,
+        MIX_FOCUS,
+    ] {
+        if let Some(detail) = mix_detail_for_id(conn, id, now)? {
+            mixes.push(detail.mix);
+        }
+    }
+
+    Ok(HomeFeed {
+        recently_played_albums,
+        recently_played_tracks,
+        recently_added_albums,
+        favorite_tracks: favs.items,
+        favorite_count: favs.total,
+        mixes,
+        has_history,
+    })
 }

@@ -106,7 +106,7 @@
     {/if}
     {#if (songs.total ?? 0) > 0}
       <h2 class="shrink-0 px-4 pb-1 text-lg font-bold">{t("Songs")}</h2>
-      <VirtualList class="min-h-0 flex-1 pb-2" count={songs.total ?? 0} rowHeight={ROW} onRangeChange={(s, e) => songs.ensureRange(s, e)}>
+      <VirtualList class="min-h-0 flex-1 pb-[var(--mobile-bar-clear,5rem)]" count={songs.total ?? 0} rowHeight={ROW} onRangeChange={(s, e) => songs.ensureRange(s, e)}>
         {#snippet row(i)}
           {@const track = songs.get(i)}
           {#if track}

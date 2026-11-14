@@ -343,6 +343,10 @@ pub fn run() {
             commands::library_artist_profile,
             commands::library_play_artist,
             commands::artist_enrich,
+            commands::library_home,
+            commands::library_home_mix,
+            commands::library_play_mix,
+            commands::library_save_mix_playlist,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

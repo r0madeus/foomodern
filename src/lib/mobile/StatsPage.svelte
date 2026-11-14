@@ -14,7 +14,7 @@
 
 <div class="absolute inset-0 flex flex-col bg-zinc-950">
   <PageHeader title={t('Listening stats')} {onBack} />
-  <div class="min-h-0 flex-1 overflow-y-auto pt-2">
+  <div class="min-h-0 flex-1 overflow-y-auto pt-2 pb-[var(--mobile-bar-clear,5rem)]">
     <StatsView {onOpenAlbum} />
   </div>
 </div>

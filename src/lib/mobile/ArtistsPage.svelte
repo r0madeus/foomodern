@@ -61,7 +61,7 @@
     <div class="min-h-0 flex-1" bind:clientWidth={width}>
       {#if width > 0}
         <VirtualList
-          class="h-full pb-4"
+          class="h-full pb-[var(--mobile-bar-clear,5rem)]"
           count={Math.ceil(total / columns)}
           {rowHeight}
           overscan={2}

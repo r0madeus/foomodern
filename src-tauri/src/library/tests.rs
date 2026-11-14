@@ -1817,3 +1817,107 @@ fn tag_changes_from_the_editor_keep_musicbrainz_ids() {
         serde_json::from_str(r#"{"mbTrackId":null}"#).unwrap();
     assert_eq!(clear.mb_track_id, Some(None));
 }
+
+fn push_listen(
+    e: &Env,
+    track: &super::TrackRow,
+    started_at: i64,
+    listened_ms: u64,
+    completed: bool,
+    skipped: bool,
+) {
+    e.lib
+        .record_listen_event(super::NewListenEvent {
+            path: track.path.clone(),
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            duration_ms: track.duration_ms,
+            started_at,
+            ended_at: started_at + i64::try_from(listened_ms / 1000).unwrap_or(0),
+            listened_ms,
+            completed,
+            skipped,
+        })
+        .unwrap();
+}
+
+#[test]
+fn home_feed_cold_start_hides_history_sections_and_keeps_added_albums() {
+    let e = env();
+    scanned_tracks(&e, &["Alpha", "Beta", "Gamma"]);
+    let tracks = e.lib.tracks_page(0, 10, SortOrder::Title).unwrap();
+    e.lib.toggle_favorite(tracks[0].id).unwrap();
+
+    let feed = super::db::home_feed(&e.lib.conn(), 1_750_000_000).unwrap();
+    assert!(!feed.has_history);
+    assert!(feed.recently_played_albums.is_empty());
+    assert!(feed.recently_played_tracks.is_empty());
+    assert!(feed.mixes.is_empty());
+    assert!(!feed.recently_added_albums.is_empty());
+    assert_eq!(feed.favorite_count, 1);
+    assert_eq!(feed.favorite_tracks[0].id, tracks[0].id);
+}
+
+#[test]
+fn home_feed_builds_dynamic_mixes_and_saves_playlist() {
+    let e = env();
+    scanned_tracks(
+        &e,
+        &[
+            "Recent A",
+            "Recent B",
+            "Recent C",
+            "Forgotten D",
+            "Forgotten E",
+            "Forgotten F",
+        ],
+    );
+    let tracks = e.lib.tracks_page(0, 20, SortOrder::Title).unwrap();
+    assert_eq!(tracks.len(), 6);
+
+    let now = 1_750_000_000i64;
+    // 3 tracks played multiple times over 7 days -> weekly-favorites, on-repeat, focus-mix.
+    for track in &tracks[0..3] {
+        push_listen(&e, track, now - 86_400, 180_000, true, false);
+        push_listen(&e, track, now - 3_600, 120_000, false, false);
+    }
+    // 3 older listens from 45 days ago -> rediscover mix.
+    for track in &tracks[3..6] {
+        push_listen(&e, track, now - 45 * 86_400, 180_000, true, false);
+    }
+
+    let feed = super::db::home_feed(&e.lib.conn(), now).unwrap();
+    assert!(feed.has_history);
+    assert_eq!(feed.recently_played_tracks.len(), 6);
+    assert_eq!(feed.recently_played_tracks[0].track.id, tracks[2].id);
+    assert!(!feed.recently_played_albums.is_empty());
+
+    let mix_ids: Vec<&str> = feed.mixes.iter().map(|m| m.id.as_str()).collect();
+    assert!(mix_ids.contains(&"weekly-favorites"), "{mix_ids:?}");
+    assert!(mix_ids.contains(&"on-repeat"), "{mix_ids:?}");
+    assert!(mix_ids.contains(&"rediscover"), "{mix_ids:?}");
+    assert!(mix_ids.contains(&"focus-mix"), "{mix_ids:?}");
+
+    // Rediscover order stays deterministic within the same UTC day.
+    let same_day_a = super::db::home_mix_detail(&e.lib.conn(), "rediscover", now)
+        .unwrap()
+        .unwrap();
+    let same_day_b = super::db::home_mix_detail(&e.lib.conn(), "rediscover", now + 120)
+        .unwrap()
+        .unwrap();
+    let ids_a: Vec<i64> = same_day_a.tracks.iter().map(|t| t.id).collect();
+    let ids_b: Vec<i64> = same_day_b.tracks.iter().map(|t| t.id).collect();
+    assert_eq!(ids_a, ids_b);
+    assert_eq!(ids_a.len(), 3);
+
+    let q_tracks =
+        super::db::home_mix_queue_tracks(&e.lib.conn(), "weekly-favorites", now).unwrap();
+    assert_eq!(q_tracks.len(), 3);
+
+    let saved = {
+        let mut conn = e.lib.conn();
+        super::db::save_mix_as_playlist(&mut conn, "on-repeat", "My Repeat", now).unwrap()
+    };
+    assert_eq!(saved.name, "My Repeat");
+    assert_eq!(saved.track_count, 3);
+}

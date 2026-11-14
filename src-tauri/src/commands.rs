@@ -1455,3 +1455,43 @@ pub async fn artist_enrich(
         .artist_info(&lib, &name, lang.as_deref() == Some("tr"))
         .await
 }
+
+// ---------------------------------------------------------------------
+// Home feed & dynamic mixes
+// ---------------------------------------------------------------------
+
+#[tauri::command]
+pub fn library_home(lib: State<'_, Arc<Library>>) -> Res<crate::library::HomeFeed> {
+    le(lib.home_feed())
+}
+
+#[tauri::command]
+pub fn library_home_mix(
+    lib: State<'_, Arc<Library>>,
+    mix_id: String,
+) -> Res<Option<crate::library::HomeMixDetail>> {
+    le(lib.home_mix_detail(&mix_id))
+}
+
+#[tauri::command]
+pub fn library_play_mix(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    mix_id: String,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let tracks = le(lib.home_mix_queue_tracks(&mix_id))?;
+    s(player.replace_queue(tracks, start_index))
+}
+
+#[tauri::command]
+pub fn library_save_mix_playlist(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    mix_id: String,
+    name: String,
+) -> Res<PlaylistInfo> {
+    let info = le(lib.save_mix_as_playlist(&mix_id, &name))?;
+    playlists_changed(&app);
+    Ok(info)
+}

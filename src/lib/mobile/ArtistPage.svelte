@@ -146,7 +146,7 @@
   </header>
 
   <div
-    class="min-h-0 flex-1 overflow-y-auto pb-8"
+    class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]"
     onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}
   >
     {#if profile}

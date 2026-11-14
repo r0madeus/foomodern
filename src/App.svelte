@@ -8,6 +8,7 @@
   import PlaylistCover from './lib/PlaylistCover.svelte'
   import PlayerBar from './lib/PlayerBar.svelte'
   import Icon from './lib/Icon.svelte'
+  import HomeView from './lib/HomeView.svelte'
   import SongsView from './lib/SongsView.svelte'
   import AlbumsView from './lib/AlbumsView.svelte'
   import ArtistsView from './lib/ArtistsView.svelte'
@@ -28,6 +29,7 @@
   import { history } from './lib/history.svelte'
   import { artists } from './lib/artists.svelte'
   import { pinned } from './lib/pinned.svelte'
+  import { home } from './lib/home.svelte'
   import { appSettings } from './lib/appSettings.svelte'
   import { online } from './lib/online.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
@@ -42,6 +44,7 @@
   ]
 
   type View =
+    | 'home'
     | 'songs'
     | 'albums'
     | 'artists'
@@ -53,17 +56,19 @@
     | 'playlist'
   // Views shown in the main navigation. Playlists live in their own sidebar
   // section, Queue is toggled from the bottom bar, and Settings sits at the bottom.
-  type NavView = 'songs' | 'albums' | 'artists' | 'search' | 'stats'
-  const NAV: NavView[] = ['songs', 'albums', 'artists', 'search', 'stats']
+  type NavView = 'home' | 'songs' | 'albums' | 'artists' | 'search' | 'stats'
+  const NAV: NavView[] = ['home', 'songs', 'albums', 'artists', 'search', 'stats']
   const VIEWS: View[] = [...NAV, 'favorites', 'queue', 'settings']
   const LABELS: Record<NavView, string> = {
+    home: 'Home',
     songs: 'Songs',
     albums: 'Albums',
     artists: 'Artists',
     search: 'Search',
     stats: 'Listening stats',
   } // English keys, shown through t()
-  const ICONS: Record<NavView, 'music' | 'album' | 'artist' | 'search' | 'chart'> = {
+  const ICONS: Record<NavView, 'home' | 'music' | 'album' | 'artist' | 'search' | 'chart'> = {
+    home: 'home',
     songs: 'music',
     albums: 'album',
     artists: 'artist',
@@ -79,7 +84,7 @@
     } catch {
       // storage unavailable: fall through
     }
-    return 'songs'
+    return 'home'
   }
 
   let view = $state<View>(loadView())
@@ -162,6 +167,7 @@
   })
 
   const counts = $derived<Record<NavView, number | null>>({
+    home: null,
     songs: library.stats.tracks,
     albums: library.stats.albums,
     artists: null,
@@ -182,6 +188,7 @@
     favorites.init().catch((e) => (player.error = String(e)))
     history.init().catch((e) => (player.error = String(e)))
     pinned.init().catch((e) => (player.error = String(e)))
+    home.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
       updates.autoCheck()
@@ -484,7 +491,14 @@
       <main class="min-h-0 flex-1">
         {#key view === 'playlist' ? `${view}:${playlistId}` : view}
           <div class="animate-view-enter h-full">
-            {#if view === 'songs'}
+            {#if view === 'home'}
+              <HomeView
+                onOpenAlbum={(id) => openAlbum(id)}
+                onOpenPlaylist={(id) => openPlaylist(id)}
+                onOpenFavorites={() => go('favorites')}
+                onOpenStats={() => go('stats')}
+              />
+            {:else if view === 'songs'}
               <SongsView />
             {:else if view === 'albums'}
               <AlbumsView {selectedAlbumId} onSelectAlbum={(id) => (selectedAlbumId = id)} />

@@ -10,12 +10,16 @@
   let {
     onOpenPlaylist,
     onOpenFavorites,
+    onOpenSongs,
+    onOpenAlbums,
     onOpenArtists,
     onOpenStats,
     onOpenPage,
   }: {
     onOpenPlaylist: (id: number) => void
     onOpenFavorites: () => void
+    onOpenSongs: () => void
+    onOpenAlbums: () => void
     onOpenArtists: () => void
     onOpenStats: () => void
     onOpenPage: (page: 'folders' | 'settings') => void
@@ -43,7 +47,7 @@
     {/snippet}
   </PageHeader>
 
-  <div class="min-h-0 flex-1 overflow-y-auto pb-4">
+  <div class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]">
     {#if creating}
       <form
         class="flex gap-2 px-4 pb-3"
@@ -86,6 +90,36 @@
           {t('Playlist · {count}', { count: count(favorites.ids.size, '{n} song', '{n} songs') })}
         </span>
       </span>
+    </button>
+
+    <button
+      type="button"
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={onOpenSongs}
+    >
+      <Icon name="music" class="size-6 text-teal-400" />
+      <span class="min-w-0 flex-1 text-[15px]">{t('Songs')}</span>
+      {#if library.stats.tracks > 0}
+        <span class="text-xs tabular-nums text-zinc-400">
+          {library.stats.tracks.toLocaleString(i18n.locale)}
+        </span>
+      {/if}
+      <Icon name="chevronRight" class="size-5 text-zinc-500" />
+    </button>
+
+    <button
+      type="button"
+      class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
+      onclick={onOpenAlbums}
+    >
+      <Icon name="album" class="size-6 text-teal-400" />
+      <span class="min-w-0 flex-1 text-[15px]">{t('Albums')}</span>
+      {#if library.stats.albums > 0}
+        <span class="text-xs tabular-nums text-zinc-400">
+          {library.stats.albums.toLocaleString(i18n.locale)}
+        </span>
+      {/if}
+      <Icon name="chevronRight" class="size-5 text-zinc-500" />
     </button>
 
     <button

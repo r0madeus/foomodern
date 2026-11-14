@@ -72,7 +72,7 @@
     </div>
   {:else}
     <VirtualList
-      class="min-h-0 flex-1 pb-4"
+      class="min-h-0 flex-1 pb-[var(--mobile-bar-clear,5rem)]"
       count={totalCount}
       rowHeight={ROW}
       onRangeChange={(s, e) => rows.ensureRange(s, e)}
