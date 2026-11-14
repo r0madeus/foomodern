@@ -69,6 +69,8 @@ pub struct PlayerSnapshot {
     pub shuffle: bool,
     pub repeat: RepeatMode,
     pub replaygain: ReplayGain,
+    pub gapless: bool,
+    pub wasapi_exclusive: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,8 +138,13 @@ struct Inner {
     duration: Option<f64>,
     volume: f64,
     replaygain: ReplayGain,
+    gapless: bool,
+    wasapi_exclusive: bool,
     /// The entry currently sitting in the engine's "next" slot.
     engine_next: Option<EntryId>,
+    /// True after a track ends at EOF while gapless is off, so the following
+    /// `Idle` advances to the next queued track instead of stopping.
+    eof_advance: bool,
     /// True between `engine.load` and the matching non-auto `TrackStarted`.
     /// An auto-advance reported in that window happened before our load and
     /// is stale: the load replaces it anyway.
@@ -206,6 +213,8 @@ impl Inner {
             shuffle: self.queue.shuffle(),
             repeat: self.queue.repeat(),
             replaygain: self.replaygain,
+            gapless: self.gapless,
+            wasapi_exclusive: self.wasapi_exclusive,
         }
     }
 
@@ -220,6 +229,7 @@ impl Inner {
         self.close_listen(false, true);
         self.queue.set_current(Some(index));
         self.engine_next = None; // `load` clears the next slot
+        self.eof_advance = false;
         self.position = 0.0;
         self.duration = None;
         self.resume_position = None;
@@ -235,6 +245,7 @@ impl Inner {
     fn stop_engine(&mut self) -> Result<(), PlayerError> {
         self.close_listen(false, true);
         self.pending_load = false;
+        self.eof_advance = false;
         self.resume_position = None;
         self.pending_load_seek = None;
         self.status = Status::Stopped;
@@ -297,12 +308,17 @@ impl Inner {
         });
     }
 
-    /// Decision K3: keep the engine's next slot equal to `queue.next()`.
+    /// Decision K3: keep the engine's next slot equal to `queue.next()` while
+    /// gapless playback is enabled; clear it when disabled so tracks end to Idle.
     fn sync_next(&mut self) -> Result<(), PlayerError> {
         if self.status == Status::Stopped {
             return Ok(());
         }
-        let want = self.queue.next().map(|e| (e.id, e.path.clone()));
+        let want = if self.gapless {
+            self.queue.next().map(|e| (e.id, e.path.clone()))
+        } else {
+            None
+        };
         let want_id = want.as_ref().map(|w| w.0);
         if want_id != self.engine_next {
             self.engine.set_next(want.as_ref().map(|w| w.1.as_path()))?;
@@ -323,7 +339,10 @@ impl Player {
                 duration: None,
                 volume: 100.0,
                 replaygain: ReplayGain::default(),
+                gapless: true,
+                wasapi_exclusive: false,
                 engine_next: None,
+                eof_advance: false,
                 pending_load: false,
                 resume_position: None,
                 pending_load_seek: None,
@@ -401,6 +420,15 @@ impl Player {
             log::warn!("failed to restore replaygain mode: {e}");
         }
         s.replaygain = state.replaygain;
+        if let Err(e) = s.engine.set_gapless(state.gapless) {
+            log::warn!("failed to restore gapless setting: {e}");
+        }
+        s.gapless = state.gapless;
+        if let Err(e) = s.engine.set_wasapi_exclusive(state.wasapi_exclusive) {
+            log::warn!("failed to restore WASAPI exclusive setting: {e}");
+        }
+        s.wasapi_exclusive = state.wasapi_exclusive;
+        s.eof_advance = false;
         let tracks: Vec<Track> = state
             .queue
             .into_iter()
@@ -448,6 +476,8 @@ impl Player {
             current_index,
             position_seconds,
             replaygain: s.replaygain,
+            gapless: s.gapless,
+            wasapi_exclusive: s.wasapi_exclusive,
             ..SessionState::default()
         }
         .normalized()
@@ -663,6 +693,7 @@ impl Player {
                 0.0
             };
             if s.status != Status::Stopped {
+                s.eof_advance = false;
                 s.resume_position = None;
                 s.pending_load_seek = None;
                 s.engine.seek(seconds)?;
@@ -689,6 +720,25 @@ impl Player {
         self.run(|s| {
             s.engine.set_replaygain(mode)?;
             s.replaygain = mode;
+            Ok(())
+        })
+    }
+
+    pub fn set_gapless(&self, enabled: bool) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.engine.set_gapless(enabled)?;
+            s.gapless = enabled;
+            if enabled {
+                s.eof_advance = false;
+            }
+            s.sync_next()
+        })
+    }
+
+    pub fn set_wasapi_exclusive(&self, enabled: bool) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.engine.set_wasapi_exclusive(enabled)?;
+            s.wasapi_exclusive = enabled;
             Ok(())
         })
     }
@@ -735,16 +785,38 @@ impl Player {
                     ..
                 } => {
                     s.pending_load = false;
+                    s.eof_advance = false;
                     s.status = Status::Playing;
                     s.set_listen_playing(true);
                     Out::State
                 }
                 EngineEvent::Idle => {
-                    s.close_listen(true, false);
-                    s.status = Status::Stopped;
-                    s.position = 0.0;
-                    s.engine_next = None;
-                    Out::State
+                    if std::mem::take(&mut s.eof_advance) {
+                        match s.queue.next_index() {
+                            Some(target) => match s.start_index(target) {
+                                Ok(()) => Out::State,
+                                Err(e) => {
+                                    s.status = Status::Stopped;
+                                    s.position = 0.0;
+                                    s.engine_next = None;
+                                    Out::Error(e.to_string())
+                                }
+                            },
+                            None => {
+                                s.close_listen(true, false);
+                                s.status = Status::Stopped;
+                                s.position = 0.0;
+                                s.engine_next = None;
+                                Out::State
+                            }
+                        }
+                    } else {
+                        s.close_listen(true, false);
+                        s.status = Status::Stopped;
+                        s.position = 0.0;
+                        s.engine_next = None;
+                        Out::State
+                    }
                 }
                 EngineEvent::Paused(b) => {
                     let new = match (s.status, b) {
@@ -793,6 +865,15 @@ impl Player {
                             EndReason::Error => s.close_listen(false, false),
                             EndReason::Stopped => {}
                         }
+                    }
+                    if reason == EndReason::Eof
+                        && !s.gapless
+                        && s.engine_next.is_none()
+                        && !s.pending_load
+                        && s.status == Status::Playing
+                        && s.queue.current().is_some_and(|e| e.path == path)
+                    {
+                        s.eof_advance = true;
                     }
                     if reason == EndReason::Error {
                         log::warn!("track failed to play: {}", path.display());
@@ -868,6 +949,8 @@ mod tests {
         Seek(f64),
         Volume(f64),
         ReplayGain(ReplayGain),
+        Gapless(bool),
+        WasapiExclusive(bool),
     }
 
     #[derive(Clone, Default)]
@@ -912,6 +995,12 @@ mod tests {
         }
         fn set_replaygain(&self, m: ReplayGain) -> Result<(), EngineError> {
             self.rec(Call::ReplayGain(m))
+        }
+        fn set_gapless(&self, enabled: bool) -> Result<(), EngineError> {
+            self.rec(Call::Gapless(enabled))
+        }
+        fn set_wasapi_exclusive(&self, enabled: bool) -> Result<(), EngineError> {
+            self.rec(Call::WasapiExclusive(enabled))
         }
     }
 
@@ -1661,5 +1750,60 @@ mod tests {
         let saved = p.export_session();
         assert_eq!(saved.current_index, None);
         assert_eq!(saved.position_seconds, 0.0);
+    }
+
+    #[test]
+    fn gapless_defaults_on_and_advances_via_idle_when_off() {
+        let (p, calls, _) = setup();
+        assert!(p.snapshot().gapless);
+        p.replace_queue(pbs(&["a", "b"]), 0).unwrap();
+        calls.take();
+
+        // Turning gapless off while playing clears the next slot.
+        let snap = p.set_gapless(false).unwrap();
+        assert!(!snap.gapless);
+        assert!(!p.export_session().gapless);
+        assert_eq!(calls.take(), [Call::Gapless(false), Call::SetNext(None)]);
+
+        p.handle_engine_event(EngineEvent::TrackStarted {
+            path: pb("a"),
+            auto_advanced: false,
+        });
+        p.handle_engine_event(EngineEvent::TrackEnded {
+            path: pb("a"),
+            reason: EndReason::Eof,
+        });
+        p.handle_engine_event(EngineEvent::Idle);
+        let snap = p.snapshot();
+        assert_eq!(snap.status, Status::Playing);
+        assert_eq!(snap.current_index, Some(1));
+        assert_eq!(calls.take(), [Call::Load(pb("b")), Call::Play]);
+
+        // Turning gapless back on restores engine next slot preloading.
+        let snap = p.set_gapless(true).unwrap();
+        assert!(snap.gapless);
+        p.set_repeat(RepeatMode::All).unwrap();
+        calls.take();
+        p.set_gapless(false).unwrap();
+        p.set_gapless(true).unwrap();
+        assert_eq!(
+            calls.take(),
+            [
+                Call::Gapless(false),
+                Call::SetNext(None),
+                Call::Gapless(true),
+                Call::SetNext(Some(pb("a"))),
+            ]
+        );
+    }
+
+    #[test]
+    fn wasapi_exclusive_defaults_off_and_persists_in_session() {
+        let (p, calls, _) = setup();
+        assert!(!p.snapshot().wasapi_exclusive);
+        let snap = p.set_wasapi_exclusive(true).unwrap();
+        assert!(snap.wasapi_exclusive);
+        assert!(p.export_session().wasapi_exclusive);
+        assert_eq!(calls.take(), [Call::WasapiExclusive(true)]);
     }
 }

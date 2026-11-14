@@ -66,6 +66,10 @@ pub struct SessionState {
     pub current_index: Option<usize>,
     pub position_seconds: f64,
     pub replaygain: ReplayGain,
+    #[serde(default = "default_true")]
+    pub gapless: bool,
+    #[serde(default)]
+    pub wasapi_exclusive: bool,
     /// Closing the window hides it to the tray instead of quitting. Owned by
     /// [`SessionStore`], which fills it in on every save.
     #[serde(default = "default_close_to_tray")]
@@ -116,6 +120,8 @@ impl Default for SessionState {
             current_index: None,
             position_seconds: 0.0,
             replaygain: ReplayGain::default(),
+            gapless: true,
+            wasapi_exclusive: false,
             close_to_tray: default_close_to_tray(),
             download_dir: None,
             ytdlp_path: None,
@@ -198,6 +204,9 @@ struct StructuralKey {
     current_index: Option<usize>,
     shuffle: bool,
     repeat: RepeatMode,
+    replaygain: ReplayGain,
+    gapless: bool,
+    wasapi_exclusive: bool,
 }
 
 impl From<&PlayerSnapshot> for StructuralKey {
@@ -207,6 +216,9 @@ impl From<&PlayerSnapshot> for StructuralKey {
             current_index: s.current_index,
             shuffle: s.shuffle,
             repeat: s.repeat,
+            replaygain: s.replaygain,
+            gapless: s.gapless,
+            wasapi_exclusive: s.wasapi_exclusive,
         }
     }
 }
@@ -451,6 +463,8 @@ mod tests {
             current_index: Some(0),
             position_seconds: 18.25,
             replaygain: ReplayGain::Track,
+            gapless: false,
+            wasapi_exclusive: true,
             close_to_tray: false,
             download_dir: Some(PathBuf::from("/music/downloads")),
             ytdlp_path: None,
@@ -501,13 +515,19 @@ mod tests {
         assert_eq!(s.volume, 55.0);
         assert!(s.shuffle);
         assert_eq!(s.replaygain, ReplayGain::Album);
+        assert!(s.gapless);
+        assert!(!s.wasapi_exclusive);
 
         let json = serde_json::to_value(SessionState {
             replaygain: ReplayGain::Off,
+            gapless: false,
+            wasapi_exclusive: true,
             ..SessionState::default()
         })
         .unwrap();
         assert_eq!(json["replaygain"], "off");
+        assert_eq!(json["gapless"], false);
+        assert_eq!(json["wasapiExclusive"], true);
     }
 
     #[test]

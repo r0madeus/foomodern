@@ -7,6 +7,7 @@ interface AppSettingsPayload {
   closeToTray: boolean
   trayAvailable: boolean
   platform: 'android' | 'desktop'
+  wasapiAvailable: boolean
   lyricsSave: LyricsSave
   lyricsNetease: boolean
   offlineMode: boolean
@@ -35,6 +36,8 @@ class AppSettings {
   trayAvailable = $state(true)
   /** Android has no tray, no free folder/file picker and a narrow screen. */
   platform = $state<'android' | 'desktop'>('desktop')
+  /** Windows-only audio engine option: WASAPI exclusive mode. */
+  wasapiAvailable = $state(false)
   /** Lyrics found online: `.lrc` next to the song, inside its tag, or cache only. */
   lyricsSave = $state<LyricsSave>('sidecar')
   /** Also search NetEase Cloud Music when LRCLIB has nothing. */
@@ -125,6 +128,7 @@ class AppSettings {
     this.closeToTray = s.closeToTray
     this.trayAvailable = s.trayAvailable
     this.platform = s.platform
+    this.wasapiAvailable = s.wasapiAvailable
     this.loaded = true
   }
 }

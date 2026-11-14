@@ -267,15 +267,23 @@ impl AudioEngine for Gated {
     fn set_replaygain(&self, m: ReplayGain) -> Result<(), EngineError> {
         self.inner.set_replaygain(m)
     }
+    fn set_gapless(&self, enabled: bool) -> Result<(), EngineError> {
+        self.inner.set_gapless(enabled)
+    }
+    fn set_wasapi_exclusive(&self, enabled: bool) -> Result<(), EngineError> {
+        self.inner.set_wasapi_exclusive(enabled)
+    }
 }
 
-#[test]
-fn player_plays_whole_queue_in_order() {
+fn run_queue_playback(gapless: bool) {
     let dir = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = [440.0, 660.0, 880.0]
         .iter()
         .enumerate()
-        .map(|(i, f)| write_wav(dir.path(), &format!("t{i}.wav"), *f, 3.0))
+        .map(|(i, f)| {
+            let secs = if gapless { 3.0 } else { 1.0 };
+            write_wav(dir.path(), &format!("t{i}.wav"), *f, secs)
+        })
         .collect();
 
     let (engine, rx) = engine();
@@ -292,6 +300,9 @@ fn player_plays_whole_queue_in_order() {
             let _ = ptx.lock().unwrap().send(e);
         }),
     ));
+    if !gapless {
+        player.set_gapless(false).unwrap();
+    }
 
     // Pump engine events into the player. After every track start the engine
     // is paused while the player re-arms the next slot, so the (fast,
@@ -332,14 +343,14 @@ fn player_plays_whole_queue_in_order() {
         let left = deadline.saturating_duration_since(Instant::now());
         match prx.recv_timeout(left) {
             Ok(PlayerEvent::State(s)) => {
-                let done = s.status == Status::Stopped && s.current_index == Some(2);
+                let finished = s.status == Status::Stopped && s.current_index == Some(2);
                 last = Some(s);
-                if done {
+                if finished {
                     break;
                 }
             }
             Ok(_) => {}
-            Err(_) => panic!("timed out; last snapshot {last:?}"),
+            Err(_) => panic!("timed out (gapless={gapless}); last snapshot {last:?}"),
         }
     }
     let last = last.unwrap();
@@ -351,4 +362,14 @@ fn player_plays_whole_queue_in_order() {
     drop(player);
     drop(engine);
     assert_eq!(started, files);
+}
+
+#[test]
+fn player_plays_whole_queue_in_order() {
+    run_queue_playback(true);
+}
+
+#[test]
+fn player_plays_whole_queue_with_gapless_off() {
+    run_queue_playback(false);
 }

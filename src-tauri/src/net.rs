@@ -192,6 +192,12 @@ mod tests {
         fn set_replaygain(&self, _: ReplayGain) -> EngineResult<()> {
             Ok(())
         }
+        fn set_gapless(&self, _: bool) -> EngineResult<()> {
+            Ok(())
+        }
+        fn set_wasapi_exclusive(&self, _: bool) -> EngineResult<()> {
+            Ok(())
+        }
     }
 
     #[test]

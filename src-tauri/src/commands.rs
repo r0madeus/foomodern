@@ -109,6 +109,19 @@ pub fn player_set_replaygain(
 }
 
 #[tauri::command]
+pub fn player_set_gapless(player: State<'_, Arc<Player>>, enabled: bool) -> Res<PlayerSnapshot> {
+    s(player.set_gapless(enabled))
+}
+
+#[tauri::command]
+pub fn player_set_wasapi_exclusive(
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> Res<PlayerSnapshot> {
+    s(player.set_wasapi_exclusive(enabled))
+}
+
+#[tauri::command]
 pub fn player_snapshot(player: State<'_, Arc<Player>>) -> Res<PlayerSnapshot> {
     Ok(player.snapshot())
 }
@@ -654,6 +667,8 @@ pub struct AppSettings {
     tray_available: bool,
     /// `"android"` or `"desktop"`; the UI adapts its layout and dialogs.
     platform: &'static str,
+    /// True on Windows, where mpv supports WASAPI exclusive output.
+    wasapi_available: bool,
     /// Where lyrics found online are saved: `sidecar`, `embed` or `off`.
     lyrics_save: SaveMode,
     /// Also search NetEase Cloud Music when LRCLIB has nothing.
@@ -684,6 +699,7 @@ fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
         } else {
             "desktop"
         },
+        wasapi_available: cfg!(target_os = "windows"),
         lyrics_save: store.lyrics_save(),
         lyrics_netease: store.lyrics_netease(),
         offline_mode: store.offline_mode(),

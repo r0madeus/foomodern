@@ -112,6 +112,10 @@ pub trait AudioEngine: Send + Sync {
     fn set_volume(&self, percent: f64) -> EngineResult<()>;
     /// Choose the ReplayGain mode. Takes effect for the current and later tracks.
     fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()>;
+    /// Enable or disable gapless transitions between consecutive tracks.
+    fn set_gapless(&self, enabled: bool) -> EngineResult<()>;
+    /// Enable or disable Windows WASAPI exclusive output mode (no-op elsewhere).
+    fn set_wasapi_exclusive(&self, enabled: bool) -> EngineResult<()>;
 }
 
 /// Wraps an engine so that online streams (`http(s)://` paths) are only
@@ -169,5 +173,13 @@ impl AudioEngine for NetGuardedEngine {
 
     fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()> {
         self.inner.set_replaygain(mode)
+    }
+
+    fn set_gapless(&self, enabled: bool) -> EngineResult<()> {
+        self.inner.set_gapless(enabled)
+    }
+
+    fn set_wasapi_exclusive(&self, enabled: bool) -> EngineResult<()> {
+        self.inner.set_wasapi_exclusive(enabled)
     }
 }

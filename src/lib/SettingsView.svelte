@@ -333,6 +333,38 @@
               {/each}
             </div>
           </div>
+
+          <div class="flex items-start justify-between gap-6 p-4">
+            <div class="min-w-0">
+              <p id="gapless-label" class="text-sm font-medium">{t('Gapless playback')}</p>
+              <p id="gapless-help" class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                {t('Plays consecutive tracks without gaps or silence. Turn off to reset playback between tracks.')}
+              </p>
+            </div>
+            <ToggleSwitch
+              ariaLabelledby="gapless-label"
+              ariaDescribedby="gapless-help"
+              checked={player.snapshot.gapless}
+              onchange={(next) => void player.setGapless(next)}
+            />
+          </div>
+
+          {#if appSettings.wasapiAvailable}
+            <div class="flex items-start justify-between gap-6 p-4">
+              <div class="min-w-0">
+                <p id="wasapi-label" class="text-sm font-medium">{t('WASAPI exclusive mode')}</p>
+                <p id="wasapi-help" class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t('Bypasses the Windows mixer for direct output at each track’s native format. Other apps cannot play sound while active.')}
+                </p>
+              </div>
+              <ToggleSwitch
+                ariaLabelledby="wasapi-label"
+                ariaDescribedby="wasapi-help"
+                checked={player.snapshot.wasapiExclusive}
+                onchange={(next) => void player.setWasapiExclusive(next)}
+              />
+            </div>
+          {/if}
         </div>
       </section>
     {/if}

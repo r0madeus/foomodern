@@ -28,6 +28,8 @@ export interface PlayerSnapshot {
   shuffle: boolean
   repeat: RepeatMode
   replaygain: ReplayGain
+  gapless: boolean
+  wasapiExclusive: boolean
 }
 
 interface PositionPayload {
@@ -47,6 +49,8 @@ const EMPTY: PlayerSnapshot = {
   shuffle: false,
   repeat: 'off',
   replaygain: 'album',
+  gapless: true,
+  wasapiExclusive: false,
 }
 
 /** Queue rows are fetched in pages; never the whole list in one IPC call. */
@@ -103,6 +107,8 @@ class PlayerStore {
     return this.setRepeat(next)
   }
   setReplayGain = (mode: ReplayGain) => this.#run('player_set_replaygain', { mode })
+  setGapless = (enabled: boolean) => this.#run('player_set_gapless', { enabled })
+  setWasapiExclusive = (enabled: boolean) => this.#run('player_set_wasapi_exclusive', { enabled })
   seek = (seconds: number) => {
     this.#setAnchor(seconds)
     return this.#run('player_seek', { seconds })

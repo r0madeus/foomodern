@@ -564,4 +564,10 @@ const TR: Record<string, string> = {
   General: 'Genel',
   'Collapse sidebar': 'Kenar çubuğunu daralt',
   'Expand sidebar': 'Kenar çubuğunu genişlet',
+  'Gapless playback': 'Kesintisiz çalma (Gapless)',
+  'Plays consecutive tracks without gaps or silence. Turn off to reset playback between tracks.':
+    'Arka arkaya gelen parçaları arada boşluk ya da sessizlik olmadan çalar. Parçalar arasında çıkışın sıfırlanması için kapat.',
+  'WASAPI exclusive mode': 'WASAPI özel (exclusive) modu',
+  'Bypasses the Windows mixer for direct output at each track’s native format. Other apps cannot play sound while active.':
+    'Windows ses karıştırıcısını atlayıp parçanın doğal biçimini doğrudan ses cihazına verir. Etkin olduğunda diğer uygulamalar ses çalamaz.',
 }

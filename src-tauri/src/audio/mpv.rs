@@ -67,6 +67,8 @@ pub struct MpvEngine {
     slots: Arc<Mutex<Slots>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    custom_ao: bool,
 }
 
 fn cmd_err(name: &str, e: impl std::fmt::Debug) -> EngineError {
@@ -124,6 +126,7 @@ fn path_str(path: &Path) -> EngineResult<&str> {
 
 impl MpvEngine {
     pub fn new(options: MpvOptions, events: Sender<EngineEvent>) -> EngineResult<MpvEngine> {
+        let custom_ao = options.audio_output.is_some();
         let mpv = Mpv::with_initializer(|i| {
             i.set_property("vid", "no")?;
             i.set_property("audio-display", "no")?;
@@ -131,6 +134,10 @@ impl MpvEngine {
             i.set_property("keep-open", "no")?;
             i.set_property("prefetch-playlist", "yes")?;
             i.set_property("gapless-audio", "weak")?;
+            #[cfg(target_os = "windows")]
+            if !custom_ao {
+                i.set_property("audio-exclusive", "no")?;
+            }
             i.set_property("replaygain", "album")?;
             i.set_property("config", "no")?;
             i.set_property("load-scripts", "no")?;
@@ -179,6 +186,7 @@ impl MpvEngine {
             slots,
             stop,
             thread: Some(thread),
+            custom_ao,
         })
     }
 
@@ -269,6 +277,37 @@ impl AudioEngine for MpvEngine {
         self.mpv
             .set_property("replaygain", mode.mpv_value())
             .map_err(|e| cmd_err("replaygain", e))
+    }
+
+    fn set_gapless(&self, enabled: bool) -> EngineResult<()> {
+        let value = if enabled { "weak" } else { "no" };
+        self.mpv
+            .set_property("gapless-audio", value)
+            .map_err(|e| cmd_err("gapless-audio", e))
+    }
+
+    fn set_wasapi_exclusive(&self, enabled: bool) -> EngineResult<()> {
+        #[cfg(target_os = "windows")]
+        if !self.custom_ao {
+            let value = if enabled { "yes" } else { "no" };
+            self.mpv
+                .set_property("audio-exclusive", value)
+                .map_err(|e| cmd_err("audio-exclusive", e))?;
+            // Reload the audio output immediately when actively playing so the
+            // user hears the switch without waiting for the next track; while
+            // idle or paused the updated option applies on the next open.
+            let idle = self.mpv.get_property::<bool>("idle-active").unwrap_or(true);
+            let paused = self.mpv.get_property::<bool>("pause").unwrap_or(true);
+            if !idle
+                && !paused
+                && let Err(e) = self.command("ao-reload", &[])
+            {
+                log::warn!("ao-reload after audio-exclusive={value} failed: {e}");
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = enabled;
+        Ok(())
     }
 }
 

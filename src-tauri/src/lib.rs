@@ -259,6 +259,8 @@ pub fn run() {
             commands::player_set_shuffle,
             commands::player_set_repeat,
             commands::player_set_replaygain,
+            commands::player_set_gapless,
+            commands::player_set_wasapi_exclusive,
             commands::player_snapshot,
             commands::library_add_folder,
             commands::library_android_pick_folder,

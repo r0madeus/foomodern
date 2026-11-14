@@ -88,16 +88,35 @@ contributors and agents.
 - CI builds an aarch64 debug APK (artifact `foomodern-android-debug-apk`).
 
 ### Look and feel (phone and desktop)
-- Phone UI (`src/lib/mobile`, below 640 px): Albums / Songs / Search /
-  Library tabs, a mini player, a full-screen player tinted with the
-  cover's colour, the line being sung under the cover, a lyrics card and
-  full-screen lyrics (follow playback, tap a line to seek), album and
-  playlist pages, cover thumbnails, Android back button closes screens,
-  always dark, edge-to-edge insets.
-- Desktop: a now-playing view (large cover + synced lyrics) opened from
-  the player bar, the lyrics panel in the same tinted style, covers in
+- Phone UI (`src/lib/mobile`, below 640 px): Home / Search / Library tabs
+  over a floating frosted gradient bar (with an Albums tile inside Library),
+  a mini player, a full-screen player tinted with the cover's colour, the
+  line being sung under the cover, a lyrics card and full-screen lyrics
+  (follow playback, tap a line to seek), album and playlist pages, cover
+  thumbnails, Android back button closes screens, always dark, edge-to-edge
+  insets.
+- Desktop: light / dark / system-default appearance theme (`theme.svelte.ts`),
+  collapsible sidebar with `Ctrl+K` quick-search hint, a now-playing view
+  (large cover + synced lyrics) opened from the player bar (with cover-tinted
+  ambient sheen), the lyrics panel in the same tinted style, covers in
   song/playlist rows and in the player bar, sidebar icons, album headers
   on the cover's colour.
+- Categorised grouped Settings (`All` / `General` / `Playback` / `Library` /
+  `Internet` / `About`) with shared `ToggleSwitch` and segmented pill
+  controls.
+
+### Home & playback controls (decisions K12, K13)
+- **Home & local dynamic mixes (decision K13)**: Home view on both desktop
+  and phone powered by local SQLite listening history (`library_home`,
+  `library_home_mix`, `library_play_mix`, `library_save_mix_playlist`): up to
+  four dynamic mixes (`Weekly Favorites`, `On Repeat`, `Rediscover`, top
+  artist/genre mix) plus `Recently played` and `Quick access`, with cold-start
+  handling and one-click saving of any mix as a playlist.
+- **Playback settings (decision K12)**: persisted `Gapless playback` toggle
+  (`weak` / `no` in mpv on desktop; clears engine next-track preloading and
+  advances via `Idle` on both platforms when turned off) and Windows-only
+  `WASAPI exclusive mode` toggle (`audio-exclusive` with `ao-reload` while
+  actively playing).
 - The cover's dominant colour is computed in Rust (`library::cover_color`).
 
 ## Next

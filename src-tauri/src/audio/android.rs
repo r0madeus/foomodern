@@ -175,4 +175,13 @@ impl AudioEngine for AndroidEngine {
         }
         Ok(())
     }
+
+    fn set_gapless(&self, _enabled: bool) -> EngineResult<()> {
+        // Player clears `set_next` and advances on Idle when gapless is off.
+        Ok(())
+    }
+
+    fn set_wasapi_exclusive(&self, _enabled: bool) -> EngineResult<()> {
+        Ok(())
+    }
 }
