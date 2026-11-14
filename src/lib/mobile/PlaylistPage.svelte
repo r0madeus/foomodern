@@ -74,7 +74,7 @@
             <Icon name="shuffle" class="size-6" />
           </button>
           <button
-            class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
+            class="flex size-14 items-center justify-center rounded-full bg-accent-500 text-zinc-950 shadow-lg active:scale-95"
             aria-label={t("Play")}
             onclick={() => playlists.play(id, 0)}
           >

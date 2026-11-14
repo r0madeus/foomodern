@@ -15,7 +15,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Teal',
     gradient: 'linear-gradient(135deg, #14b8a6, #0f766e, #134e4a)',
     heroTop: '#0d9488',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#14b8a6',
   },
   {
@@ -23,7 +23,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Ocean',
     gradient: 'linear-gradient(135deg, #38bdf8, #1d4ed8, #1e1b4b)',
     heroTop: '#0284c7',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#38bdf8',
   },
   {
@@ -31,7 +31,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Indigo',
     gradient: 'linear-gradient(135deg, #6366f1, #4338ca, #1e1b4b)',
     heroTop: '#4f46e5',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#6366f1',
   },
   {
@@ -39,7 +39,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Violet',
     gradient: 'linear-gradient(135deg, #c084fc, #7e22ce, #3b0764)',
     heroTop: '#9333ea',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#a855f7',
   },
   {
@@ -47,7 +47,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Rose',
     gradient: 'linear-gradient(135deg, #fb7185, #be123c, #4c0519)',
     heroTop: '#e11d48',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#f43f5e',
   },
   {
@@ -55,7 +55,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Sunset',
     gradient: 'linear-gradient(135deg, #fb923c, #ea580c, #7c2d12)',
     heroTop: '#ea580c',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#f97316',
   },
   {
@@ -63,7 +63,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Emerald',
     gradient: 'linear-gradient(135deg, #34d399, #059669, #064e3b)',
     heroTop: '#059669',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#10b981',
   },
   {
@@ -71,7 +71,7 @@ export const COVER_PALETTES: CoverPalette[] = [
     label: 'Slate',
     gradient: 'linear-gradient(135deg, #64748b, #334155, #0f172a)',
     heroTop: '#475569',
-    heroSurface: '#09090b',
+    heroSurface: 'var(--color-zinc-950)',
     swatch: '#64748b',
   },
 ]

@@ -34,7 +34,7 @@
 <div class="absolute inset-0 flex flex-col bg-zinc-950">
   <PageHeader title={t('Favorites')} {onBack} />
   <div class="flex shrink-0 items-center gap-4 px-4 pt-1 pb-4">
-    <div class="flex size-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-indigo-600 shadow-lg shadow-black/40">
+    <div class="flex size-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-indigo-600 shadow-lg shadow-black/40">
       <Icon name="star" class="size-10 text-white" />
     </div>
     <div class="min-w-0 flex-1">
@@ -54,7 +54,7 @@
       </button>
       <button
         type="button"
-        class="flex size-12 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
+        class="flex size-12 items-center justify-center rounded-full bg-accent-500 text-zinc-950 shadow-lg active:scale-95"
         aria-label={t('Play')}
         onclick={() => void favorites.play(0)}
       >

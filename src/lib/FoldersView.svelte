@@ -22,7 +22,7 @@
         {t("Rescan")}
       </button>
       <button
-        class="flex items-center gap-1.5 rounded-full bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-500"
+        class="flex items-center gap-1.5 rounded-full bg-accent-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-500"
         onclick={() => library.addFolder()}
       >
         <Icon name="folder" class="size-3.5" /> {t("Add folder")}
@@ -31,11 +31,11 @@
   </div>
 
   {#if library.scan}
-    <p class="mb-3 text-sm text-teal-700 dark:text-teal-400" role="status">
+    <p class="mb-3 text-sm text-accent-700 dark:text-accent-400" role="status">
       Scanning {library.scan.folder} – {library.scan.scanned.toLocaleString()} files…
     </p>
   {:else if library.scanning}
-    <p class="mb-3 text-sm text-teal-700 dark:text-teal-400" role="status">{t("Scanning…")}</p>
+    <p class="mb-3 text-sm text-accent-700 dark:text-accent-400" role="status">{t("Scanning…")}</p>
   {/if}
 
   {#if library.folders.length === 0}
@@ -44,7 +44,7 @@
     <ul class="divide-y divide-zinc-200/70 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/70 dark:divide-zinc-800/80 dark:border-zinc-800 dark:bg-zinc-950/40">
       {#each library.folders as f (f.id)}
         <li class="group flex items-center gap-3 px-3.5 py-2.5 text-sm">
-          <Icon name="folder" class="size-4 shrink-0 text-teal-600 dark:text-teal-400" />
+          <Icon name="folder" class="size-4 shrink-0 text-accent-600 dark:text-accent-400" />
           <span class="min-w-0 flex-1 truncate text-xs sm:text-sm" title={f.path}>{f.path}</span>
           <button
             class="rounded-full p-1 text-zinc-400 transition hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"

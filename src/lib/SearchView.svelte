@@ -101,7 +101,7 @@
               ? t('Search your library…')
               : t('Search your library & online (Enter for online)…')}
             aria-label={onlineOff ? t('Search your library') : t('Search library and online')}
-            class="h-10 w-full rounded-full border border-zinc-200 bg-white pr-16 pl-9 text-sm outline-none placeholder:text-zinc-400 focus:border-teal-500 dark:border-zinc-800 dark:bg-zinc-900 dark:placeholder:text-zinc-500"
+            class="h-10 w-full rounded-full border border-zinc-200 bg-white pr-16 pl-9 text-sm outline-none placeholder:text-zinc-400 focus:border-accent-500 dark:border-zinc-800 dark:bg-zinc-900 dark:placeholder:text-zinc-500"
           />
           {#if online.query}
             <button
@@ -122,7 +122,7 @@
           <button
             type="submit"
             disabled={online.searching || trimmedQuery === ''}
-            class="h-10 shrink-0 rounded-full bg-teal-500 px-5 text-sm font-semibold text-zinc-950 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
+            class="h-10 shrink-0 rounded-full bg-accent-500 px-5 text-sm font-semibold text-zinc-950 hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {online.searching ? t('Searching…') : t('Online search')}
           </button>
@@ -132,7 +132,7 @@
       {#if onlineOff}
         <p class="flex flex-wrap items-center gap-2 text-xs text-zinc-500" role="status">
           <span>{t('Online search is turned off in Settings.')}</span>
-          <button type="button" class="font-medium text-teal-700 hover:underline dark:text-teal-300" onclick={onOpenSettings}>
+          <button type="button" class="font-medium text-accent-700 hover:underline dark:text-accent-300" onclick={onOpenSettings}>
             {t('Settings')}
           </button>
         </p>
@@ -244,9 +244,9 @@
                         role="button"
                         tabindex="0"
                         class={[
-                          'flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                          'flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
                           track.path === currentPath
-                            ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                            ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                             : 'text-zinc-800 hover:bg-zinc-100/80 dark:text-zinc-200 dark:hover:bg-zinc-800/50',
                         ]}
                         onclick={() => void library.playQuery(debouncedLocalQuery, i)}
@@ -337,7 +337,7 @@
                             {album.artist}{album.year ? ` · ${album.year}` : ''}
                           </span>
                           {#if inLib}
-                            <span class="mt-1 inline-flex w-fit rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300">
+                            <span class="mt-1 inline-flex w-fit rounded-full bg-accent-500/15 px-2 py-0.5 text-[10px] font-medium text-accent-700 dark:text-accent-300">
                               {t('In library')}
                             </span>
                           {/if}
@@ -367,7 +367,7 @@
                             class={[
                               'flex h-12 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60',
                               isCurrent
-                                ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                                ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                                 : 'text-zinc-800 hover:bg-zinc-100/80 dark:text-zinc-200 dark:hover:bg-zinc-800/50',
                             ]}
                             onclick={() => void online.playTracks(songs, i)}
@@ -384,7 +384,7 @@
                               </p>
                             </div>
                             {#if online.playingId === track.id}
-                              <span class="text-xs text-teal-600 dark:text-teal-400">
+                              <span class="text-xs text-accent-600 dark:text-accent-400">
                                 {t('Loading…')}
                               </span>
                             {:else if inLib && job?.state !== 'done'}
@@ -409,7 +409,7 @@
                             class={[
                               'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
                               job?.state === 'done'
-                                ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
+                                ? 'bg-accent-500/15 text-accent-700 dark:text-accent-300'
                                 : job?.state === 'failed'
                                   ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25 dark:text-red-400'
                                   : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
@@ -444,7 +444,7 @@
                 <span>{t('Press Enter to search online for “{q}”.', { q: trimmedQuery })}</span>
                 <button
                   type="button"
-                  class="rounded-full bg-teal-500/15 px-3.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-500/25 dark:text-teal-300"
+                  class="rounded-full bg-accent-500/15 px-3.5 py-1 text-xs font-semibold text-accent-700 hover:bg-accent-500/25 dark:text-accent-300"
                   onclick={() => void online.search()}
                 >
                   {t('Online search')}
@@ -465,10 +465,10 @@
     >
       <div class="mb-2 flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          <Icon name="download" class="size-4 text-teal-600 dark:text-teal-400" />
+          <Icon name="download" class="size-4 text-accent-600 dark:text-accent-400" />
           <span>{t('Downloads')}</span>
           {#if online.activeDownloadCount > 0}
-            <span class="rounded-full bg-teal-500/15 px-2 py-0.5 text-[11px] font-medium text-teal-700 normal-case dark:text-teal-300">
+            <span class="rounded-full bg-accent-500/15 px-2 py-0.5 text-[11px] font-medium text-accent-700 normal-case dark:text-accent-300">
               {count(online.activeDownloadCount, '{n} active', '{n} active')}
             </span>
           {/if}
@@ -504,7 +504,7 @@
                 class={[
                   'shrink-0 font-medium tabular-nums',
                   job.state === 'done'
-                    ? 'text-teal-600 dark:text-teal-400'
+                    ? 'text-accent-600 dark:text-accent-400'
                     : job.state === 'failed'
                       ? 'text-red-500'
                       : 'text-zinc-500',
@@ -538,7 +538,7 @@
             {#if job.state === 'downloading' || job.state === 'queued'}
               <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <div
-                  class="h-full w-full origin-left bg-teal-500 transition-transform duration-300 ease-out"
+                  class="h-full w-full origin-left bg-accent-500 transition-transform duration-300 ease-out"
                   style:transform="scaleX({downloadProgress(job) / 100})"
                 ></div>
               </div>

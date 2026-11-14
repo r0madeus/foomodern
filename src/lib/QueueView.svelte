@@ -38,7 +38,7 @@
             }}
           >
             <input
-              class="w-48 rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
+              class="w-48 rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-zinc-700 dark:bg-zinc-900"
               placeholder={t("Playlist name")}
               aria-label={t("Playlist name")}
               bind:value={name}
@@ -47,7 +47,7 @@
             />
             <button
               type="submit"
-              class="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+              class="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
               disabled={name.trim() === ''}
             >
               {t("Save")}

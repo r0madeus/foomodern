@@ -66,7 +66,7 @@
         <p class="text-sm text-zinc-500">{t('No albums match “{q}”.', { q })}</p>
         <button
           type="button"
-          class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-950/50"
           onclick={() => library.setQuery('')}
         >
           {t("Clear search")}
@@ -93,7 +93,7 @@
                         <Cover
                           cover={a.cover}
                           title={a.title}
-                          class="aspect-square w-full rounded-lg text-3xl shadow-sm group-hover:ring-2 group-hover:ring-teal-500"
+                          class="aspect-square w-full rounded-lg text-3xl shadow-sm group-hover:ring-2 group-hover:ring-accent-500"
                         />
                         <p class="mt-2 truncate text-sm font-medium">{a.title}</p>
                         <p class="truncate text-xs text-zinc-500">{a.albumArtist}{a.year ? ` · ${a.year}` : ''}</p>

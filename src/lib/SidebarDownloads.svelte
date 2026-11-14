@@ -24,11 +24,11 @@
       <Icon
         name="download"
         class={online.activeDownloadCount > 0
-          ? 'size-[18px] animate-pulse text-teal-600 dark:text-teal-400'
+          ? 'size-[18px] animate-pulse text-accent-600 dark:text-accent-400'
           : 'size-[18px] opacity-85'}
       />
       {#if online.activeDownloadCount > 0}
-        <span class="absolute top-0.5 right-1 flex size-3.5 items-center justify-center rounded-full bg-teal-600 text-[9px] font-semibold text-white">
+        <span class="absolute top-0.5 right-1 flex size-3.5 items-center justify-center rounded-full bg-accent-600 text-[9px] font-semibold text-white">
           {online.activeDownloadCount}
         </span>
       {/if}
@@ -43,12 +43,12 @@
           <Icon
             name="download"
             class={online.activeDownloadCount > 0
-              ? 'size-3.5 shrink-0 animate-pulse text-teal-600 dark:text-teal-400'
+              ? 'size-3.5 shrink-0 animate-pulse text-accent-600 dark:text-accent-400'
               : 'size-3.5 shrink-0'}
           />
           <span class="truncate">{t('Downloads')}</span>
           {#if online.activeDownloadCount > 0}
-            <span class="shrink-0 rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium normal-case text-teal-700 dark:text-teal-300">
+            <span class="shrink-0 rounded-full bg-accent-500/15 px-1.5 py-0.5 text-[10px] font-medium normal-case text-accent-700 dark:text-accent-300">
               {online.activeDownloadCount}
             </span>
           {/if}
@@ -84,7 +84,7 @@
                   class={[
                     'text-[11px] font-medium tabular-nums',
                     job.state === 'done'
-                      ? 'text-teal-600 dark:text-teal-400'
+                      ? 'text-accent-600 dark:text-accent-400'
                       : job.state === 'failed'
                         ? 'text-red-500'
                         : 'text-zinc-500 dark:text-zinc-400',
@@ -119,10 +119,10 @@
             {#if active}
               <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 {#if job.state === 'downloading' && job.doneTracks === 0}
-                  <div class="h-full w-2/5 animate-pulse rounded-full bg-teal-500"></div>
+                  <div class="h-full w-2/5 animate-pulse rounded-full bg-accent-500"></div>
                 {:else}
                   <div
-                    class="h-full w-full origin-left bg-teal-500 transition-transform duration-300 ease-out"
+                    class="h-full w-full origin-left bg-accent-500 transition-transform duration-300 ease-out"
                     style:transform="scaleX({downloadProgress(job) / 100})"
                   ></div>
                 {/if}

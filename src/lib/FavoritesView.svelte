@@ -33,8 +33,8 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <div class="mx-5 mb-5 flex items-end gap-6 rounded-2xl bg-gradient-to-br from-teal-700 via-teal-900 to-zinc-950 p-6 text-white">
-    <div class="flex size-40 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-indigo-600 shadow-2xl shadow-black/40 sm:size-44">
+  <div class="mx-5 mb-5 flex items-end gap-6 rounded-2xl bg-gradient-to-br from-accent-700 via-accent-900 to-zinc-950 p-6 text-white">
+    <div class="flex size-40 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-indigo-600 shadow-2xl shadow-black/40 sm:size-44">
       <Icon name="star" class="size-20 text-white" />
     </div>
     <div class="min-w-0">
@@ -47,7 +47,7 @@
         <button
           type="button"
           disabled={totalCount === 0}
-          class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           onclick={() => void favorites.play(0)}
         >
           <Icon name="play" class="size-5" /> {t('Play')}
@@ -92,9 +92,9 @@
             title={track.path}
             class={[
               COLS,
-              'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
+              'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset',
               track.path === currentPath
-                ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             ondblclick={() => void favorites.play(i)}
@@ -104,7 +104,7 @@
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                <Equalizer class="text-teal-600 dark:text-teal-400" />
+                <Equalizer class="text-accent-600 dark:text-accent-400" />
               {:else}{i + 1}{/if}
             </span>
             <span class="flex min-w-0 items-center gap-3">

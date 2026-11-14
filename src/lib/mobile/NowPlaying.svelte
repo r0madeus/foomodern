@@ -75,7 +75,7 @@
   aria-modal="true"
   aria-label={t("Now playing")}
 >
-  <TintedBackdrop background="linear-gradient(to bottom, {tint.top} 0%, #09090b 92%)" duration={600} />
+  <TintedBackdrop background="linear-gradient(to bottom, {tint.top} 0%, var(--color-zinc-950) 92%)" duration={600} />
   <div bind:this={scroller} class="h-full overflow-y-auto overscroll-contain">
     <section
       class="flex flex-col px-6"
@@ -108,7 +108,7 @@
               <h2 class="truncate text-[22px] leading-tight font-bold">{snap.current.title}</h2>
               <p class="mt-0.5 truncate text-base text-white/70">
                 {#if snap.current.artist}
-                  <ArtistLinks artist={snap.current.artist} linkClass="hover:text-teal-400 active:underline" />
+                  <ArtistLinks artist={snap.current.artist} linkClass="hover:text-accent-400 active:underline" />
                 {:else}
                   {t('Unknown artist')}
                 {/if}
@@ -117,7 +117,7 @@
                   <AlbumLink
                     album={nowCover.track.album}
                     albumId={nowCover.track.albumId}
-                    linkClass="hover:text-teal-400 active:underline"
+                    linkClass="hover:text-accent-400 active:underline"
                   />
                 {/if}
               </p>
@@ -149,13 +149,13 @@
 
           <div class="mt-2 flex items-center justify-between">
             <button
-              class={['relative rounded-full p-3 active:bg-white/10', snap.shuffle ? 'text-teal-400' : 'text-white']}
+              class={['relative rounded-full p-3 active:bg-white/10', snap.shuffle ? 'text-accent-400' : 'text-white']}
               aria-pressed={snap.shuffle}
               aria-label={t(snap.shuffle ? 'Shuffle on' : 'Shuffle off')}
               onclick={player.toggleShuffle}
             >
               <Icon name="shuffle" class="size-6" />
-              {#if snap.shuffle}<span class="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-teal-400"></span>{/if}
+              {#if snap.shuffle}<span class="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-accent-400"></span>{/if}
             </button>
             <button class="rounded-full p-2 active:bg-white/10" aria-label={t("Previous")} onclick={player.previous}>
               <Icon name="prev" class="size-10" />
@@ -171,13 +171,13 @@
               <Icon name="next" class="size-10" />
             </button>
             <button
-              class={['relative rounded-full p-3 active:bg-white/10', snap.repeat !== 'off' ? 'text-teal-400' : 'text-white']}
+              class={['relative rounded-full p-3 active:bg-white/10', snap.repeat !== 'off' ? 'text-accent-400' : 'text-white']}
               aria-pressed={snap.repeat !== 'off'}
               aria-label={t(snap.repeat === 'one' ? 'Repeat one' : snap.repeat === 'all' ? 'Repeat all' : 'Repeat off')}
               onclick={player.cycleRepeat}
             >
               <Icon name={snap.repeat === 'one' ? 'repeatOne' : 'repeat'} class="size-6" />
-              {#if snap.repeat !== 'off'}<span class="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-teal-400"></span>{/if}
+              {#if snap.repeat !== 'off'}<span class="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-accent-400"></span>{/if}
             </button>
           </div>
 

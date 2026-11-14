@@ -193,9 +193,9 @@
   const pillGroup =
     'inline-flex shrink-0 flex-wrap rounded-xl border border-zinc-200/80 bg-zinc-100/80 p-1 dark:border-zinc-800 dark:bg-zinc-950/60'
   const pillBtn = (active: boolean) => [
-    'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+    'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
     active
-      ? 'bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-zinc-950'
+      ? 'bg-accent-600 text-white shadow-xs dark:bg-accent-500 dark:text-zinc-950'
       : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
   ]
   const actionBtn =
@@ -213,9 +213,9 @@
             role="tab"
             aria-selected={category === cat.id}
             class={[
-              'flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+              'flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
               category === cat.id
-                ? 'bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-zinc-950'
+                ? 'bg-accent-600 text-white shadow-xs dark:bg-accent-500 dark:text-zinc-950'
                 : 'bg-zinc-200/70 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800',
             ]}
             onclick={() => (category = cat.id)}
@@ -407,7 +407,7 @@
               {:else}
                 <button
                   type="button"
-                  class="shrink-0 rounded-full bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-500"
+                  class="shrink-0 rounded-full bg-accent-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-500"
                   onclick={() => void invoke('app_request_file_access').catch((e) => (player.error = String(e)))}
                 >
                   {t('Allow')}
@@ -520,7 +520,7 @@
                 </div>
                 <div class="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                   <div
-                    class="h-full rounded-full bg-teal-500 transition-[width]"
+                    class="h-full rounded-full bg-accent-500 transition-[width]"
                     style:width="{artists.scan.total > 0 ? Math.round((artists.scan.done / artists.scan.total) * 100) : 0}%"
                   ></div>
                 </div>
@@ -537,7 +537,7 @@
                 })}
               </p>
             {:else if artists.scan.total > 0}
-              <p class="text-xs text-teal-700 dark:text-teal-400" role="status">
+              <p class="text-xs text-accent-700 dark:text-accent-400" role="status">
                 {t('Updated {updated} of {total} artists.', {
                   updated: artists.scan.updated,
                   total: artists.scan.total,
@@ -578,9 +578,9 @@
                   aria-checked={active}
                   disabled={!appSettings.loaded}
                   class={[
-                    'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50',
+                    'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:opacity-50',
                     active
-                      ? 'border-teal-500/70 bg-teal-50/70 text-teal-900 dark:border-teal-500/60 dark:bg-teal-950/40 dark:text-teal-200'
+                      ? 'border-accent-500/70 bg-accent-50/70 text-accent-900 dark:border-accent-500/60 dark:bg-accent-950/40 dark:text-accent-200'
                       : 'border-zinc-200/80 text-zinc-700 hover:bg-zinc-100/70 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
                   ]}
                   onclick={() => void appSettings.setLyricsSave(m.value)}
@@ -589,7 +589,7 @@
                     class={[
                       'flex size-4 shrink-0 items-center justify-center rounded-full border',
                       active
-                        ? 'border-teal-600 bg-teal-600 dark:border-teal-400 dark:bg-teal-400'
+                        ? 'border-accent-600 bg-accent-600 dark:border-accent-400 dark:bg-accent-400'
                         : 'border-zinc-400 dark:border-zinc-600',
                     ]}
                   >
@@ -636,7 +636,7 @@
                 {t('Writes the lyrics already found for your library with the setting above. Songs that already have lyrics are skipped.')}
               </p>
               {#if lyricsSaved}
-                <p class="mt-1 text-xs font-medium text-teal-600 dark:text-teal-400" role="status">
+                <p class="mt-1 text-xs font-medium text-accent-600 dark:text-accent-400" role="status">
                   {lyricsSaved}
                 </p>
               {/if}
@@ -788,7 +788,7 @@
         <div class={cardClass}>
           <div class="flex flex-wrap items-center justify-between gap-3 p-4">
             <div class="flex items-center gap-3">
-              <span class="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 text-white shadow-sm">
+              <span class="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-700 text-white shadow-sm">
                 <Icon name="music" class="size-5" />
               </span>
               <div>
@@ -816,7 +816,7 @@
 
             <button
               type="button"
-              class="rounded-full bg-teal-500/15 px-4 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-500/25 disabled:opacity-50 dark:text-teal-300"
+              class="rounded-full bg-accent-500/15 px-4 py-1.5 text-xs font-semibold text-accent-700 transition hover:bg-accent-500/25 disabled:opacity-50 dark:text-accent-300"
               disabled={updates.checking || !appSettings.allowUpdates}
               title={appSettings.allowUpdates ? undefined : t('Turned off in Settings')}
               onclick={() => void updates.check(true)}

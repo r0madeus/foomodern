@@ -162,7 +162,7 @@
 <div class="h-full overflow-y-auto px-5 pb-8">
   <div class="mx-auto flex max-w-6xl flex-col gap-6">
     <!-- Wrapped-style hero banner -->
-    <section class="rounded-2xl bg-gradient-to-br from-teal-700 via-teal-900 to-zinc-950 p-6 text-white shadow-lg">
+    <section class="rounded-2xl bg-gradient-to-br from-accent-700 via-accent-900 to-zinc-950 p-6 text-white shadow-lg">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p class="flex items-center gap-1.5 text-xs font-semibold tracking-widest text-white/70 uppercase">
@@ -185,7 +185,7 @@
               class={[
                 'rounded-full px-3 py-1.5 text-xs font-medium transition',
                 preset === id
-                  ? 'bg-teal-400 text-zinc-950'
+                  ? 'bg-accent-400 text-zinc-950'
                   : 'bg-white/10 text-white/85 hover:bg-white/20',
               ]}
               onclick={() => (preset = id)}
@@ -198,7 +198,7 @@
             <select
               aria-label={t('Year')}
               bind:value={selectedYear}
-              class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white outline-none hover:bg-white/25 focus-visible:ring-2 focus-visible:ring-teal-400"
+              class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white outline-none hover:bg-white/25 focus-visible:ring-2 focus-visible:ring-accent-400"
             >
               {#each yearOptions as y (y)}
                 <option value={y} class="bg-zinc-900 text-white">{y}</option>
@@ -215,7 +215,7 @@
             <input
               type="date"
               bind:value={customFrom}
-              class="rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+              class="rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
             />
           </label>
           <label class="flex items-center gap-2 text-white/80">
@@ -223,7 +223,7 @@
             <input
               type="date"
               bind:value={customTo}
-              class="rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+              class="rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
             />
           </label>
         </div>
@@ -292,7 +292,7 @@
 
     {#if stats && stats.summary.rawEventCount === 0}
       <div class="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-16 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
-        <Icon name="history" class="size-10 text-teal-600 dark:text-teal-400" />
+        <Icon name="history" class="size-10 text-accent-600 dark:text-accent-400" />
         <h3 class="mt-3 text-base font-semibold">
           {stats.availableYears.length === 0
             ? t('No listening history yet')
@@ -314,7 +314,7 @@
             {sum.topHour !== null ? `${pad2(sum.topHour)}:00 – ${pad2((sum.topHour + 1) % 24)}:00` : '—'}
           </p>
           {#if sum.topHour !== null}
-            <p class="mt-0.5 text-xs text-teal-600 dark:text-teal-400">{hourPersona(sum.topHour)}</p>
+            <p class="mt-0.5 text-xs text-accent-600 dark:text-accent-400">{hourPersona(sum.topHour)}</p>
           {/if}
         </div>
         <div class="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -376,7 +376,7 @@
                 <button
                   type="button"
                   disabled={savingPlaylist}
-                  class="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+                  class="rounded-lg bg-accent-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-500 disabled:opacity-50"
                   onclick={() => void saveTopPlaylist()}
                 >
                   {t('Save as playlist')}
@@ -423,7 +423,7 @@
                   </div>
                   <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                     <div
-                      class="h-full rounded-full bg-teal-500/80"
+                      class="h-full rounded-full bg-accent-500/80"
                       style:width="{pct}%"
                     ></div>
                   </div>
@@ -465,7 +465,7 @@
                   </div>
                   <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                     <div
-                      class="h-full rounded-full bg-emerald-500/80"
+                      class="h-full rounded-full bg-accent-500/80"
                       style:width="{pct}%"
                     ></div>
                   </div>
@@ -535,7 +535,7 @@
                   </span>
                 </div>
                 <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                  <div class="h-full rounded-full bg-teal-500" style:width="{pct}%"></div>
+                  <div class="h-full rounded-full bg-accent-500" style:width="{pct}%"></div>
                 </div>
               </div>
             {:else}
@@ -567,7 +567,7 @@
                         class={[
                           'h-full w-full origin-bottom rounded-t transition-[transform,background-color] duration-500 ease-out',
                           bucket.listenedMs > 0
-                            ? 'bg-teal-500/80 group-hover:bg-teal-400'
+                            ? 'bg-accent-500/80 group-hover:bg-accent-400'
                             : 'bg-zinc-200/70 dark:bg-zinc-800/80',
                         ]}
                         style:transform="scaleY({hPct / 100})"
@@ -602,7 +602,7 @@
                     <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                       <div class="animate-bar-x h-full w-full" style:animation-delay="{idx * 35}ms">
                         <div
-                          class="h-full w-full origin-left rounded-r-full bg-teal-500/85 transition-transform duration-500 ease-out"
+                          class="h-full w-full origin-left rounded-r-full bg-accent-500/85 transition-transform duration-500 ease-out"
                           style:transform="scaleX({wPct / 100})"
                         ></div>
                       </div>
@@ -632,7 +632,7 @@
                   >
                     <div class="animate-bar-y min-h-0 w-full max-w-10 flex-1" style:animation-delay="{idx * 24}ms">
                       <div
-                        class="h-full w-full origin-bottom rounded-t bg-emerald-500/80 transition-[transform,background-color] duration-500 ease-out hover:bg-emerald-400"
+                        class="h-full w-full origin-bottom rounded-t bg-accent-500/80 transition-[transform,background-color] duration-500 ease-out hover:bg-accent-400"
                         style:transform="scaleY({mPct / 100})"
                       ></div>
                     </div>

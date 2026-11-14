@@ -36,10 +36,10 @@
       <h2 class="px-4 pt-2 pb-1 text-sm font-bold">{t("Now playing")}</h2>
       <div class="flex h-14 items-center px-4">
         <span class="min-w-0">
-          <span class="block truncate text-[15px] text-teal-400">{player.queue[current].title}</span>
+          <span class="block truncate text-[15px] text-accent-400">{player.queue[current].title}</span>
           <span class="block truncate text-[13px] text-zinc-400">
             {#if player.queue[current].artist}
-              <ArtistLinks artist={player.queue[current].artist} linkClass="hover:text-teal-400 active:underline" />
+              <ArtistLinks artist={player.queue[current].artist} linkClass="hover:text-accent-400 active:underline" />
             {/if}
           </span>
         </span>
@@ -59,7 +59,7 @@
             <span class="block truncate text-[15px]">{track.title}</span>
             <span class="block truncate text-[13px] text-zinc-400">
               {#if track.artist}
-                <ArtistLinks artist={track.artist} linkClass="hover:text-teal-400 active:underline" />
+                <ArtistLinks artist={track.artist} linkClass="hover:text-accent-400 active:underline" />
               {/if}
             </span>
           </div>

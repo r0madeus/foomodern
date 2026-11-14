@@ -119,6 +119,11 @@ contributors and agents.
   actively playing).
 - The cover's dominant colour is computed in Rust (`library::cover_color`).
 
+### Colours (decision K14)
+- The experience stays close to Spotify on purpose. Only the identity layer
+  changes: lavender-blue `accent` (#7C8CFF) instead of teal, and a neutral
+  grey with a slight cool tint (`zinc` overridden in `src/app.css`).
+
 ### Library navigation and desktop controls (v0.8)
 - Sortable columns: Songs sorts in the backend (`SortSpec`, ascending or
   descending, including duration); playlists sort the loaded list.

@@ -151,7 +151,7 @@
   >
     {#if profile}
       <div class="relative isolate overflow-hidden px-4 pt-16 pb-4">
-        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)" />
+        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, var(--color-zinc-950) 100%)" />
           <div class="flex flex-col items-center text-center">
             <Cover
               cover={portrait}
@@ -167,7 +167,7 @@
               )}
             </p>
             {#if profile.playCount > 0}
-              <p class="mt-1 text-xs font-medium text-teal-300">
+              <p class="mt-1 text-xs font-medium text-accent-300">
                 {t('Your listens: {time} · {plays}', {
                   time: formatHoursMins(profile.listenedMs),
                   plays: count(profile.playCount, '{n} play', '{n} plays'),
@@ -199,7 +199,7 @@
           <button
             type="button"
             disabled={profile.tracks.length === 0}
-            class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95 disabled:opacity-40"
+            class="flex size-14 items-center justify-center rounded-full bg-accent-500 text-zinc-950 shadow-lg active:scale-95 disabled:opacity-40"
             aria-label={t('Play')}
             onclick={() => void artists.play(profile!.name, 0, false)}
           >

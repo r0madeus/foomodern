@@ -4,7 +4,7 @@
   let {
     artist,
     class: className = '',
-    linkClass = 'hover:text-teal-600 hover:underline dark:hover:text-teal-400',
+    linkClass = 'hover:text-accent-600 hover:underline dark:hover:text-accent-400',
     onNavigate,
   }: {
     artist: string

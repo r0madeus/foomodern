@@ -59,9 +59,9 @@
               type="button"
               aria-pressed={library.sort === s.value}
               class={[
-                'rounded-lg px-3 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                'rounded-lg px-3 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
                 library.sort === s.value
-                  ? 'bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-zinc-950'
+                  ? 'bg-accent-600 text-white shadow-xs dark:bg-accent-500 dark:text-zinc-950'
                   : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
               ]}
               onclick={() => library.toggleColumnSort(s.value)}
@@ -88,10 +88,10 @@
         <button
           type="button"
           class={[
-            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-teal-500',
+            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-accent-500',
             h.align,
             active
-              ? 'font-semibold text-teal-600 dark:text-teal-400'
+              ? 'font-semibold text-accent-600 dark:text-accent-400'
               : 'hover:text-zinc-700 dark:hover:text-zinc-200',
           ]}
           aria-pressed={active}
@@ -112,7 +112,7 @@
         <p class="text-sm text-zinc-500">{t('No songs match “{q}”.', { q })}</p>
         <button
           type="button"
-          class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-950/50"
           onclick={() => library.setQuery('')}
         >
           {t("Clear search")}
@@ -135,9 +135,9 @@
               title={track.path}
               class={[
                 COLS,
-                'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
+                'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset',
                 track.path === currentPath
-                  ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                  ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
               ondblclick={() => library.playAll(i)}
@@ -147,7 +147,7 @@
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
                 {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                  <Equalizer class="text-teal-600 dark:text-teal-400" />
+                  <Equalizer class="text-accent-600 dark:text-accent-400" />
                 {:else}{i + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">

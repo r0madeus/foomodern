@@ -57,30 +57,30 @@
     onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onPlay()}
   >
     {#if number !== null}
-      <span class={['w-6 shrink-0 text-center text-sm tabular-nums', current ? 'text-teal-400' : 'text-zinc-500']}>
+      <span class={['w-6 shrink-0 text-center text-sm tabular-nums', current ? 'text-accent-400' : 'text-zinc-500']}>
         {#if playing}<Equalizer />{:else}{number}{/if}
       </span>
     {:else}
       <span class="relative shrink-0">
         <Cover {cover} {title} class="size-12 rounded text-sm" />
         {#if playing}
-          <span class="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-teal-300">
+          <span class="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-accent-300">
             <Equalizer />
           </span>
         {/if}
       </span>
     {/if}
     <span class="min-w-0 flex-1">
-      <span class={['block truncate text-[15px] leading-tight', current ? 'text-teal-400' : 'text-zinc-50']}>{title}</span>
+      <span class={['block truncate text-[15px] leading-tight', current ? 'text-accent-400' : 'text-zinc-50']}>{title}</span>
       <span class="mt-1 block truncate text-[13px] leading-tight text-zinc-400">
         {#if useLinks}
           {#if extraMeta}{extraMeta}{#if effArtist || effAlbum} · {/if}{/if}{#if effArtist}<ArtistLinks
               artist={effArtist}
-              linkClass="hover:text-teal-400 active:underline"
+              linkClass="hover:text-accent-400 active:underline"
             />{/if}{#if effArtist && effAlbum} · {/if}{#if effAlbum}<AlbumLink
               album={effAlbum}
               albumId={effAlbumId}
-              linkClass="hover:text-teal-400 active:underline"
+              linkClass="hover:text-accent-400 active:underline"
             />{/if}
         {:else}
           {subtitle}

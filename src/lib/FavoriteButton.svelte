@@ -53,11 +53,11 @@
   aria-label={label}
   title={label}
   class={[
-    'shrink-0 rounded p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-teal-500 active:scale-90',
+    'shrink-0 rounded p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-accent-500 active:scale-90',
     active
       ? light
-        ? 'text-teal-300 opacity-100 hover:bg-white/10'
-        : 'text-teal-500 opacity-100 hover:bg-zinc-200/70 dark:text-teal-400 dark:hover:bg-zinc-800'
+        ? 'text-accent-300 opacity-100 hover:bg-white/10'
+        : 'text-accent-500 opacity-100 hover:bg-zinc-200/70 dark:text-accent-400 dark:hover:bg-zinc-800'
       : [
           light
             ? 'text-white/60 hover:bg-white/10 hover:text-white'

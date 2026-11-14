@@ -81,7 +81,7 @@
         oncontextmenu={(e) => trackMenu.fromEvent(e, menuRow)}
       >
         <button
-          class="group relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          class="group relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
           onclick={onToggleNowPlaying}
           aria-pressed={nowPlaying}
           title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
@@ -93,7 +93,7 @@
         </button>
         <div class="min-w-0 flex-1">
           <button
-            class="block max-w-full truncate text-left text-sm font-medium text-zinc-900 hover:underline focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-100"
+            class="block max-w-full truncate text-left text-sm font-medium text-zinc-900 hover:underline focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-zinc-100"
             onclick={onToggleNowPlaying}
             aria-pressed={nowPlaying}
             title={t(nowPlaying ? 'Close now playing' : 'Open now playing')}
@@ -123,7 +123,7 @@
         class={[
           'rounded-full p-2 transition-colors',
           snap.shuffle
-            ? 'text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/60'
+            ? 'text-accent-600 hover:bg-accent-50 dark:text-accent-400 dark:hover:bg-accent-950/60'
             : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white',
         ]}
         onclick={player.toggleShuffle}
@@ -143,7 +143,7 @@
         <Icon name="prev" />
       </button>
       <button
-        class="rounded-full bg-teal-600 p-3 text-white shadow-sm transition hover:scale-105 hover:bg-teal-500 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 dark:bg-teal-500 dark:text-zinc-950 dark:hover:bg-teal-400"
+        class="rounded-full bg-accent-600 p-3 text-white shadow-sm transition hover:scale-105 hover:bg-accent-500 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 dark:bg-accent-500 dark:text-zinc-950 dark:hover:bg-accent-400"
         onclick={player.togglePause}
         disabled={!hasTrack}
         aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
@@ -164,7 +164,7 @@
         class={[
           'rounded-full p-2 transition-colors',
           snap.repeat !== 'off'
-            ? 'text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/60'
+            ? 'text-accent-600 hover:bg-accent-50 dark:text-accent-400 dark:hover:bg-accent-950/60'
             : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white',
         ]}
         onclick={player.cycleRepeat}
@@ -199,7 +199,7 @@
       class={[
         'rounded-full p-2 transition-colors',
         lyrics.open
-          ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950'
+          ? 'bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-950/60 dark:text-accent-300 dark:hover:bg-accent-950'
           : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white',
       ]}
       onclick={() => lyrics.toggle()}
@@ -215,7 +215,7 @@
         class={[
           'rounded-full p-2 transition-colors',
           queueOpen
-            ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-950'
+            ? 'bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-950/60 dark:text-accent-300 dark:hover:bg-accent-950'
             : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white',
         ]}
         onclick={onToggleQueue}

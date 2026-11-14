@@ -279,7 +279,7 @@
     <button type="button" role="menuitem" class={itemCls} onclick={() => void doToggleFavorite()}>
       <Icon
         name={starred ? 'star' : 'starOutline'}
-        class={['size-4 shrink-0', starred ? 'text-teal-500' : 'text-zinc-500'].join(' ')}
+        class={['size-4 shrink-0', starred ? 'text-accent-500' : 'text-zinc-500'].join(' ')}
       />
       <span class="truncate">
         {starred ? t('Remove from favorites') : t('Add to favorites')}
@@ -413,7 +413,7 @@
           }}
         >
           <input
-            class="rounded-md border border-zinc-200 bg-white px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950"
+            class="rounded-md border border-zinc-200 bg-white px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-zinc-700 dark:bg-zinc-950"
             placeholder={t('Playlist name')}
             aria-label={t('New playlist name')}
             bind:value={playlistName}
@@ -428,7 +428,7 @@
             </button>
             <button
               type="submit"
-              class="rounded-md bg-teal-600 px-2 py-1 font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+              class="rounded-md bg-accent-600 px-2 py-1 font-medium text-white hover:bg-accent-500 disabled:opacity-50"
               disabled={playlistName.trim() === ''}
             >
               {t('Create')}
@@ -454,7 +454,7 @@
         <button
           type="button"
           role="menuitem"
-          class="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-left text-teal-700 outline-none hover:bg-zinc-100 focus-visible:bg-zinc-100 dark:border-zinc-800 dark:text-teal-300 dark:hover:bg-zinc-800 dark:focus-visible:bg-zinc-800"
+          class="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-left text-accent-700 outline-none hover:bg-zinc-100 focus-visible:bg-zinc-100 dark:border-zinc-800 dark:text-accent-300 dark:hover:bg-zinc-800 dark:focus-visible:bg-zinc-800"
           onclick={() => void startCreate()}
         >
           <Icon name="plus" class="size-4" /> {t('New playlist…')}

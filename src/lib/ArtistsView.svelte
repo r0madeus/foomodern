@@ -74,7 +74,7 @@
         <p class="text-sm text-zinc-500">{t('No artists match “{q}”.', { q })}</p>
         <button
           type="button"
-          class="rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
+          class="rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-950/50"
           onclick={() => library.setQuery('')}
         >
           {t('Clear search')}
@@ -103,7 +103,7 @@
                     {#if a}
                       <button
                         type="button"
-                        class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                         onclick={() => selectArtist(a.name)}
                       >
                         <Cover

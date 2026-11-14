@@ -34,7 +34,7 @@
   transition:fly={{ y: 24, duration: motionDuration(220) }}
   class="absolute inset-0 isolate flex flex-col overflow-hidden text-white"
 >
-  <TintedBackdrop background="linear-gradient(160deg, {tint.top} 0%, {tint.surface} 45%, #09090b 100%)" />
+  <TintedBackdrop background="linear-gradient(160deg, {tint.top} 0%, {tint.surface} 45%, var(--color-zinc-950) 100%)" />
   <header class="flex shrink-0 items-center gap-2 px-6 pt-4">
     <button class="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" aria-label={t("Close now playing")} title={t("Close (Esc)")} onclick={onClose}>
       <Icon name="down" class="size-6" />

@@ -9,7 +9,7 @@
   {:else}
     <p>{t("Your library is empty.")}</p>
     <button
-      class="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
+      class="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500"
       onclick={() => library.addFolder()}
     >
       {t("Add a music folder")}

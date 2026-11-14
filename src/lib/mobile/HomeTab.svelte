@@ -126,7 +126,7 @@
           class="flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-800 px-3.5 py-1.5 text-[13px] font-medium text-zinc-100 active:bg-zinc-700"
           onclick={onOpenAlbums}
         >
-          <Icon name="album" class="size-4 text-teal-400" />
+          <Icon name="album" class="size-4 text-accent-400" />
           {t('Albums')}
         </button>
         <button
@@ -134,12 +134,12 @@
           class="flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-800 px-3.5 py-1.5 text-[13px] font-medium text-zinc-100 active:bg-zinc-700"
           onclick={onOpenSongs}
         >
-          <Icon name="music" class="size-4 text-teal-400" />
+          <Icon name="music" class="size-4 text-accent-400" />
           {t('Songs')}
         </button>
         <button
           type="button"
-          class="flex shrink-0 items-center gap-1.5 rounded-full bg-teal-500/20 px-3.5 py-1.5 text-[13px] font-medium text-teal-300 active:bg-teal-500/30"
+          class="flex shrink-0 items-center gap-1.5 rounded-full bg-accent-500/20 px-3.5 py-1.5 text-[13px] font-medium text-accent-300 active:bg-accent-500/30"
           onclick={() => void shuffleAll()}
         >
           <Icon name="shuffle" class="size-4" />
@@ -154,7 +154,7 @@
           class="flex items-center gap-2.5 overflow-hidden rounded-lg bg-zinc-900 text-left active:bg-zinc-800"
           onclick={onOpenFavorites}
         >
-          <span class="flex size-13 shrink-0 items-center justify-center bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+          <span class="flex size-13 shrink-0 items-center justify-center bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
             <Icon name="star" class="size-6" />
           </span>
           <span class="min-w-0 flex-1 pr-2">
@@ -271,7 +271,7 @@
             <h2 class="text-lg font-bold">{t('Favorites')}</h2>
             <button
               type="button"
-              class="py-1 text-xs font-medium text-teal-400 active:opacity-70"
+              class="py-1 text-xs font-medium text-accent-400 active:opacity-70"
               onclick={onOpenFavorites}
             >
               {t('See all')}

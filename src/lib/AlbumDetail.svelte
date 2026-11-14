@@ -74,7 +74,7 @@
         </p>
         <div class="mt-4 flex flex-wrap items-center gap-2">
           <button
-            class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400"
+            class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-accent-400"
             onclick={() => library.playAlbum(albumId, 0)}
           >
             <Icon name="play" class="size-5" /> {t("Play")}
@@ -85,7 +85,7 @@
             class={[
               'flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium whitespace-nowrap transition',
               pinned.isPinned('album', albumId)
-                ? 'border-teal-400/60 bg-teal-500/20 text-teal-200 hover:bg-teal-500/30'
+                ? 'border-accent-400/60 bg-accent-500/20 text-accent-200 hover:bg-accent-500/30'
                 : 'border-white/20 bg-white/10 text-white/90 hover:bg-white/20',
             ]}
             onclick={() => void pinned.toggle('album', albumId)}
@@ -124,14 +124,14 @@
             class={[
               'flex h-10 min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm',
               track.path === currentPath
-                ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             onclick={() => library.playAlbum(albumId, i)}
           >
             <span class="w-8 text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                <Equalizer class="text-teal-600 dark:text-teal-400" />
+                <Equalizer class="text-accent-600 dark:text-accent-400" />
               {:else}
                 {track.trackNo ?? i + 1}
               {/if}

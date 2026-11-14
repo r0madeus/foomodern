@@ -204,7 +204,7 @@
   }
 
   const inputClass =
-    'w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm outline-none placeholder:text-zinc-400 focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950'
+    'w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm outline-none placeholder:text-zinc-400 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-zinc-700 dark:bg-zinc-950'
 </script>
 
 {#if request}
@@ -265,7 +265,7 @@
                   {#if mixed.has(f.key) && !cleared.has(f.key)}
                     <button
                       type="button"
-                      class="rounded px-1 text-xs text-zinc-500 outline-none hover:text-zinc-800 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:text-zinc-100"
+                      class="rounded px-1 text-xs text-zinc-500 outline-none hover:text-zinc-800 focus-visible:ring-2 focus-visible:ring-accent-500 dark:hover:text-zinc-100"
                       aria-label={t('Clear {label} on all files', { label: t(f.label) })}
                       onclick={() => {
                         draft[f.key] = ''
@@ -319,7 +319,7 @@
             {#if request.trackIds.length === 1}
               <button
                 type="button"
-                class="mr-auto rounded-lg px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                class="mr-auto rounded-lg px-3 py-1.5 text-sm text-accent-700 hover:bg-accent-50 disabled:opacity-50 dark:text-accent-300 dark:hover:bg-accent-950/40"
                 disabled={saving || dirty || !appSettings.allowMetadata}
                 title={!appSettings.allowMetadata
                   ? t('Turned off in Settings')
@@ -341,7 +341,7 @@
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+              class="rounded-lg bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
               disabled={!dirty || saving}
             >
               {saving ? t('Saving…') : t('Save')}

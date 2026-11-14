@@ -134,7 +134,7 @@
           <button
             type="button"
             disabled={detail.tracks.length === 0}
-            class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50"
             onclick={() => void play(null, false)}
           >
             <Icon name="play" class="size-5" />
@@ -186,9 +186,9 @@
             title={track.path}
             class={[
               COLS,
-              'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
+              'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset',
               track.path === currentPath
-                ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             ondblclick={() => void play(track.path)}
@@ -198,7 +198,7 @@
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                <Equalizer class="text-teal-600 dark:text-teal-400" />
+                <Equalizer class="text-accent-600 dark:text-accent-400" />
               {:else}
                 {i + 1}
               {/if}

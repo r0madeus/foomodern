@@ -75,7 +75,7 @@
   <div class="min-h-0 flex-1 overflow-y-auto pb-[var(--mobile-bar-clear,5rem)]" onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}>
     {#if data}
       <div class="relative isolate overflow-hidden px-4 pt-16 pb-4">
-        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, #09090b 100%)" />
+        <TintedBackdrop background="linear-gradient(180deg, {tint.top} 0%, {tint.surface} 65%, var(--color-zinc-950) 100%)" />
         <div class="relative">
           <Cover cover={data.album.cover} title={data.album.title} class="mx-auto aspect-square w-3/5 max-w-64 rounded-md text-5xl shadow-2xl shadow-black/60" />
           <h2 class="mt-5 text-2xl leading-tight font-bold">{data.album.title}</h2>
@@ -106,7 +106,7 @@
           <Icon name="shuffle" class="size-6" />
         </button>
         <button
-          class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
+          class="flex size-14 items-center justify-center rounded-full bg-accent-500 text-zinc-950 shadow-lg active:scale-95"
           aria-label={t(playingThis ? 'Pause' : 'Play')}
           onclick={() => (playingThis ? player.togglePause() : library.playAlbum(albumId, 0))}
         >

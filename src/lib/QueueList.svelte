@@ -50,7 +50,7 @@
       class={[
         'group flex h-11 items-center gap-3 px-5 text-sm',
         i === current
-          ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+          ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
           : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
       ]}
       ondblclick={() => player.playIndex(i)}
@@ -58,7 +58,7 @@
     >
       <span class="w-8 shrink-0 text-right text-xs tabular-nums text-zinc-400">
         {#if i === current && status === 'playing'}
-          <Equalizer class="text-teal-600 dark:text-teal-400" />
+          <Equalizer class="text-accent-600 dark:text-accent-400" />
         {:else}
           {i + 1}
         {/if}

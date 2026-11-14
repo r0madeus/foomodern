@@ -185,7 +185,7 @@
   }
 
   const btn =
-    'rounded p-1 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+    'rounded p-1 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-accent-500 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
 </script>
 
 {#if !info}
@@ -229,7 +229,7 @@
               bind:this={nameInput}
               bind:value={draft}
               aria-label={t('Playlist name')}
-              class="w-80 max-w-full rounded-lg border border-white/25 bg-black/35 px-3 py-1.5 text-2xl font-bold tracking-tight text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+              class="w-80 max-w-full rounded-lg border border-white/25 bg-black/35 px-3 py-1.5 text-2xl font-bold tracking-tight text-white outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
               onkeydown={(e) => e.key === 'Escape' && (renaming = false)}
               onblur={() => renaming && void commitRename()}
             />
@@ -262,7 +262,7 @@
             <button
               type="button"
               disabled={info.trackCount === 0}
-              class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+              class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               onclick={() => playlists.play(id, 0)}
             >
               <Icon name="play" class="size-5" /> {t('Play')}
@@ -273,7 +273,7 @@
               class={[
                 'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition',
                 pinned.isPinned('playlist', id)
-                  ? 'bg-teal-400/20 font-medium text-teal-200 hover:bg-teal-400/30'
+                  ? 'bg-accent-400/20 font-medium text-accent-200 hover:bg-accent-400/30'
                   : 'bg-white/10 text-white/90 hover:bg-white/20',
               ]}
               onclick={() => void pinned.toggle('playlist', id)}
@@ -327,10 +327,10 @@
         <button
           type="button"
           class={[
-            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-teal-500',
+            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-accent-500',
             h.align,
             active
-              ? 'font-semibold text-teal-600 dark:text-teal-400'
+              ? 'font-semibold text-accent-600 dark:text-accent-400'
               : 'hover:text-zinc-700 dark:hover:text-zinc-200',
           ]}
           aria-pressed={active}
@@ -365,9 +365,9 @@
               title={t('{path}\nDouble-click or Enter to play. Alt+Up/Down moves, Delete removes.', { path: track.path })}
               class={[
                 COLS,
-                'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset',
+                'group h-full cursor-default text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset',
                 track.path === currentPath
-                  ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                  ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
               ondblclick={() => playlists.play(id, orig)}
@@ -380,7 +380,7 @@
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
                 {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                  <Equalizer class="text-teal-600 dark:text-teal-400" />
+                  <Equalizer class="text-accent-600 dark:text-accent-400" />
                 {:else}{orig + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">

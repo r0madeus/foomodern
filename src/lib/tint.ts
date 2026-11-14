@@ -29,7 +29,7 @@ export interface Tint {
   dim: string
 }
 
-export const NEUTRAL: Tint = { top: '#3f3f46', surface: '#27272a', dim: '#a1a1aa' }
+export const NEUTRAL: Tint = { top: '#3d414e', surface: '#262933', dim: '#9fa3b2' }
 
 export function tintFrom(color: Rgb | null): Tint {
   if (!color) return NEUTRAL

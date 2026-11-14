@@ -57,21 +57,21 @@
         }}
       >
         <input
-          class="min-w-0 flex-1 rounded-lg bg-zinc-800 px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-teal-500"
+          class="min-w-0 flex-1 rounded-lg bg-zinc-800 px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent-500"
           placeholder={t("Playlist name")}
           aria-label={t("New playlist name")}
           bind:value={name}
           {@attach (el) => el.focus()}
         />
-        <button class="rounded-lg bg-teal-500 px-4 text-sm font-semibold text-zinc-950 disabled:opacity-40" disabled={name.trim() === ''}>
+        <button class="rounded-lg bg-accent-500 px-4 text-sm font-semibold text-zinc-950 disabled:opacity-40" disabled={name.trim() === ''}>
           {t("Create")}
         </button>
       </form>
     {/if}
 
     {#if library.scanning}
-      <p class="flex items-center gap-2 px-4 pb-3 text-sm text-teal-400" role="status">
-        <span class="size-2 animate-pulse rounded-full bg-teal-400"></span>
+      <p class="flex items-center gap-2 px-4 pb-3 text-sm text-accent-400" role="status">
+        <span class="size-2 animate-pulse rounded-full bg-accent-400"></span>
         {library.scan ? t('Scanning · {n} files', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
       </p>
     {/if}
@@ -81,7 +81,7 @@
       class="flex h-[72px] w-full items-center gap-3 px-4 text-left active:bg-white/5"
       onclick={onOpenFavorites}
     >
-      <span class="flex size-14 shrink-0 items-center justify-center rounded bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+      <span class="flex size-14 shrink-0 items-center justify-center rounded bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
         <Icon name="star" class="size-7" />
       </span>
       <span class="min-w-0 flex-1">
@@ -97,7 +97,7 @@
       class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
       onclick={onOpenSongs}
     >
-      <Icon name="music" class="size-6 text-teal-400" />
+      <Icon name="music" class="size-6 text-accent-400" />
       <span class="min-w-0 flex-1 text-[15px]">{t('Songs')}</span>
       {#if library.stats.tracks > 0}
         <span class="text-xs tabular-nums text-zinc-400">
@@ -112,7 +112,7 @@
       class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
       onclick={onOpenAlbums}
     >
-      <Icon name="album" class="size-6 text-teal-400" />
+      <Icon name="album" class="size-6 text-accent-400" />
       <span class="min-w-0 flex-1 text-[15px]">{t('Albums')}</span>
       {#if library.stats.albums > 0}
         <span class="text-xs tabular-nums text-zinc-400">
@@ -127,7 +127,7 @@
       class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
       onclick={onOpenArtists}
     >
-      <Icon name="artist" class="size-6 text-teal-400" />
+      <Icon name="artist" class="size-6 text-accent-400" />
       <span class="min-w-0 flex-1 text-[15px]">{t('Artists')}</span>
       <Icon name="chevronRight" class="size-5 text-zinc-500" />
     </button>
@@ -137,7 +137,7 @@
       class="flex h-14 w-full items-center gap-4 px-4 text-left active:bg-white/5"
       onclick={onOpenStats}
     >
-      <Icon name="chart" class="size-6 text-teal-400" />
+      <Icon name="chart" class="size-6 text-accent-400" />
       <span class="min-w-0 flex-1 text-[15px]">{t('Listening stats')}</span>
       <Icon name="chevronRight" class="size-5 text-zinc-500" />
     </button>

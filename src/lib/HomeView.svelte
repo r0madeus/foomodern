@@ -149,7 +149,7 @@
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="flex items-center gap-1.5 rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-40"
+            class="flex items-center gap-1.5 rounded-full bg-accent-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-500 disabled:opacity-40"
             disabled={library.stats.tracks === 0}
             onclick={() => void shuffleLibrary()}
           >
@@ -161,7 +161,7 @@
             class="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-800"
             onclick={onOpenStats}
           >
-            <Icon name="chart" class="size-4 text-teal-600 dark:text-teal-400" />
+            <Icon name="chart" class="size-4 text-accent-600 dark:text-accent-400" />
             {t('Listening stats')}
           </button>
         </div>
@@ -177,7 +177,7 @@
               class="flex min-w-0 flex-1 items-center gap-3 pr-12 text-left"
               onclick={onOpenFavorites}
             >
-              <span class="flex size-14 shrink-0 items-center justify-center bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+              <span class="flex size-14 shrink-0 items-center justify-center bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
                 <Icon name="star" class="size-6" />
               </span>
               <span class="min-w-0 flex-1 py-2">
@@ -193,7 +193,7 @@
               <button
                 type="button"
                 aria-label={t('Play')}
-                class="absolute right-2.5 flex size-9 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-md transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-teal-400"
+                class="absolute right-2.5 flex size-9 items-center justify-center rounded-full bg-accent-500 text-zinc-950 opacity-0 shadow-md transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-accent-400"
                 onclick={() => void favorites.play(0)}
               >
                 <Icon name="play" class="size-4" />
@@ -231,7 +231,7 @@
               <button
                 type="button"
                 aria-label={t('Play')}
-                class="absolute right-2.5 flex size-9 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-md transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-teal-400"
+                class="absolute right-2.5 flex size-9 items-center justify-center rounded-full bg-accent-500 text-zinc-950 opacity-0 shadow-md transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-accent-400"
                 onclick={() => playQuickTile(tile)}
               >
                 <Icon name="play" class="size-4" />
@@ -275,7 +275,7 @@
                 <button
                   type="button"
                   aria-label={t('Play')}
-                  class="absolute right-5 bottom-[4.75rem] flex size-10 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 translate-y-1 hover:scale-105 hover:bg-teal-400"
+                  class="absolute right-5 bottom-[4.75rem] flex size-10 items-center justify-center rounded-full bg-accent-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 translate-y-1 hover:scale-105 hover:bg-accent-400"
                   onclick={() => void home.playMix(mix.id)}
                 >
                   <Icon name="play" class="size-5" />
@@ -319,7 +319,7 @@
                 <button
                   type="button"
                   aria-label={t('Play')}
-                  class="absolute right-4 bottom-16 flex size-9 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-teal-400"
+                  class="absolute right-4 bottom-16 flex size-9 items-center justify-center rounded-full bg-accent-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-accent-400"
                   onclick={() => void library.playAlbum(album.id, 0)}
                 >
                   <Icon name="play" class="size-4" />
@@ -351,15 +351,15 @@
                     <div
                       role="button"
                       tabindex="0"
-                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                       onclick={() => void player.openFiles([track.path])}
                       onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void player.openFiles([track.path])}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">
-                        <span class={['flex items-center gap-1.5 truncate text-sm font-medium', track.path === currentPath ? 'text-teal-600 dark:text-teal-400' : 'text-zinc-900 dark:text-zinc-100']}>
+                        <span class={['flex items-center gap-1.5 truncate text-sm font-medium', track.path === currentPath ? 'text-accent-600 dark:text-accent-400' : 'text-zinc-900 dark:text-zinc-100']}>
                           {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                            <Equalizer class="shrink-0 text-teal-600 dark:text-teal-400" />
+                            <Equalizer class="shrink-0 text-accent-600 dark:text-accent-400" />
                           {/if}
                           <span class="truncate">{track.title}</span>
                         </span>
@@ -393,7 +393,7 @@
                 </h2>
                 <button
                   type="button"
-                  class="text-xs font-medium text-teal-600 hover:underline dark:text-teal-400"
+                  class="text-xs font-medium text-accent-600 hover:underline dark:text-accent-400"
                   onclick={onOpenFavorites}
                 >
                   {t('See all')}
@@ -411,15 +411,15 @@
                     <div
                       role="button"
                       tabindex="0"
-                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                       onclick={() => void favorites.play(i)}
                       onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void favorites.play(i)}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">
-                        <span class={['flex items-center gap-1.5 truncate text-sm font-medium', track.path === currentPath ? 'text-teal-600 dark:text-teal-400' : 'text-zinc-900 dark:text-zinc-100']}>
+                        <span class={['flex items-center gap-1.5 truncate text-sm font-medium', track.path === currentPath ? 'text-accent-600 dark:text-accent-400' : 'text-zinc-900 dark:text-zinc-100']}>
                           {#if track.path === currentPath && player.snapshot.status === 'playing'}
-                            <Equalizer class="shrink-0 text-teal-600 dark:text-teal-400" />
+                            <Equalizer class="shrink-0 text-accent-600 dark:text-accent-400" />
                           {/if}
                           <span class="truncate">{track.title}</span>
                         </span>
@@ -476,7 +476,7 @@
                 <button
                   type="button"
                   aria-label={t('Play')}
-                  class="absolute right-4 bottom-16 flex size-9 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-teal-400"
+                  class="absolute right-4 bottom-16 flex size-9 items-center justify-center rounded-full bg-accent-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:opacity-100 hover:scale-105 hover:bg-accent-400"
                   onclick={() => void library.playAlbum(album.id, 0)}
                 >
                   <Icon name="play" class="size-4" />

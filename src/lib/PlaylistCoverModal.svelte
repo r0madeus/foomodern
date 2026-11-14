@@ -129,7 +129,7 @@
               class={[
                 'size-8 rounded-full transition',
                 selectedPalette === p.id
-                  ? 'ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900'
+                  ? 'ring-2 ring-accent-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900'
                   : 'opacity-80 hover:opacity-100',
               ]}
               style:background={p.gradient}
@@ -152,7 +152,7 @@
               class={[
                 'flex size-9 items-center justify-center rounded-lg border transition',
                 selectedIcon === icon
-                  ? 'border-teal-500 bg-teal-500/15 text-teal-600 dark:text-teal-300'
+                  ? 'border-accent-500 bg-accent-500/15 text-accent-600 dark:text-accent-300'
                   : 'border-zinc-200 text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800',
               ]}
               onclick={() => (selectedIcon = icon)}
@@ -175,7 +175,7 @@
       <button
         type="button"
         disabled={saving}
-        class="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+        class="rounded-lg bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
         onclick={() => void applyPreset()}
       >
         {t('Apply gradient & icon')}

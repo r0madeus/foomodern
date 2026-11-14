@@ -23,7 +23,7 @@
   />
   <input
     type="search"
-    class="w-full rounded-xl border border-zinc-200/90 bg-white/90 py-1.5 pr-7 pl-8 text-sm text-zinc-800 shadow-2xs placeholder:text-zinc-400 focus:border-teal-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-100"
+    class="w-full rounded-xl border border-zinc-200/90 bg-white/90 py-1.5 pr-7 pl-8 text-sm text-zinc-800 shadow-2xs placeholder:text-zinc-400 focus:border-accent-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-100"
     value={text}
     placeholder={t(placeholder)}
     aria-label={label ?? t('Filter library')}

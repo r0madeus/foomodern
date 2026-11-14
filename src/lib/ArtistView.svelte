@@ -183,7 +183,7 @@
             <button
               type="button"
               disabled={profile.trackCount === 0}
-              class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
+              class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50"
               onclick={() => void artists.play(profile!.name, 0, false)}
             >
               <Icon name="play" class="size-5" />
@@ -219,9 +219,9 @@
                       tabindex="0"
                       title={tr.path}
                       class={[
-                        'group grid grid-cols-[1.75rem_2.25rem_minmax(0,1fr)_auto_4.25rem_3.5rem] items-center gap-3 rounded-lg px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                        'group grid grid-cols-[1.75rem_2.25rem_minmax(0,1fr)_auto_4.25rem_3.5rem] items-center gap-3 rounded-lg px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
                         active
-                          ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                          ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                           : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
                       ]}
                       ondblclick={() => void artists.play(profile!.name, idx)}
@@ -233,7 +233,7 @@
                     >
                       <span class="text-right text-xs tabular-nums text-zinc-400">
                         {#if active && player.snapshot.status === 'playing'}
-                          <Equalizer class="text-teal-600 dark:text-teal-400" />
+                          <Equalizer class="text-accent-600 dark:text-accent-400" />
                         {:else}
                           {i + 1}
                         {/if}
@@ -295,7 +295,7 @@
               {#each profile.albums as a (a.id)}
                 <button
                   type="button"
-                  class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                   onclick={() => onOpenAlbum?.(a.id)}
                 >
                   <Cover
@@ -323,7 +323,7 @@
               {#each missingAlbums as a (a.id)}
                 <button
                   type="button"
-                  class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  class="group flex flex-col gap-2 rounded-lg p-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
                   onclick={() => openOnlineAlbum(a)}
                 >
                   <Cover
@@ -355,9 +355,9 @@
                   tabindex="0"
                   title={tr.path}
                   class={[
-                    'group grid grid-cols-[2rem_minmax(0,2fr)_minmax(0,1.5fr)_4.25rem_3.5rem] items-center gap-3 rounded-lg px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                    'group grid grid-cols-[2rem_minmax(0,2fr)_minmax(0,1.5fr)_4.25rem_3.5rem] items-center gap-3 rounded-lg px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
                     active
-                      ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                      ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                       : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
                   ]}
                   ondblclick={() => void artists.play(profile!.name, i)}
@@ -369,7 +369,7 @@
                 >
                   <span class="text-right text-xs tabular-nums text-zinc-400">
                     {#if active && player.snapshot.status === 'playing'}
-                      <Equalizer class="text-teal-600 dark:text-teal-400" />
+                      <Equalizer class="text-accent-600 dark:text-accent-400" />
                     {:else}
                       {i + 1}
                     {/if}

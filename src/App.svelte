@@ -365,7 +365,7 @@
       <div class={['flex items-center', sidebarCollapsed ? 'justify-center' : 'justify-between px-1.5']}>
         {#if !sidebarCollapsed}
           <div class="flex min-w-0 items-center gap-2">
-            <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-emerald-600 text-white shadow-xs">
+            <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent-400 to-accent-700 text-white shadow-xs">
               <Icon name="music" class="size-4" />
             </span>
             <h1 class="truncate text-base font-bold tracking-tight">FooModern</h1>
@@ -373,7 +373,7 @@
         {/if}
         <button
           type="button"
-          class="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          class="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
           title={t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
           onclick={toggleSidebar}
@@ -389,7 +389,7 @@
               'flex items-center rounded-lg py-1.5 text-sm transition-colors',
               sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-2',
               view === v
-                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
                 : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
             ]}
             title={sidebarCollapsed ? t(LABELS[v]) : undefined}
@@ -442,7 +442,7 @@
                   class={[
                     'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left',
                     active
-                      ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                      ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                       : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
                   ]}
                   aria-current={active ? 'page' : undefined}
@@ -479,7 +479,7 @@
                   type="button"
                   title={t('Unpin')}
                   aria-label={t('Unpin “{title}”', { title: entry.title })}
-                  class="shrink-0 rounded p-1 text-teal-600 opacity-75 hover:bg-zinc-200 hover:opacity-100 dark:text-teal-400 dark:hover:bg-zinc-800"
+                  class="shrink-0 rounded p-1 text-accent-600 opacity-75 hover:bg-zinc-200 hover:opacity-100 dark:text-accent-400 dark:hover:bg-zinc-800"
                   onclick={() => void pinned.toggle(entry.kind, entry.id)}
                 >
                   <Icon name="pin" class="size-3.5" />
@@ -496,7 +496,7 @@
             <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
             <span class="flex items-center gap-0.5">
               <button
-                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-accent-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 aria-label={t("Import playlist (M3U)")}
                 title={t("Import playlist (M3U)")}
                 onclick={async () => {
@@ -507,7 +507,7 @@
                 <Icon name="upload" class="size-4" />
               </button>
               <button
-                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-accent-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 aria-label={t("New playlist")}
                 title={t("New playlist")}
                 onclick={() => (creatingPlaylist = !creatingPlaylist)}
@@ -528,7 +528,7 @@
             }}
           >
             <input
-              class="w-full rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
+              class="w-full rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-zinc-700 dark:bg-zinc-900"
               placeholder={t("Playlist name")}
               aria-label={t("New playlist name")}
               bind:value={newPlaylistName}
@@ -544,7 +544,7 @@
               'flex items-center rounded-lg px-2 py-1.5 text-sm',
               sidebarCollapsed ? 'justify-center' : 'justify-between gap-2 text-left',
               view === 'favorites'
-                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
                 : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
             ]}
             title={sidebarCollapsed ? t('Favorites') : undefined}
@@ -553,7 +553,7 @@
             onclick={() => go('favorites')}
           >
             <span class="flex min-w-0 items-center gap-2">
-              <span class="flex size-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
+              <span class="flex size-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
                 <Icon name="star" class="size-3" />
               </span>
               {#if !sidebarCollapsed}
@@ -575,7 +575,7 @@
                   'flex min-w-0 flex-1 items-center rounded-lg px-2 py-1.5 text-sm',
                   sidebarCollapsed ? 'justify-center' : 'gap-2 text-left',
                   active
-                    ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                    ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
                     : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
                 ]}
                 title={sidebarCollapsed ? p.name : undefined}
@@ -603,7 +603,7 @@
                   class={[
                     'shrink-0 rounded p-1 transition hover:bg-zinc-200 dark:hover:bg-zinc-800',
                     isPinned
-                      ? 'text-teal-600 opacity-100 dark:text-teal-400'
+                      ? 'text-accent-600 opacity-100 dark:text-accent-400'
                       : 'text-zinc-400 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
                   ]}
                   onclick={() => void pinned.toggle('playlist', p.id)}
@@ -623,11 +623,11 @@
       <div class="mt-auto flex flex-col gap-2">
         {#if library.scanning}
           <p
-            class={['flex items-center gap-2 px-2 text-xs text-teal-700 dark:text-teal-400', sidebarCollapsed && 'justify-center']}
+            class={['flex items-center gap-2 px-2 text-xs text-accent-700 dark:text-accent-400', sidebarCollapsed && 'justify-center']}
             role="status"
             title={library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
           >
-            <span class="size-2 shrink-0 animate-pulse rounded-full bg-teal-500"></span>
+            <span class="size-2 shrink-0 animate-pulse rounded-full bg-accent-500"></span>
             {#if !sidebarCollapsed}
               <span class="truncate">
                 {library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
@@ -646,7 +646,7 @@
             'flex items-center rounded-lg px-2 py-1.5 text-sm transition-colors',
             sidebarCollapsed ? 'justify-center' : 'gap-2.5 text-left',
             view === 'settings'
-              ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+              ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
               : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
           ]}
           title={sidebarCollapsed ? t('Settings') : undefined}

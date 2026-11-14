@@ -114,7 +114,7 @@
           <button
             type="button"
             disabled={!ytdlpAvailable || tracks.length === 0 || online.playingId !== null}
-            class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             onclick={() => {
               void online.playTracks(tracks, 0)
             }}
@@ -132,7 +132,7 @@
             onclick={() => void online.downloadAlbum(activeAlbum, tracks)}
           >
             {#if albumJob?.state === 'done'}
-              <Icon name="check" class="size-4 text-teal-300" />
+              <Icon name="check" class="size-4 text-accent-300" />
               {t('Downloaded')}
             {:else if albumJob?.state === 'downloading'}
               <Icon name="download" class="size-4 animate-pulse" />
@@ -191,7 +191,7 @@
             class={[
               'flex h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60',
               isCurrent
-                ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
+                ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             onclick={() => void online.playTracks(tracks, i)}
@@ -206,7 +206,7 @@
               {/if}
             </div>
             {#if online.playingId === track.id}
-              <span class="text-xs text-teal-600 dark:text-teal-400">{t('Loading…')}</span>
+              <span class="text-xs text-accent-600 dark:text-accent-400">{t('Loading…')}</span>
             {:else if inLib && job?.state !== 'done'}
               <span class="rounded-full bg-zinc-200/80 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                 {t('In library')}
@@ -226,7 +226,7 @@
               class={[
                 'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
                 job?.state === 'done'
-                  ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
+                  ? 'bg-accent-500/15 text-accent-700 dark:text-accent-300'
                   : job?.state === 'failed'
                     ? 'bg-red-500/15 text-red-600 hover:bg-red-500/25 dark:text-red-400'
                     : 'text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',

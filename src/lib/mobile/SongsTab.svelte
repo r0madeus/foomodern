@@ -42,7 +42,7 @@
     {#snippet actions()}
       {#if total > 0}
         <button
-          class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-4 pl-3 text-sm font-semibold text-zinc-950 active:scale-95"
+          class="flex items-center gap-2 rounded-full bg-accent-500 py-2 pr-4 pl-3 text-sm font-semibold text-zinc-950 active:scale-95"
           onclick={shuffleAll}
         >
           <Icon name="shuffle" class="size-4" /> {t("Shuffle")}
@@ -58,7 +58,7 @@
         <button
           class={[
             'shrink-0 rounded-full px-3.5 py-1.5 text-[13px]',
-            library.sort === s.value ? 'bg-teal-500 font-medium text-zinc-950' : 'bg-zinc-800 text-zinc-100',
+            library.sort === s.value ? 'bg-accent-500 font-medium text-zinc-950' : 'bg-zinc-800 text-zinc-100',
           ]}
           onclick={() => library.toggleColumnSort(s.value)}
         >

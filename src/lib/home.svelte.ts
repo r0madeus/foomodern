@@ -46,7 +46,7 @@ export function mixSubtitle(mix: Pick<DynamicMix, 'subtitleKey'>): string {
 export function mixAccent(kind: string): string {
   switch (kind) {
     case 'weekly-favorites':
-      return 'from-teal-500/80 via-emerald-700/70 to-zinc-900'
+      return 'from-accent-500/80 via-accent-800/70 to-zinc-900'
     case 'on-repeat':
       return 'from-indigo-500/80 via-violet-700/70 to-zinc-900'
     case 'rediscover':

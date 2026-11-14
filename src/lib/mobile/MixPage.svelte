@@ -59,7 +59,7 @@
   <PageHeader title={detail ? mixTitle(detail.mix) : t('Dynamic mix')} {onBack} />
   {#if loading && !detail}
     <div class="flex flex-1 items-center justify-center">
-      <div class="size-8 animate-spin rounded-full border-2 border-zinc-700 border-t-teal-400"></div>
+      <div class="size-8 animate-spin rounded-full border-2 border-zinc-700 border-t-accent-400"></div>
     </div>
   {:else if !detail}
     <div class="flex flex-1 items-center justify-center px-8 text-center text-sm text-zinc-400">
@@ -105,7 +105,7 @@
           </button>
           <button
             type="button"
-            class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
+            class="flex size-14 items-center justify-center rounded-full bg-accent-500 text-zinc-950 shadow-lg active:scale-95"
             aria-label={t('Play')}
             onclick={() => void play(null, false)}
           >

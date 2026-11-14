@@ -208,7 +208,7 @@
     <span class="w-24 shrink-0 text-zinc-500">{t(FIELD_LABEL[f.field])}</span>
     <span class="min-w-0 break-words text-zinc-500 line-through decoration-zinc-400/60">{f.old ?? '—'}</span>
     <span aria-hidden="true" class="text-zinc-400">→</span>
-    <span class="min-w-0 break-words font-medium text-teal-700 dark:text-teal-300">{f.new ?? '—'}</span>
+    <span class="min-w-0 break-words font-medium text-accent-700 dark:text-accent-300">{f.new ?? '—'}</span>
   </li>
 {/snippet}
 
@@ -271,7 +271,7 @@
           </p>
         {:else if outcome && outcome.updated > 0}
           <p
-            class="rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:bg-teal-950/40 dark:text-teal-100"
+            class="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-900 dark:bg-accent-950/40 dark:text-accent-100"
             role="status"
           >
             {t('Updated tags of {count}', { count: count(outcome.updated, '{n} track', '{n} tracks') })}{outcome.cover
@@ -308,7 +308,7 @@
           {/if}
           <button
             type="button"
-            class="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+            class="rounded-lg bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
             disabled={phase === 'undoing'}
             onclick={close}
           >
@@ -328,9 +328,9 @@
                 role="radio"
                 aria-checked={i === selected}
                 class={[
-                  'flex items-center gap-3 rounded-xl border p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                  'flex items-center gap-3 rounded-xl border p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-500',
                   i === selected
-                    ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-950/30'
+                    ? 'border-accent-500 bg-accent-50/60 dark:bg-accent-950/30'
                     : 'border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/60',
                 ]}
                 onclick={() => (selected = i)}
@@ -345,7 +345,7 @@
                   class={[
                     'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap',
                     c.label === 'recommended'
-                      ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200'
+                      ? 'bg-accent-100 text-accent-800 dark:bg-accent-900/50 dark:text-accent-200'
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
                   ]}
                   title={t('Match score {score}', { score: c.score })}
@@ -403,7 +403,7 @@
           {#if candidates.length > 0}
             <button
               type="button"
-              class="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+              class="rounded-lg bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50"
               disabled={!current || phase === 'applying'}
               onclick={apply}
             >
