@@ -461,7 +461,7 @@ fn png_bytes() -> Vec<u8> {
 fn rate_limit_spaces_requests() {
     let mock = Mock::start(Arc::new(|_| Reply::json(r#"{"releases":[{"id":"x"}]}"#)));
     let mut cfg = mock.config();
-    cfg.min_interval = Duration::from_millis(200);
+    cfg.min_interval = Duration::from_millis(300);
     let client = MbClient::new(cfg).unwrap();
     block_on(async {
         client.search_releases("A", "B", None).await.unwrap();
@@ -470,9 +470,14 @@ fn rate_limit_spaces_requests() {
     });
     let times: Vec<Instant> = mock.requests.lock().unwrap().iter().map(|r| r.1).collect();
     assert_eq!(times.len(), 3);
+    // The limiter spaces the moments requests are started; the mock stamps
+    // when they arrive. The first request also opens the connection, so its
+    // arrival can lag by tens of milliseconds (seen on the Windows runner:
+    // 182 ms for a 200 ms interval). Allow that, while still failing when
+    // requests are not spaced at all.
     for w in times.windows(2) {
         assert!(
-            w[1] - w[0] >= Duration::from_millis(190),
+            w[1] - w[0] >= Duration::from_millis(240),
             "{:?}",
             w[1] - w[0]
         );
