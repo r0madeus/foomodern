@@ -90,7 +90,22 @@ struct Parsed {
     year: Option<i64>,
     genre: Option<String>,
     duration_ms: Option<i64>,
-    cover: Option<String>,
+    /// Embedded picture, kept only for the first file of its album group in
+    /// the current batch; written in `flush` once the album year is known.
+    picture: Option<Picture>,
+}
+
+/// An album group inside one directory: (directory, lowercased album title,
+/// lowercased album artist). Album identity is derived per group, so tracks
+/// of one album folder stay together whatever their individual years are.
+type GroupKey = (PathBuf, String, String);
+
+fn group_key(path: &str, album: &str, album_artist: &str) -> GroupKey {
+    let dir = Path::new(path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    (dir, album.to_lowercase(), album_artist.to_lowercase())
 }
 
 #[derive(Default)]
@@ -192,6 +207,11 @@ struct Scanner<'a> {
     /// Albums (lowercased title, album artist, year) that already have a cover file.
     covered: HashSet<(String, String, Option<i64>)>,
     dir_cover_cache: HashMap<PathBuf, Option<PathBuf>>,
+    /// Album groups that already hold a picture in the current batch.
+    pictured: HashSet<GroupKey>,
+    /// Directories whose tracks were written or removed; their album groups
+    /// are re-derived once the scan is done.
+    touched_dirs: HashSet<PathBuf>,
     now: i64,
     stats: ScanStats,
     last_progress: Instant,
@@ -206,15 +226,16 @@ impl Scanner<'_> {
         (album.to_lowercase(), album_artist.to_lowercase(), year)
     }
 
-    /// Writes the album cover once; returns the cover path if a new file
-    /// was written.
-    fn ensure_cover(
+    /// Writes the cover of an album; returns the cover path if a file was
+    /// written. `picture` comes from the tags; without one, `cover.jpg` & co.
+    /// next to the files are used.
+    fn write_cover(
         &mut self,
-        file: &Path,
+        dir: &Path,
         album: &str,
         album_artist: &str,
         year: Option<i64>,
-        picture: Option<Picture>,
+        picture: Option<&Picture>,
     ) -> Option<String> {
         let covers_dir = self.lib.covers_dir();
         if let Some(pic) = picture {
@@ -228,11 +249,10 @@ impl Scanner<'_> {
                 Err(e) => log::warn!("failed to write cover {}: {e}", dest.display()),
             }
         }
-        let dir = file.parent()?.to_path_buf();
         let src = self
             .dir_cover_cache
-            .entry(dir.clone())
-            .or_insert_with(|| find_cover_file(&dir))
+            .entry(dir.to_path_buf())
+            .or_insert_with(|| find_cover_file(dir))
             .clone()?;
         let ext = src
             .extension()
@@ -254,8 +274,6 @@ impl Scanner<'_> {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // The picture is cloned out of the tag only; it is written to disk
-        // below only if the album has no cover yet.
         let tags = match read_tags(path, true) {
             Ok(t) => t,
             Err(e) => {
@@ -267,14 +285,13 @@ impl Scanner<'_> {
         let album = tags.album.clone().unwrap_or_default();
         let album_artist = tags.album_artist.clone().unwrap_or_else(|| artist.clone());
 
-        let mut cover = None;
-        if !album.is_empty() {
-            let key = Self::album_key(&album, &album_artist, tags.year);
-            if !self.covered.contains(&key) {
-                cover = self.ensure_cover(path, &album, &album_artist, tags.year, tags.picture);
-                if cover.is_some() {
-                    self.covered.insert(key);
-                }
+        // Keep at most one picture per album group and batch; the cover is
+        // written in `flush` once the album year is known.
+        let mut picture = None;
+        if !album.is_empty() && tags.picture.is_some() {
+            let key = group_key(&path_str, &album, &album_artist);
+            if self.pictured.insert(key) {
+                picture = tags.picture;
             }
         }
 
@@ -291,13 +308,49 @@ impl Scanner<'_> {
             year: tags.year,
             genre: tags.genre,
             duration_ms: tags.duration_ms,
-            cover,
+            picture,
         }
     }
 
     fn flush(&mut self, batch: &mut Vec<Parsed>) -> Result<()> {
         if batch.is_empty() {
             return Ok(());
+        }
+        // Album year and cover per album group of this batch. Tracks of the
+        // same group already in the database are re-grouped after the scan
+        // (`db::regroup_albums_in_dirs`).
+        let mut groups: HashMap<GroupKey, Vec<usize>> = HashMap::new();
+        for (i, t) in batch.iter().enumerate() {
+            self.touched_dirs.insert(
+                Path::new(&t.path)
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_default(),
+            );
+            if !t.album.is_empty() {
+                groups
+                    .entry(group_key(&t.path, &t.album, &t.album_artist))
+                    .or_default()
+                    .push(i);
+            }
+        }
+        let mut album_of: Vec<Option<(Option<i64>, Option<String>)>> = vec![None; batch.len()];
+        for ((dir, album_lc, artist_lc), members) in &groups {
+            let year = db::pick_album_year(members.iter().map(|&i| batch[i].year));
+            let first = &batch[members[0]];
+            let covered_key = (album_lc.clone(), artist_lc.clone(), year);
+            let mut cover = None;
+            if !self.covered.contains(&covered_key) {
+                let picture = members.iter().find_map(|&i| batch[i].picture.as_ref());
+                let (album, album_artist) = (first.album.clone(), first.album_artist.clone());
+                cover = self.write_cover(dir, &album, &album_artist, year, picture);
+                if cover.is_some() {
+                    self.covered.insert(covered_key);
+                }
+            }
+            for &i in members {
+                album_of[i] = Some((year, cover.clone()));
+            }
         }
         {
             let mut conn = self.lib.conn();
@@ -321,15 +374,16 @@ impl Scanner<'_> {
                         duration_ms = excluded.duration_ms, genre = excluded.genre
                      RETURNING id",
                 )?;
-                for t in batch.iter() {
-                    let album_id = if t.album.is_empty() {
-                        None
-                    } else {
-                        let id: i64 = upsert_album
-                            .query_row(params![t.album, t.album_artist, t.year, t.cover], |r| {
-                                r.get(0)
-                            })?;
-                        Some(id)
+                for (t, album) in batch.iter().zip(&album_of) {
+                    let album_id = match album {
+                        None => None,
+                        Some((year, cover)) => {
+                            let id: i64 = upsert_album
+                                .query_row(params![t.album, t.album_artist, year, cover], |r| {
+                                    r.get(0)
+                                })?;
+                            Some(id)
+                        }
                     };
                     let track_id: i64 = upsert_track.query_row(
                         params![
@@ -355,6 +409,7 @@ impl Scanner<'_> {
             tx.commit()?;
         }
         batch.clear();
+        self.pictured.clear();
         self.lib.bump();
         Ok(())
     }
@@ -431,6 +486,8 @@ pub fn scan_folder(lib: &Library, folder_id: i64, root: &Path) -> Result<ScanSta
         folder: display_path(root),
         covered,
         dir_cover_cache: HashMap::new(),
+        pictured: HashSet::new(),
+        touched_dirs: HashSet::new(),
         now: unix_secs(SystemTime::now()),
         stats: ScanStats::default(),
         last_progress: Instant::now(),
@@ -483,6 +540,11 @@ pub fn scan_folder(lib: &Library, folder_id: i64, root: &Path) -> Result<ScanSta
         log::warn!("walk had errors, not removing missing tracks");
         Vec::new()
     } else {
+        for path in existing.keys() {
+            if let Some(dir) = Path::new(path).parent() {
+                sc.touched_dirs.insert(dir.to_path_buf());
+            }
+        }
         existing.values().map(|(_, _, id)| *id).collect()
     };
     let orphan_covers = {
@@ -494,6 +556,7 @@ pub fn scan_folder(lib: &Library, folder_id: i64, root: &Path) -> Result<ScanSta
                 del.execute([id])?;
             }
         }
+        db::regroup_albums_in_dirs(&tx, &sc.touched_dirs)?;
         let covers = db::delete_empty_albums(&tx)?;
         tx.commit()?;
         covers
@@ -528,6 +591,8 @@ pub fn rescan_files(lib: &Library, files: &[(String, i64)]) -> Result<usize> {
             folder: String::new(),
             covered: covered.clone(),
             dir_cover_cache: HashMap::new(),
+            pictured: HashSet::new(),
+            touched_dirs: HashSet::new(),
             now,
             stats: ScanStats::default(),
             last_progress: Instant::now(),
@@ -545,6 +610,7 @@ pub fn rescan_files(lib: &Library, files: &[(String, i64)]) -> Result<usize> {
         let orphan_covers = {
             let mut conn = lib.conn();
             let tx = conn.transaction()?;
+            db::regroup_albums_in_dirs(&tx, &sc.touched_dirs)?;
             let covers = db::delete_empty_albums(&tx)?;
             tx.commit()?;
             covers

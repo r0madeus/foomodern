@@ -1,0 +1,28 @@
+{
+  "_comment": "Expected artist splits. Checked by the Rust splitter (library tests) and the UI splitter (npm test); keep both in sync.",
+  "cases": [
+    ["", []],
+    ["Sezen Aksu", ["Sezen Aksu"]],
+    ["Simon & Garfunkel", ["Simon & Garfunkel"]],
+    ["AC/DC", ["AC/DC"]],
+    ["Ezhel x Murda", ["Ezhel x Murda"]],
+    ["Daft Punk (feat. Pharrell Williams)", ["Daft Punk", "Pharrell Williams"]],
+    ["Daft Punk (feat. Pharrell Williams), Nile Rodgers", ["Daft Punk", "Pharrell Williams", "Nile Rodgers"]],
+    ["İbrahim Tatlıses feat. Sibel Can", ["İbrahim Tatlıses", "Sibel Can"]],
+    ["İİİ Band ft. Ceza", ["İİİ Band", "Ceza"]],
+    ["Sezen Aksu FEAT. İlhan Şeşen", ["Sezen Aksu", "İlhan Şeşen"]],
+    ["Mabel Matiz ft Sıla", ["Mabel Matiz", "Sıla"]],
+    ["Gökhan Türkmen [featuring Ece Seçkin]", ["Gökhan Türkmen", "Ece Seçkin"]],
+    ["Sezen Aksu, Tarkan", ["Sezen Aksu", "Tarkan"]],
+    ["Ceza, Ezhel", ["Ceza", "Ezhel"]],
+    ["Ceza; Sagopa Kajmer", ["Ceza", "Sagopa Kajmer"]],
+    ["Tyler, The Creator", ["Tyler, The Creator"]],
+    ["Tyler, The Creator feat. Frank Ocean", ["Tyler, The Creator", "Frank Ocean"]],
+    ["Frank Ocean, Tyler, The Creator", ["Frank Ocean", "Tyler, The Creator"]],
+    ["Earth, Wind & Fire", ["Earth, Wind & Fire"]],
+    ["Crosby, Stills, Nash & Young", ["Crosby, Stills, Nash & Young"]],
+    ["Peter, Paul and Mary", ["Peter, Paul and Mary"]],
+    ["Kanye West, Jay-Z & Rihanna", ["Kanye West", "Jay-Z & Rihanna"]],
+    ["Tarkan, tarkan", ["Tarkan"]]
+  ]
+}

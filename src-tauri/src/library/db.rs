@@ -10,10 +10,10 @@ use super::{
 use crate::queue::Track;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -215,6 +215,145 @@ pub fn init(conn: &Connection) -> Result<()> {
         backfill_track_artists(&tx)?;
         tx.pragma_update(None, "user_version", 7)?;
         tx.commit()?;
+    }
+    if version < 8 {
+        // v3 keyed albums by each track's own year, which split albums whose
+        // tracks carry different or missing years. Re-derive albums per
+        // folder group, and re-split artists with the corrected rules.
+        let tx = conn.unchecked_transaction()?;
+        regroup_all_albums(&tx)?;
+        let orphan_covers = delete_empty_albums(&tx)?;
+        backfill_track_artists(&tx)?;
+        tx.pragma_update(None, "user_version", 8)?;
+        tx.commit()?;
+        for cover in orphan_covers {
+            if let Err(e) = std::fs::remove_file(&cover) {
+                log::debug!("could not remove cover {cover}: {e}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The year shown for an album: the most common track year, the latest one
+/// on a tie (a compilation's tracks all differ; its release is the latest).
+/// Tracks without a year are ignored.
+pub fn pick_album_year(years: impl IntoIterator<Item = Option<i64>>) -> Option<i64> {
+    let mut counts: HashMap<i64, usize> = HashMap::new();
+    for y in years.into_iter().flatten() {
+        *counts.entry(y).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|&(year, n)| (n, year))
+        .map(|(year, _)| year)
+}
+
+/// A track with its current album, as needed to re-derive album groups.
+struct GroupedTrack {
+    track_id: i64,
+    path: String,
+    year: Option<i64>,
+    album_id: i64,
+    title: String,
+    album_artist: String,
+    album_year: Option<i64>,
+    cover: Option<String>,
+}
+
+const GROUPED_TRACK_SELECT: &str = "SELECT t.id, t.path, t.year, a.id, a.title,
+        a.album_artist, a.year, a.cover
+     FROM tracks t JOIN albums a ON a.id = t.album_id";
+
+fn grouped_track(r: &Row<'_>) -> rusqlite::Result<GroupedTrack> {
+    Ok(GroupedTrack {
+        track_id: r.get(0)?,
+        path: r.get(1)?,
+        year: r.get(2)?,
+        album_id: r.get(3)?,
+        title: r.get(4)?,
+        album_artist: r.get(5)?,
+        album_year: r.get(6)?,
+        cover: r.get(7)?,
+    })
+}
+
+/// Re-derives the albums of the tracks directly inside `dirs`. An album is
+/// one (folder, album title, album artist) group; its year comes from
+/// [`pick_album_year`], so a track's own year never splits it off. Groups in
+/// different folders that end up with the same title, artist and year share
+/// one album (e.g. `CD1`/`CD2` folders). Albums left empty are not deleted
+/// here; call [`delete_empty_albums`] afterwards.
+pub fn regroup_albums_in_dirs(conn: &Connection, dirs: &HashSet<PathBuf>) -> Result<()> {
+    let mut st = conn.prepare_cached(&format!(
+        "{GROUPED_TRACK_SELECT} WHERE t.path >= ?1 AND t.path < ?2"
+    ))?;
+    let mut rows = Vec::new();
+    for dir in dirs {
+        let lower = dir.to_string_lossy().into_owned();
+        // Every path that starts with `lower`; the filter below keeps only
+        // the files directly inside `dir`.
+        let upper = format!("{lower}\u{10FFFF}");
+        for row in st.query_map([&lower, &upper], grouped_track)? {
+            let row = row?;
+            if Path::new(&row.path).parent() == Some(dir.as_path()) {
+                rows.push(row);
+            }
+        }
+    }
+    apply_regroup(conn, rows)
+}
+
+fn regroup_all_albums(conn: &Connection) -> Result<()> {
+    let mut st = conn.prepare(GROUPED_TRACK_SELECT)?;
+    let rows = st
+        .query_map([], grouped_track)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    apply_regroup(conn, rows)
+}
+
+fn apply_regroup(conn: &Connection, rows: Vec<GroupedTrack>) -> Result<()> {
+    let mut groups: HashMap<(PathBuf, String, String), Vec<GroupedTrack>> = HashMap::new();
+    for row in rows {
+        let dir = Path::new(&row.path)
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        let key = (
+            dir,
+            row.title.to_lowercase(),
+            row.album_artist.to_lowercase(),
+        );
+        groups.entry(key).or_default().push(row);
+    }
+    let mut upsert = conn.prepare_cached(
+        "INSERT INTO albums(title, album_artist, year, cover) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(title, album_artist, COALESCE(year, -1)) DO UPDATE SET
+            cover = COALESCE(cover, excluded.cover)
+         RETURNING id",
+    )?;
+    let mut move_track = conn.prepare_cached("UPDATE tracks SET album_id = ?1 WHERE id = ?2")?;
+    for members in groups.values() {
+        let year = pick_album_year(members.iter().map(|m| m.year));
+        let first = &members[0];
+        let settled = members
+            .iter()
+            .all(|m| m.album_id == first.album_id && m.album_year == year);
+        if settled {
+            continue;
+        }
+        let cover = members
+            .iter()
+            .filter(|m| m.album_year == year)
+            .chain(members.iter())
+            .find_map(|m| m.cover.clone());
+        let target: i64 = upsert.query_row(
+            rusqlite::params![first.title, first.album_artist, year, cover],
+            |r| r.get(0),
+        )?;
+        for m in members.iter().filter(|m| m.album_id != target) {
+            move_track.execute([target, m.track_id])?;
+        }
     }
     Ok(())
 }
@@ -1448,66 +1587,127 @@ pub fn listening_stats(
 // Artists & profiles
 // ---------------------------------------------------------------------
 
+/// Feature markers, matched ASCII-case-insensitively. Longer variants come
+/// first so `" feat. "` wins over `" feat "`.
 const FEATURE_TOKENS: &[&str] = &[
+    "(featuring ",
+    "[featuring ",
     "(feat.",
     "[feat.",
     "(ft.",
     "[ft.",
-    "(featuring ",
-    "[featuring ",
+    " featuring ",
     " feat. ",
     " feat ",
     " ft. ",
     " ft ",
-    " featuring ",
 ];
 
-/// Splits compound artist strings (`"A, B feat. C"`, `"A; B"`) into distinct
-/// artist names while preserving band names containing `&` or `+`.
+/// Splits compound artist strings (`"A feat. B"`, `"A, B"`, `"A; B"`) into
+/// distinct artists. Group names stay whole: `&` and `+` never split, a part
+/// starting with "The" belongs to the name before it (`"Tyler, The
+/// Creator"`), and a list of three or more single words joined by a final
+/// `&`/`and` is a band (`"Earth, Wind & Fire"`).
+///
+/// The UI mirrors these rules in `src/lib/artistNames.ts`; both are checked
+/// against `fixtures/artist-split-cases.json`.
 pub fn split_artists(raw: &str) -> Vec<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-    let mut work = trimmed.to_owned();
-    let lower = work.to_lowercase();
-    // Mark case-insensitive feature delimiters with ASCII Unit Separator (\x1F).
-    let mut offsets: Vec<(usize, usize)> = Vec::new();
-    for tok in FEATURE_TOKENS {
-        let mut from = 0;
-        while let Some(pos) = lower[from..].find(tok) {
-            let start = from + pos;
-            offsets.push((start, start + tok.len()));
-            from = start + tok.len();
-        }
-    }
-    offsets.sort_unstable_by_key(|r| r.0);
-    // Replace from back to front so byte indices stay valid.
-    for (s, e) in offsets.into_iter().rev() {
-        if work.is_char_boundary(s) && work.is_char_boundary(e) {
-            work.replace_range(s..e, "\x1F");
-        }
-    }
-
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    for part in work.split([',', ';', '\x1F']) {
-        let mut p = part.trim();
-        if let Some(stripped) = p.strip_suffix(')').filter(|s| !s.contains('(')) {
-            p = stripped.trim();
-        }
-        if let Some(stripped) = p.strip_suffix(']').filter(|s| !s.contains('[')) {
-            p = stripped.trim();
-        }
-        if p.is_empty() {
-            continue;
-        }
-        let key = p.to_lowercase();
-        if seen.insert(key) {
-            out.push(p.to_owned());
+    for segment in feature_segments(raw.trim()) {
+        for piece in segment.split(';') {
+            for name in split_name_list(piece) {
+                if seen.insert(name.to_lowercase()) {
+                    out.push(name);
+                }
+            }
         }
     }
     out
+}
+
+/// Cuts `raw` at feature markers. Matching runs on the original bytes: the
+/// markers are ASCII, so cut points are always char boundaries (lowercasing
+/// first would shift byte offsets for letters such as `İ`).
+fn feature_segments(raw: &str) -> Vec<&str> {
+    let bytes = raw.as_bytes();
+    let mut segments = Vec::new();
+    let (mut start, mut i) = (0, 0);
+    while i < bytes.len() {
+        let hit = FEATURE_TOKENS.iter().find(|tok| {
+            bytes
+                .get(i..i + tok.len())
+                .is_some_and(|b| b.eq_ignore_ascii_case(tok.as_bytes()))
+        });
+        match hit {
+            Some(tok) => {
+                segments.push(&raw[start..i]);
+                i += tok.len();
+                start = i;
+            }
+            None => i += 1,
+        }
+    }
+    segments.push(&raw[start..]);
+    segments
+}
+
+/// Drops a closing bracket left over from `"(feat. X)"`.
+fn strip_unmatched_close(part: &str) -> &str {
+    let mut p = part.trim();
+    if let Some(s) = p.strip_suffix(')').filter(|s| !s.contains('(')) {
+        p = s.trim();
+    }
+    if let Some(s) = p.strip_suffix(']').filter(|s| !s.contains('[')) {
+        p = s.trim();
+    }
+    p
+}
+
+fn starts_with_ignore_ascii_case(s: &str, prefix: &str) -> bool {
+    s.as_bytes()
+        .get(..prefix.len())
+        .is_some_and(|b| b.eq_ignore_ascii_case(prefix.as_bytes()))
+}
+
+/// Splits one comma-separated name list, keeping group names whole.
+fn split_name_list(list: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    for part in list
+        .split(',')
+        .map(strip_unmatched_close)
+        .filter(|p| !p.is_empty())
+    {
+        match parts.last_mut() {
+            Some(prev) if starts_with_ignore_ascii_case(part, "the ") => {
+                prev.push_str(", ");
+                prev.push_str(part);
+            }
+            _ => parts.push(part.to_owned()),
+        }
+    }
+    if parts.len() > 1 && is_single_word_band(&parts) {
+        return vec![parts.join(", ")];
+    }
+    parts
+}
+
+/// `"Earth, Wind & Fire"`, `"Crosby, Stills, Nash & Young"`,
+/// `"Peter, Paul and Mary"`: three or more single words, the last two joined
+/// by `&` or `and`.
+fn is_single_word_band(parts: &[String]) -> bool {
+    let Some((last, rest)) = parts.split_last() else {
+        return false;
+    };
+    let lower = last.to_lowercase();
+    let Some((a, b)) = lower
+        .split_once(" & ")
+        .or_else(|| lower.split_once(" and "))
+    else {
+        return false;
+    };
+    let single = |w: &str| !w.trim().is_empty() && !w.trim().contains(char::is_whitespace);
+    rest.len() + 2 >= 3 && rest.iter().all(|w| single(w)) && single(a) && single(b)
 }
 
 pub fn sync_track_artists(conn: &Connection, track_id: i64, raw_artist: &str) -> Result<()> {
