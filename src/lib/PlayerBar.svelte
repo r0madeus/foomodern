@@ -26,7 +26,6 @@
   // While the user drags the seek bar we show the drag value and only send
   // one seek command when they let go.
   let dragging = $state<number | null>(null)
-  let volumeBeforeMute = $state(100)
 
   const snap = $derived(player.snapshot)
   const duration = $derived(snap.durationSeconds)
@@ -46,15 +45,6 @@
   function commitSeek() {
     if (dragging !== null) void player.seek(dragging)
     dragging = null
-  }
-
-  function toggleMute() {
-    if (snap.volume > 0) {
-      volumeBeforeMute = snap.volume
-      void player.setVolume(0)
-    } else {
-      void player.setVolume(volumeBeforeMute || 100)
-    }
   }
 </script>
 
@@ -139,7 +129,7 @@
         onclick={player.toggleShuffle}
         aria-pressed={snap.shuffle}
         aria-label={t(snap.shuffle ? 'Shuffle on' : 'Shuffle off')}
-        title={t(snap.shuffle ? 'Shuffle: On' : 'Shuffle: Off')}
+        title={`${t(snap.shuffle ? 'Shuffle: On' : 'Shuffle: Off')} (S)`}
       >
         <Icon name="shuffle" class="size-4" />
       </button>
@@ -148,6 +138,7 @@
         onclick={player.previous}
         disabled={!hasTrack}
         aria-label={t("Previous")}
+        title={`${t('Previous')} (Ctrl+←)`}
       >
         <Icon name="prev" />
       </button>
@@ -156,6 +147,7 @@
         onclick={player.togglePause}
         disabled={!hasTrack}
         aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
+        title={`${t(snap.status === 'playing' ? 'Pause' : 'Play')} (Space)`}
       >
         <Icon name={snap.status === 'playing' ? 'pause' : 'play'} />
       </button>
@@ -164,6 +156,7 @@
         onclick={player.next}
         disabled={!hasTrack}
         aria-label={t("Next")}
+        title={`${t('Next')} (Ctrl+→)`}
       >
         <Icon name="next" />
       </button>
@@ -177,7 +170,7 @@
         onclick={player.cycleRepeat}
         aria-pressed={snap.repeat !== 'off'}
         aria-label={repeatLabel}
-        title={repeatLabel}
+        title={`${repeatLabel} (R)`}
       >
         <Icon name={snap.repeat === 'one' ? 'repeatOne' : 'repeat'} class="size-4" />
       </button>
@@ -235,8 +228,9 @@
     {/if}
     <button
       class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
-      onclick={toggleMute}
+      onclick={player.toggleMute}
       aria-label={t(snap.volume > 0 ? 'Mute' : 'Unmute')}
+      title={`${t(snap.volume > 0 ? 'Mute' : 'Unmute')} (M)`}
     >
       <Icon name={snap.volume > 0 ? 'volume' : 'mute'} />
     </button>

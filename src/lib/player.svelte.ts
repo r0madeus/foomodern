@@ -67,6 +67,7 @@ class PlayerStore {
   #now = $state(0)
   #frame = 0
   #loadedQueueVersion = -1
+  #unmutedVolume = 100
 
   position = $derived.by(() => {
     const { seconds, at } = this.#anchor
@@ -98,7 +99,19 @@ class PlayerStore {
   togglePause = () => this.#run('player_toggle_pause')
   next = () => this.#run('player_next')
   previous = () => this.#run('player_previous')
-  setVolume = (percent: number) => this.#run('player_set_volume', { percent })
+  setVolume = (percent: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)))
+    if (clamped > 0) this.#unmutedVolume = clamped
+    return this.#run('player_set_volume', { percent: clamped })
+  }
+  adjustVolume = (delta: number) => this.setVolume(this.snapshot.volume + delta)
+  toggleMute = () => {
+    if (this.snapshot.volume > 0) {
+      this.#unmutedVolume = this.snapshot.volume
+      return this.#run('player_set_volume', { percent: 0 })
+    }
+    return this.setVolume(this.#unmutedVolume > 0 ? this.#unmutedVolume : 100)
+  }
   setShuffle = (enabled: boolean) => this.#run('player_set_shuffle', { enabled })
   toggleShuffle = () => this.setShuffle(!this.snapshot.shuffle)
   setRepeat = (mode: RepeatMode) => this.#run('player_set_repeat', { mode })
@@ -113,6 +126,11 @@ class PlayerStore {
   seek = (seconds: number) => {
     this.#setAnchor(seconds)
     return this.#run('player_seek', { seconds })
+  }
+  seekRelative = (deltaSeconds: number) => {
+    const dur = this.snapshot.durationSeconds
+    if (dur === null || dur <= 0) return Promise.resolve()
+    return this.seek(Math.max(0, Math.min(dur, this.position + deltaSeconds)))
   }
 
   async #run(command: string, args?: Record<string, unknown>): Promise<void> {

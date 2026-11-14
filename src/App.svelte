@@ -40,6 +40,8 @@
   import { nowCover } from './lib/nowCover.svelte'
   import SidebarDownloads from './lib/SidebarDownloads.svelte'
   import TrackMenu from './lib/TrackMenu.svelte'
+  import { trackMenu } from './lib/contextMenu.svelte'
+  import { tagEditor } from './lib/tags.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -248,6 +250,12 @@
     else await player.openFiles(picked)
   }
 
+  function isTypingTarget(el: EventTarget | null): boolean {
+    if (!(el instanceof HTMLElement)) return false
+    if (el.isContentEditable) return true
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+  }
+
   async function onGlobalKey(e: KeyboardEvent) {
     if (mobile) return
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
@@ -258,6 +266,94 @@
       const input = document.getElementById('global-search-input') as HTMLInputElement | null
       input?.focus()
       input?.select()
+      return
+    }
+
+    if (e.key === 'MediaPlayPause') {
+      e.preventDefault()
+      if (player.snapshot.current || player.snapshot.queueLength > 0) void player.togglePause()
+      return
+    }
+    if (e.key === 'MediaTrackNext') {
+      e.preventDefault()
+      if (player.snapshot.current) void player.next()
+      return
+    }
+    if (e.key === 'MediaTrackPrevious') {
+      e.preventDefault()
+      if (player.snapshot.current) void player.previous()
+      return
+    }
+
+    if (e.altKey) return
+    if (
+      trackMenu.current !== null ||
+      tagEditor.request !== null ||
+      document.querySelector('[aria-modal="true"], [role="dialog"], [role="menu"]')
+    ) {
+      return
+    }
+    const active = document.activeElement
+    if (isTypingTarget(e.target) || isTypingTarget(active)) return
+
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          if (player.snapshot.current) void player.previous()
+          return
+        case 'ArrowRight':
+          e.preventDefault()
+          if (player.snapshot.current) void player.next()
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          void player.adjustVolume(5)
+          return
+        case 'ArrowDown':
+          e.preventDefault()
+          void player.adjustVolume(-5)
+          return
+      }
+      return
+    }
+
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return
+
+    const interactive =
+      active instanceof HTMLElement &&
+      active.closest(
+        'button, a, summary, input, textarea, select, [role="slider"], [role="menuitem"], [role="switch"], [role="checkbox"], [role="radio"]',
+      ) !== null
+
+    if (e.code === 'Space' || e.key === ' ') {
+      if (interactive) return
+      if (!player.snapshot.current && player.snapshot.queueLength === 0) return
+      e.preventDefault()
+      void player.togglePause()
+      return
+    }
+
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (interactive || !player.snapshot.current) return
+      e.preventDefault()
+      void player.seekRelative(e.key === 'ArrowLeft' ? -5 : 5)
+      return
+    }
+
+    switch (e.key.toLowerCase()) {
+      case 'm':
+        e.preventDefault()
+        void player.toggleMute()
+        break
+      case 's':
+        e.preventDefault()
+        void player.toggleShuffle()
+        break
+      case 'r':
+        e.preventDefault()
+        void player.cycleRepeat()
+        break
     }
   }
 </script>
