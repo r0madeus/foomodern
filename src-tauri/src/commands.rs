@@ -32,6 +32,23 @@ pub fn queue_append(player: State<'_, Arc<Player>>, paths: Vec<String>) -> Res<P
 }
 
 #[tauri::command]
+pub fn queue_play_next(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    path: String,
+) -> Res<PlayerSnapshot> {
+    let track = match lib.track_meta(&path).ok().flatten() {
+        Some(meta) => crate::queue::Track {
+            path: PathBuf::from(&path),
+            title: Some(meta.title),
+            artist: Some(meta.artist),
+        },
+        None => crate::queue::Track::from(PathBuf::from(path)),
+    };
+    s(player.insert_next(track))
+}
+
+#[tauri::command]
 pub fn queue_remove(player: State<'_, Arc<Player>>, index: usize) -> Res<PlayerSnapshot> {
     s(player.remove(index))
 }
@@ -131,7 +148,7 @@ pub fn player_snapshot(player: State<'_, Arc<Player>>) -> Res<PlayerSnapshot> {
 // ---------------------------------------------------------------------
 
 use crate::library::{
-    AlbumDetail, AlbumRow, FolderInfo, Library, LibraryStats, Page, SortOrder, TrackRow,
+    AlbumDetail, AlbumRow, FolderInfo, Library, LibraryStats, Page, SortSpec, TrackRow,
 };
 
 fn le<T>(r: Result<T, crate::library::LibraryError>) -> Res<T> {
@@ -198,6 +215,26 @@ pub fn app_log_dir(app: tauri::AppHandle) -> Res<String> {
         .app_log_dir()
         .map(|p| p.display().to_string())
         .map_err(|e| e.to_string())
+}
+
+/// Highlights `path` in the OS file manager (desktop only).
+#[tauri::command]
+pub fn app_reveal_file(app: tauri::AppHandle, path: String) -> Res<()> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, path);
+        Err("not supported on Android".into())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        if path.starts_with("http://") || path.starts_with("https://") {
+            return Err("cannot reveal an online stream".into());
+        }
+        app.opener()
+            .reveal_item_in_dir(std::path::Path::new(&path))
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -386,14 +423,20 @@ pub fn library_tracks_page(
     offset: u64,
     limit: u64,
     sort: String,
+    dir: Option<String>,
     query: Option<String>,
 ) -> Res<Page<TrackRow>> {
     le(lib.search_tracks_page(
         offset,
         limit,
-        SortOrder::parse(&sort),
+        SortSpec::parse(&sort, dir.as_deref()),
         query.as_deref().unwrap_or(""),
     ))
+}
+
+#[tauri::command]
+pub fn library_track_by_path(lib: State<'_, Arc<Library>>, path: String) -> Res<Option<TrackRow>> {
+    le(lib.track_row_by_path(&path))
 }
 
 #[tauri::command]
@@ -427,10 +470,14 @@ pub fn library_play_all(
     lib: State<'_, Arc<Library>>,
     player: State<'_, Arc<Player>>,
     sort: String,
+    dir: Option<String>,
     start_index: usize,
     query: Option<String>,
 ) -> Res<PlayerSnapshot> {
-    let paths = le(lib.matching_tracks(SortOrder::parse(&sort), query.as_deref().unwrap_or("")))?;
+    let paths = le(lib.matching_tracks(
+        SortSpec::parse(&sort, dir.as_deref()),
+        query.as_deref().unwrap_or(""),
+    ))?;
     s(player.replace_queue(paths, start_index))
 }
 
@@ -1470,6 +1517,29 @@ pub async fn artist_enrich(
     online
         .artist_info(&lib, &name, lang.as_deref() == Some("tr"))
         .await
+}
+
+#[tauri::command]
+pub fn artist_enrich_all(
+    app: AppHandle,
+    lib: State<'_, Arc<Library>>,
+    online: State<'_, Arc<OnlineService>>,
+    force: bool,
+    lang: Option<String>,
+) -> Res<crate::online::ArtistScanProgress> {
+    online.start_artist_scan(app, Arc::clone(&lib), force, lang.as_deref() == Some("tr"))
+}
+
+#[tauri::command]
+pub fn artist_enrich_status(
+    online: State<'_, Arc<OnlineService>>,
+) -> crate::online::ArtistScanProgress {
+    online.artist_scan_status()
+}
+
+#[tauri::command]
+pub fn artist_enrich_cancel(online: State<'_, Arc<OnlineService>>) {
+    online.cancel_artist_scan();
 }
 
 // ---------------------------------------------------------------------

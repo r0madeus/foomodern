@@ -544,6 +544,15 @@ impl Player {
         })
     }
 
+    /// Queue `track` immediately after the current entry (or at the front
+    /// when nothing is selected), updating the gapless next slot.
+    pub fn insert_next(&self, track: impl Into<Track>) -> Result<PlayerSnapshot, PlayerError> {
+        self.run(|s| {
+            s.queue.insert_next(track);
+            s.sync_next()
+        })
+    }
+
     /// Insert `track` right after the queue entry `anchor`. Returns the new
     /// entry's id, or `None` when `anchor` is gone (the queue was replaced or
     /// the entry removed), so background fillers know to stop.
@@ -1812,5 +1821,20 @@ mod tests {
         assert!(snap.wasapi_exclusive);
         assert!(p.export_session().wasapi_exclusive);
         assert_eq!(calls.take(), [Call::WasapiExclusive(true)]);
+    }
+
+    #[test]
+    fn insert_next_places_track_right_after_current_even_under_shuffle() {
+        let (p, calls, _) = setup();
+        p.replace_queue(pbs(&["a", "b", "c"]), 0).unwrap();
+        p.set_shuffle(true).unwrap();
+        calls.take();
+
+        let snap = p.insert_next(pb("urgent")).unwrap();
+        assert_eq!(snap.queue_length, 4);
+        assert_eq!(calls.take(), [Call::SetNext(Some(pb("urgent")))]);
+
+        let snap = p.next().unwrap();
+        assert_eq!(snap.current.unwrap().path, "urgent");
     }
 }

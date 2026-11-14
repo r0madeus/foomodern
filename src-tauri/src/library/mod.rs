@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-pub use db::SortOrder;
+pub use db::{SortDir, SortOrder, SortSpec};
 pub use scan::ScanStats;
 
 #[derive(Debug, thiserror::Error)]
@@ -471,7 +471,12 @@ impl Library {
         })
     }
 
-    pub fn tracks_page(&self, offset: u64, limit: u64, sort: SortOrder) -> Result<Vec<TrackRow>> {
+    pub fn tracks_page(
+        &self,
+        offset: u64,
+        limit: u64,
+        sort: impl Into<SortSpec>,
+    ) -> Result<Vec<TrackRow>> {
         db::tracks_page(&self.conn(), offset, limit.min(1000), sort)
     }
 
@@ -479,7 +484,7 @@ impl Library {
         &self,
         offset: u64,
         limit: u64,
-        sort: SortOrder,
+        sort: impl Into<SortSpec>,
         query: &str,
     ) -> Result<Page<TrackRow>> {
         db::search_tracks_page(&self.conn(), offset, limit.min(1000), sort, query)
@@ -519,12 +524,12 @@ impl Library {
     }
 
     /// The whole library in `sort` order, ready for the queue.
-    pub fn all_tracks(&self, sort: SortOrder) -> Result<Vec<Track>> {
+    pub fn all_tracks(&self, sort: impl Into<SortSpec>) -> Result<Vec<Track>> {
         db::all_tracks(&self.conn(), sort)
     }
 
     /// Tracks matching `query` in `sort` order, ready for the queue.
-    pub fn matching_tracks(&self, sort: SortOrder, query: &str) -> Result<Vec<Track>> {
+    pub fn matching_tracks(&self, sort: impl Into<SortSpec>, query: &str) -> Result<Vec<Track>> {
         db::matching_tracks(&self.conn(), sort, query)
     }
 
@@ -765,6 +770,10 @@ impl Library {
         db::artist_meta(&self.conn(), name)
     }
 
+    pub fn all_artist_names(&self) -> Result<Vec<String>> {
+        db::all_artist_names(&self.conn())
+    }
+
     pub fn save_artist_meta(
         &self,
         name: &str,
@@ -788,6 +797,11 @@ impl Library {
 
     pub fn track_by_id(&self, track_id: i64) -> Result<Option<TrackRow>> {
         db::track_by_id(&self.conn(), track_id)
+    }
+
+    pub fn track_row_by_path(&self, path: &str) -> Result<Option<TrackRow>> {
+        let key = scan::display_path(Path::new(path));
+        db::track_row_by_path(&self.conn(), &key)
     }
 
     pub fn track_id_by_path(&self, path: &str) -> Result<Option<i64>> {

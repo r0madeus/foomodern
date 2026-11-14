@@ -11,9 +11,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 
 #[cfg(not(target_os = "android"))]
 use lofty::config::WriteOptions;
@@ -127,6 +128,18 @@ pub struct ArtistOnlineInfo {
     pub albums: Vec<OnlineAlbum>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistScanProgress {
+    pub scanning: bool,
+    pub done: u32,
+    pub total: u32,
+    pub updated: u32,
+    pub current_artist: Option<String>,
+    pub cancelled: bool,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DownloadKind {
@@ -194,6 +207,8 @@ pub struct OnlineService {
     net: Arc<NetPolicy>,
     #[cfg(not(target_os = "android"))]
     worker_tx: mpsc::Sender<DownloadWork>,
+    artist_scan_cancel: Arc<AtomicBool>,
+    artist_scan_status: Arc<Mutex<ArtistScanProgress>>,
 }
 
 impl OnlineService {
@@ -255,6 +270,8 @@ impl OnlineService {
             net,
             #[cfg(not(target_os = "android"))]
             worker_tx,
+            artist_scan_cancel: Arc::new(AtomicBool::new(false)),
+            artist_scan_status: Arc::new(Mutex::new(ArtistScanProgress::default())),
         }
     }
 
@@ -658,10 +675,7 @@ impl OnlineService {
         prefer_tr: bool,
     ) -> Result<ArtistOnlineInfo, String> {
         let existing = lib.artist_meta(name).map_err(|e| e.to_string())?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-            .unwrap_or(0);
+        let now = unix_now();
         let fresh = existing
             .as_ref()
             .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
@@ -711,37 +725,19 @@ impl OnlineService {
         let Ok(client) = self.http(Feature::ArtistInfo).cloned() else {
             return ArtistOnlineInfo::default();
         };
-        let c1 = client.clone();
-        let c2 = client.clone();
-        let c3 = client.clone();
-        let q1 = q.to_owned();
-        let q2 = q.to_owned();
-        let q3 = q.to_owned();
-
-        let h_img = tokio::task::spawn(async move {
-            if !need_image {
-                return None;
-            }
-            fetch_deezer_artist_image(&c1, &q1).await
-        });
-        let h_bio = tokio::task::spawn(async move {
-            if !need_bio {
-                return None;
-            }
-            fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
-        });
+        let c_alb = client.clone();
+        let q_alb = q.to_owned();
         let h_alb = tokio::task::spawn(async move {
-            fetch_itunes_albums(&c3, &q3).await.ok().unwrap_or_default()
+            fetch_itunes_albums(&c_alb, &q_alb)
+                .await
+                .ok()
+                .unwrap_or_default()
         });
 
-        let img_url = h_img.await.ok().flatten();
-        let bio = h_bio.await.ok().flatten();
+        let (image, bio) = self
+            .fetch_artist_image_and_bio(&client, q, prefer_tr, need_image, need_bio)
+            .await;
         let raw_albums = h_alb.await.ok().unwrap_or_default();
-
-        let image = match img_url {
-            Some(url) => ensure_cached_cover(&client, &self.covers_dir, &url).await,
-            None => None,
-        };
 
         let q_low = q.to_lowercase();
         let filtered: Vec<OnlineAlbum> = raw_albums
@@ -763,6 +759,230 @@ impl OnlineService {
             albums: results.albums,
         }
     }
+
+    async fn fetch_artist_image_and_bio(
+        &self,
+        client: &reqwest::Client,
+        q: &str,
+        prefer_tr: bool,
+        need_image: bool,
+        need_bio: bool,
+    ) -> (Option<String>, Option<String>) {
+        let c1 = client.clone();
+        let c2 = client.clone();
+        let q1 = q.to_owned();
+        let q2 = q.to_owned();
+
+        let h_img = tokio::task::spawn(async move {
+            if !need_image {
+                return None;
+            }
+            fetch_deezer_artist_image(&c1, &q1).await
+        });
+        let h_bio = tokio::task::spawn(async move {
+            if !need_bio {
+                return None;
+            }
+            fetch_wikipedia_bio(&c2, &q2, prefer_tr).await
+        });
+
+        let img_url = h_img.await.ok().flatten();
+        let bio = h_bio.await.ok().flatten();
+        let image = match img_url {
+            Some(url) => ensure_cached_cover(client, &self.covers_dir, &url).await,
+            None => None,
+        };
+        (image, bio)
+    }
+
+    pub fn artist_scan_status(&self) -> ArtistScanProgress {
+        self.artist_scan_status
+            .lock()
+            .map(|s| s.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn cancel_artist_scan(&self) {
+        self.artist_scan_cancel.store(true, Ordering::SeqCst);
+    }
+
+    /// Walks library artists in the background, caching photos and bios.
+    /// When `force` is false, artists already checked in the last 30 days are
+    /// skipped unless their cached cover file is missing from disk.
+    pub fn start_artist_scan(
+        self: &Arc<Self>,
+        app: AppHandle,
+        lib: Arc<Library>,
+        force: bool,
+        prefer_tr: bool,
+    ) -> Result<ArtistScanProgress, String> {
+        self.net
+            .require(Feature::ArtistInfo)
+            .map_err(str::to_owned)?;
+        {
+            let guard = self.artist_scan_status.lock().unwrap();
+            if guard.scanning {
+                return Ok(guard.clone());
+            }
+        }
+
+        let names = lib.all_artist_names().map_err(|e| e.to_string())?;
+        let now = unix_now();
+        let mut targets: Vec<(String, Option<String>, Option<String>, bool, bool)> = Vec::new();
+        for name in names {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let existing = lib.artist_meta(trimmed).ok().flatten();
+            let fresh = existing
+                .as_ref()
+                .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
+            let raw_image = existing.as_ref().and_then(|m| m.image.clone());
+            let image_missing = raw_image.as_deref().is_some_and(|p| !Path::new(p).exists());
+            let cached_image = raw_image.filter(|p| Path::new(p).exists());
+            let cached_bio = existing.as_ref().and_then(|m| m.bio.clone());
+            let need_image = force || image_missing || (cached_image.is_none() && !fresh);
+            let need_bio = force || (cached_bio.is_none() && !fresh);
+            if need_image || need_bio {
+                targets.push((
+                    trimmed.to_owned(),
+                    cached_image,
+                    cached_bio,
+                    need_image,
+                    need_bio,
+                ));
+            }
+        }
+
+        if targets.is_empty() {
+            let done = ArtistScanProgress::default();
+            if let Ok(mut guard) = self.artist_scan_status.lock() {
+                *guard = done.clone();
+            }
+            let _ = app.emit("artist://scan", &done);
+            return Ok(done);
+        }
+
+        self.artist_scan_cancel.store(false, Ordering::SeqCst);
+        let initial = ArtistScanProgress {
+            scanning: true,
+            done: 0,
+            total: targets.len() as u32,
+            updated: 0,
+            current_artist: Some(targets[0].0.clone()),
+            cancelled: false,
+            error: None,
+        };
+        if let Ok(mut guard) = self.artist_scan_status.lock() {
+            *guard = initial.clone();
+        }
+        let _ = app.emit("artist://scan", &initial);
+
+        let service = Arc::clone(self);
+        tauri::async_runtime::spawn(async move {
+            service.run_artist_scan(app, lib, targets, prefer_tr).await;
+        });
+
+        Ok(initial)
+    }
+
+    async fn run_artist_scan(
+        &self,
+        app: AppHandle,
+        lib: Arc<Library>,
+        targets: Vec<(String, Option<String>, Option<String>, bool, bool)>,
+        prefer_tr: bool,
+    ) {
+        let total = targets.len() as u32;
+        let mut done: u32 = 0;
+        let mut updated: u32 = 0;
+        let mut cancelled = false;
+        let mut error: Option<String> = None;
+
+        for (idx, (name, cached_image, cached_bio, need_img, need_bio)) in
+            targets.into_iter().enumerate()
+        {
+            if self.artist_scan_cancel.load(Ordering::SeqCst) {
+                cancelled = true;
+                break;
+            }
+            let Ok(client) = self.http(Feature::ArtistInfo).cloned() else {
+                error = Some(OnlineError::Disabled.to_string());
+                break;
+            };
+            self.publish_artist_scan(
+                &app,
+                ArtistScanProgress {
+                    scanning: true,
+                    done,
+                    total,
+                    updated,
+                    current_artist: Some(name.clone()),
+                    cancelled: false,
+                    error: None,
+                },
+            );
+
+            let (img, bio) = self
+                .fetch_artist_image_and_bio(&client, &name, prefer_tr, need_img, need_bio)
+                .await;
+            let got_new = img.is_some() || bio.is_some();
+            let final_image = img.or(cached_image);
+            let final_bio = bio.or(cached_bio);
+            let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
+
+            done += 1;
+            if got_new {
+                updated += 1;
+            }
+            self.publish_artist_scan(
+                &app,
+                ArtistScanProgress {
+                    scanning: true,
+                    done,
+                    total,
+                    updated,
+                    current_artist: Some(name),
+                    cancelled: false,
+                    error: None,
+                },
+            );
+
+            if idx + 1 < total as usize && !self.artist_scan_cancel.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        }
+
+        let finished = ArtistScanProgress {
+            scanning: false,
+            done,
+            total,
+            updated,
+            current_artist: None,
+            cancelled,
+            error,
+        };
+        self.publish_artist_scan(&app, finished);
+        if updated > 0 {
+            let version = lib.bump();
+            let _ = app.emit("library://changed", version);
+        }
+    }
+
+    fn publish_artist_scan(&self, app: &AppHandle, progress: ArtistScanProgress) {
+        if let Ok(mut guard) = self.artist_scan_status.lock() {
+            *guard = progress.clone();
+        }
+        let _ = app.emit("artist://scan", &progress);
+    }
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 pub(crate) fn parse_deezer_artist_image(json: &str, wanted: &str) -> Option<String> {

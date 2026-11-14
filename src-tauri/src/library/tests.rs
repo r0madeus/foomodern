@@ -463,6 +463,40 @@ fn track_sort_orders_and_paging() {
             .is_empty()
     );
     assert_eq!(e.lib.all_tracks(SortOrder::Title).unwrap().len(), 3);
+
+    let rev_titles: Vec<String> = e
+        .lib
+        .tracks_page(
+            0,
+            10,
+            super::SortSpec::parse("title", Some("desc")),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    assert_eq!(rev_titles, ["cherry", "banana", "Apple"]);
+    assert_eq!(
+        super::SortSpec::parse("added", None).dir,
+        super::SortDir::Desc
+    );
+    assert_eq!(
+        super::SortSpec::parse("duration", None).order,
+        SortOrder::Duration
+    );
+
+    let one_path = page[0].path.clone();
+    let looked_up = e.lib.track_row_by_path(&one_path).unwrap().unwrap();
+    assert_eq!(looked_up.id, page[0].id);
+    let mut names: Vec<String> = e
+        .lib
+        .all_artist_names()
+        .unwrap()
+        .into_iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["abe", "zed"]);
 }
 
 #[test]

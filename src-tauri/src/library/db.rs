@@ -382,6 +382,19 @@ pub enum SortOrder {
     Title,
     Album,
     Added,
+    Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SortSpec {
+    pub order: SortOrder,
+    pub dir: SortDir,
 }
 
 impl SortOrder {
@@ -391,18 +404,75 @@ impl SortOrder {
             "title" => Self::Title,
             "album" => Self::Album,
             "added" => Self::Added,
+            "duration" => Self::Duration,
             _ => Self::Artist,
         }
     }
 
-    fn order_by(self) -> &'static str {
+    pub fn default_dir(self) -> SortDir {
         match self {
-            Self::Artist => "t.artist, a.title, a.year, a.id, t.disc_no, t.track_no, t.title, t.id",
-            Self::Title => "t.title, t.artist, t.id",
-            Self::Album => {
+            Self::Added => SortDir::Desc,
+            _ => SortDir::Asc,
+        }
+    }
+}
+
+impl SortDir {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "asc" => Some(Self::Asc),
+            "desc" => Some(Self::Desc),
+            _ => None,
+        }
+    }
+}
+
+impl SortSpec {
+    pub fn new(order: SortOrder, dir: SortDir) -> Self {
+        Self { order, dir }
+    }
+
+    pub fn parse(sort: &str, dir: Option<&str>) -> Self {
+        let order = SortOrder::parse(sort);
+        let dir = dir
+            .and_then(SortDir::parse)
+            .unwrap_or_else(|| order.default_dir());
+        Self { order, dir }
+    }
+
+    fn order_by(self) -> &'static str {
+        match (self.order, self.dir) {
+            (SortOrder::Artist, SortDir::Asc) => {
+                "t.artist, a.title, a.year, a.id, t.disc_no, t.track_no, t.title, t.id"
+            }
+            (SortOrder::Artist, SortDir::Desc) => {
+                "t.artist DESC, a.title, a.year, a.id, t.disc_no, t.track_no, t.title, t.id"
+            }
+            (SortOrder::Title, SortDir::Asc) => "t.title, t.artist, t.id",
+            (SortOrder::Title, SortDir::Desc) => "t.title DESC, t.artist, t.id",
+            (SortOrder::Album, SortDir::Asc) => {
                 "a.title, a.album_artist, a.year, a.id, t.disc_no, t.track_no, t.title, t.id"
             }
-            Self::Added => "t.added_at DESC, t.id",
+            (SortOrder::Album, SortDir::Desc) => {
+                "a.title DESC, a.album_artist DESC, a.year DESC, a.id DESC, t.disc_no, t.track_no, t.title, t.id"
+            }
+            (SortOrder::Added, SortDir::Asc) => "t.added_at ASC, t.id ASC",
+            (SortOrder::Added, SortDir::Desc) => "t.added_at DESC, t.id",
+            (SortOrder::Duration, SortDir::Asc) => {
+                "t.duration_ms IS NULL, t.duration_ms ASC, t.title, t.id"
+            }
+            (SortOrder::Duration, SortDir::Desc) => {
+                "t.duration_ms IS NULL, t.duration_ms DESC, t.title, t.id"
+            }
+        }
+    }
+}
+
+impl From<SortOrder> for SortSpec {
+    fn from(order: SortOrder) -> Self {
+        Self {
+            order,
+            dir: order.default_dir(),
         }
     }
 }
@@ -549,7 +619,7 @@ pub fn tracks_page(
     conn: &Connection,
     offset: u64,
     limit: u64,
-    sort: SortOrder,
+    sort: impl Into<SortSpec>,
 ) -> Result<Vec<TrackRow>> {
     Ok(search_tracks_page(conn, offset, limit, sort, "")?.items)
 }
@@ -579,9 +649,10 @@ pub fn search_tracks_page(
     conn: &Connection,
     offset: u64,
     limit: u64,
-    sort: SortOrder,
+    sort: impl Into<SortSpec>,
     query: &str,
 ) -> Result<Page<TrackRow>> {
+    let sort = sort.into();
     let f = track_filter(query);
     let n = f.params.len();
     let count_sql = format!(
@@ -609,11 +680,16 @@ fn queue_track(r: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
     })
 }
 
-pub fn all_tracks(conn: &Connection, sort: SortOrder) -> Result<Vec<Track>> {
+pub fn all_tracks(conn: &Connection, sort: impl Into<SortSpec>) -> Result<Vec<Track>> {
     matching_tracks(conn, sort, "")
 }
 
-pub fn matching_tracks(conn: &Connection, sort: SortOrder, query: &str) -> Result<Vec<Track>> {
+pub fn matching_tracks(
+    conn: &Connection,
+    sort: impl Into<SortSpec>,
+    query: &str,
+) -> Result<Vec<Track>> {
+    let sort = sort.into();
     let f = track_filter(query);
     let sql = format!(
         "SELECT t.path, t.title, t.artist FROM tracks t \
@@ -1800,6 +1876,18 @@ pub fn search_artists_page(
     })
 }
 
+/// Distinct artist names in the library, sorted case-insensitively.
+pub fn all_artist_names(conn: &Connection) -> Result<Vec<String>> {
+    let mut st = conn.prepare(
+        "SELECT MIN(ta.artist)
+         FROM track_artists ta
+         GROUP BY ta.artist
+         ORDER BY MIN(ta.artist) COLLATE NOCASE",
+    )?;
+    let rows = st.query_map([], |r| r.get(0))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
 pub fn artist_meta(conn: &Connection, name: &str) -> Result<Option<ArtistMeta>> {
     conn.query_row(
         "SELECT display, image, bio, fetched_at
@@ -2053,6 +2141,17 @@ pub fn track_by_id(conn: &Connection, track_id: i64) -> Result<Option<TrackRow>>
         .query_row(
             &format!("{TRACK_SELECT} WHERE t.id = ?1"),
             [track_id],
+            track_row,
+        )
+        .optional()?)
+}
+
+/// One track by filesystem path, in the same shape as album listings.
+pub fn track_row_by_path(conn: &Connection, path: &str) -> Result<Option<TrackRow>> {
+    Ok(conn
+        .query_row(
+            &format!("{TRACK_SELECT} WHERE t.path = ?1"),
+            [path],
             track_row,
         )
         .optional()?)

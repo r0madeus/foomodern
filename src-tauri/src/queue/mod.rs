@@ -231,6 +231,21 @@ impl Queue {
         self.version += 1;
     }
 
+    /// Insert `track` immediately after the current entry (or at the front
+    /// when nothing is selected). Even with shuffle enabled, it plays next.
+    pub fn insert_next(&mut self, track: impl Into<Track>) -> EntryId {
+        let at = self.current.map_or(0, |c| c + 1);
+        let entry = self.make_entry(track.into());
+        let id = entry.id;
+        self.entries.insert(at, entry);
+        if self.shuffle {
+            let order_at = self.current_order_pos().map_or(0, |pos| pos + 1);
+            self.order.insert(order_at, id);
+        }
+        self.version += 1;
+        id
+    }
+
     /// Insert `track` right after the entry `anchor`. Returns the new entry's
     /// id, or `None` (and changes nothing) when `anchor` is no longer queued.
     /// With shuffle on, the new entry gets a random place among the entries
