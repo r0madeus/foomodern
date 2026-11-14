@@ -325,10 +325,11 @@
                 {/if}
 
                 {#if online.results.tracks.length > 0}
+                  {@const songs = online.results.tracks}
                   <div>
                     <h4 class="mb-2 text-xs font-medium text-zinc-400">{t('Songs')}</h4>
                     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
-                      {#each online.results.tracks as track (track.id)}
+                      {#each songs as track, i (track.id)}
                         {@const job = online.jobFor('track', track.title, track.artist)}
                         {@const inLib = isTrackInLibrary(track, localTracks)}
                         {@const isCurrent =
@@ -346,7 +347,7 @@
                                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                                 : 'text-zinc-800 hover:bg-zinc-100/80 dark:text-zinc-200 dark:hover:bg-zinc-800/50',
                             ]}
-                            onclick={() => void online.playTrack(track)}
+                            onclick={() => void online.playTracks(songs, i)}
                           >
                             <Cover
                               cover={track.cover ?? track.coverUrl}

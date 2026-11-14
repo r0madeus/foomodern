@@ -292,7 +292,7 @@ pub fn run() {
             commands::online_set_ytdlp_path,
             commands::online_search,
             commands::online_album_detail,
-            commands::online_play_track,
+            commands::online_play_tracks,
             commands::online_download_track,
             commands::online_download_album,
             commands::online_downloads,

@@ -201,11 +201,17 @@ class OnlineStore {
     this.albumError = null
   }
 
-  async playTrack(track: OnlineTrack): Promise<void> {
+  /** Plays `tracks[index]`; the tracks after it follow in the queue. */
+  async playTracks(tracks: OnlineTrack[], index: number): Promise<void> {
+    const track = tracks[index]
+    if (!track) return
     this.playingId = track.id
     this.error = null
     try {
-      const snap = await invoke<PlayerSnapshot>('online_play_track', { track })
+      const snap = await invoke<PlayerSnapshot>('online_play_tracks', {
+        tracks,
+        startIndex: index,
+      })
       player.applySnapshot(snap)
     } catch (e) {
       this.error = String(e)

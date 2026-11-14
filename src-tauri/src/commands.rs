@@ -889,24 +889,64 @@ pub async fn online_album_detail(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub async fn online_play_track(
-    store: State<'_, Arc<SessionStore>>,
-    online: State<'_, Arc<OnlineService>>,
-    player: State<'_, Arc<Player>>,
-    track: OnlineTrack,
-) -> Res<PlayerSnapshot> {
-    let bin = online.resolve_ytdlp_bin(&store);
-    let (stream_url, _) = online
-        .resolve_stream(&track, &bin)
-        .await
-        .map_err(|e| e.to_string())?;
-    let entry = Track {
+fn online_queue_entry(track: OnlineTrack, stream_url: String) -> Track {
+    Track {
         path: PathBuf::from(stream_url),
         title: (!track.title.is_empty()).then_some(track.title),
         artist: (!track.artist.is_empty()).then_some(track.artist),
+    }
+}
+
+/// Plays `tracks[start_index]` with the rest of the list (an album or search
+/// results) after it, like playing from a local list. Only the clicked track
+/// is resolved before playback starts; the following ones are resolved in
+/// the background and inserted in order. That stops as soon as the queue no
+/// longer holds the last inserted entry (the user replaced the queue).
+#[tauri::command]
+pub async fn online_play_tracks(
+    store: State<'_, Arc<SessionStore>>,
+    online: State<'_, Arc<OnlineService>>,
+    player: State<'_, Arc<Player>>,
+    tracks: Vec<OnlineTrack>,
+    start_index: usize,
+) -> Res<PlayerSnapshot> {
+    let mut rest = tracks.into_iter().skip(start_index);
+    let first = rest.next().ok_or("no track to play")?;
+    let bin = online.resolve_ytdlp_bin(&store);
+    let (stream_url, _) = online
+        .resolve_stream(&first, &bin)
+        .await
+        .map_err(|e| e.to_string())?;
+    let snap = s(player.replace_queue(vec![online_queue_entry(first, stream_url)], 0))?;
+    let Some(mut anchor) = snap.current.as_ref().map(|c| c.id) else {
+        return Ok(snap);
     };
-    s(player.replace_queue(vec![entry], 0))
+    let rest: Vec<OnlineTrack> = rest.collect();
+    if !rest.is_empty() {
+        let online = Arc::clone(&online);
+        let player = Arc::clone(&player);
+        tauri::async_runtime::spawn(async move {
+            for track in rest {
+                let title = track.title.clone();
+                let stream_url = match online.resolve_stream(&track, &bin).await {
+                    Ok((url, _)) => url,
+                    Err(e) => {
+                        log::warn!("skipping '{title}': {e}");
+                        continue;
+                    }
+                };
+                match player.insert_after(anchor, online_queue_entry(track, stream_url)) {
+                    Ok(Some(id)) => anchor = id,
+                    Ok(None) => break,
+                    Err(e) => {
+                        log::warn!("could not queue '{title}': {e}");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+    Ok(snap)
 }
 
 #[tauri::command]

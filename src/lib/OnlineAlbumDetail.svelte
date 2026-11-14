@@ -116,7 +116,7 @@
             disabled={!ytdlpAvailable || tracks.length === 0 || online.playingId !== null}
             class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             onclick={() => {
-              if (tracks[0]) void online.playTrack(tracks[0])
+              void online.playTracks(tracks, 0)
             }}
           >
             <Icon name="play" class="size-5" />
@@ -194,7 +194,7 @@
                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
-            onclick={() => void online.playTrack(track)}
+            onclick={() => void online.playTracks(tracks, i)}
           >
             <span class="w-7 text-right text-xs tabular-nums text-zinc-400">
               {track.trackNo ?? i + 1}
