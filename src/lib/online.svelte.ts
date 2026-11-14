@@ -84,6 +84,15 @@ class OnlineStore {
   downloads = $state<DownloadJob[]>([])
   error = $state<string | null>(null)
 
+  activeDownloadCount = $derived(
+    this.downloads.filter((j) => j.state === 'queued' || j.state === 'downloading').length,
+  )
+  hasFinishedDownloads = $derived(
+    this.downloads.some(
+      (j) => j.state === 'done' || j.state === 'failed' || j.state === 'cancelled',
+    ),
+  )
+
   #initialized = false
   #searchSeq = 0
   #albumSeq = 0
@@ -277,6 +286,11 @@ class OnlineStore {
 }
 
 export const online = new OnlineStore()
+
+export function downloadProgress(job: DownloadJob): number {
+  if (job.totalTracks <= 0) return 0
+  return Math.min(100, Math.round((job.doneTracks / job.totalTracks) * 100))
+}
 
 function normMatch(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ')

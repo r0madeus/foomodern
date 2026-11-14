@@ -9,10 +9,10 @@
   import { count, t } from './i18n.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import {
+    downloadProgress,
     isAlbumInLibrary,
     isTrackInLibrary,
     online,
-    type DownloadJob,
   } from './online.svelte'
   import { formatTime, player } from './player.svelte'
 
@@ -27,14 +27,6 @@
   const trimmedQuery = $derived(online.query.trim())
   const hasCurrentOnline = $derived(
     trimmedQuery !== '' && online.searchedQuery === trimmedQuery && online.results !== null,
-  )
-  const hasFinishedDownloads = $derived(
-    online.downloads.some(
-      (j) => j.state === 'done' || j.state === 'failed' || j.state === 'cancelled',
-    ),
-  )
-  const activeCount = $derived(
-    online.downloads.filter((j) => j.state === 'queued' || j.state === 'downloading').length,
   )
   const currentPath = $derived(player.snapshot.current?.path ?? null)
 
@@ -82,11 +74,6 @@
     e.preventDefault()
     if (onlineOff) return
     void online.search()
-  }
-
-  function jobPercent(job: DownloadJob): number {
-    if (job.totalTracks <= 0) return 0
-    return Math.min(100, Math.round((job.doneTracks / job.totalTracks) * 100))
   }
 </script>
 
@@ -466,13 +453,13 @@
         <div class="flex items-center gap-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
           <Icon name="download" class="size-4 text-teal-600 dark:text-teal-400" />
           <span>{t('Downloads')}</span>
-          {#if activeCount > 0}
+          {#if online.activeDownloadCount > 0}
             <span class="rounded-full bg-teal-500/15 px-2 py-0.5 text-[11px] font-medium text-teal-700 normal-case dark:text-teal-300">
-              {count(activeCount, '{n} active', '{n} active')}
+              {count(online.activeDownloadCount, '{n} active', '{n} active')}
             </span>
           {/if}
         </div>
-        {#if hasFinishedDownloads}
+        {#if online.hasFinishedDownloads}
           <button
             type="button"
             class="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -538,7 +525,7 @@
               <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <div
                   class="h-full w-full origin-left bg-teal-500 transition-transform duration-300 ease-out"
-                  style:transform="scaleX({jobPercent(job) / 100})"
+                  style:transform="scaleX({downloadProgress(job) / 100})"
                 ></div>
               </div>
             {/if}

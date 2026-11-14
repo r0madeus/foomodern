@@ -38,6 +38,7 @@
   import UpdateBanner from './lib/UpdateBanner.svelte'
   import { updates } from './lib/updates.svelte'
   import { nowCover } from './lib/nowCover.svelte'
+  import SidebarDownloads from './lib/SidebarDownloads.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -543,6 +544,12 @@
             {/if}
           </p>
         {/if}
+        <SidebarDownloads
+          collapsed={sidebarCollapsed}
+          onExpand={() => {
+            if (sidebarCollapsed) toggleSidebar()
+          }}
+        />
         <button
           class={[
             'flex items-center rounded-lg px-2 py-1.5 text-sm transition-colors',
