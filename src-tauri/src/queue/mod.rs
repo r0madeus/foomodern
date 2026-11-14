@@ -231,6 +231,30 @@ impl Queue {
         self.version += 1;
     }
 
+    /// Insert `track` right after the entry `anchor`. Returns the new entry's
+    /// id, or `None` (and changes nothing) when `anchor` is no longer queued.
+    /// With shuffle on, the new entry gets a random place among the entries
+    /// still to play.
+    pub fn insert_after(&mut self, anchor: EntryId, track: impl Into<Track>) -> Option<EntryId> {
+        let at = self.index_of(anchor)? + 1;
+        let entry = self.make_entry(track.into());
+        let id = entry.id;
+        self.entries.insert(at, entry);
+        if let Some(c) = self.current
+            && c >= at
+        {
+            self.current = Some(c + 1);
+        }
+        if self.shuffle {
+            let tail_start = self.current_order_pos().map_or(0, |pos| pos + 1);
+            let span = (self.order.len() - tail_start) as u64 + 1;
+            let pos = tail_start + (self.next_random() % span) as usize;
+            self.order.insert(pos, id);
+        }
+        self.version += 1;
+        Some(id)
+    }
+
     /// Remove the entry at `index`. Removing the current entry leaves the
     /// queue without a current entry.
     pub fn remove(&mut self, index: usize) -> Option<QueueEntry> {
@@ -692,5 +716,34 @@ mod tests {
 
         q.set_current(Some(first));
         assert_eq!(q.previous_index(), Some(third));
+    }
+
+    #[test]
+    fn insert_after_keeps_order_and_current_and_stops_without_anchor() {
+        let mut q = queue(&["a", "b", "c"], Some(2));
+        let a = q.get(0).unwrap().id;
+        let x = q.insert_after(a, PathBuf::from("x")).unwrap();
+        assert_eq!(names(&q), ["a", "x", "b", "c"]);
+        assert_eq!(q.current_index(), Some(3), "current still points at c");
+        let y = q.insert_after(x, PathBuf::from("y")).unwrap();
+        assert_eq!(names(&q), ["a", "x", "y", "b", "c"]);
+        assert_ne!(x, y);
+
+        q.replace(paths(&["z"]), Some(0));
+        assert_eq!(q.insert_after(y, PathBuf::from("late")), None);
+        assert_eq!(names(&q), ["z"]);
+    }
+
+    #[test]
+    fn insert_after_with_shuffle_queues_the_entry_to_play_later() {
+        let mut q = Queue::with_seed(5);
+        q.set_shuffle(true);
+        q.replace(paths(&["a", "b", "c", "d"]), Some(0));
+        let cur = q.current().unwrap().id;
+        let x = q.insert_after(cur, PathBuf::from("x")).unwrap();
+        let cur_pos = q.order.iter().position(|&id| id == cur).unwrap();
+        let x_pos = q.order.iter().position(|&id| id == x).unwrap();
+        assert!(x_pos > cur_pos);
+        assert_eq!(q.order.len(), 5);
     }
 }

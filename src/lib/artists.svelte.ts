@@ -41,27 +41,7 @@ export interface ArtistOnlineInfo {
   albums: OnlineAlbum[]
 }
 
-const FEATURE_RE = /\(\s*(?:feat\.?|ft\.?|featuring)\b|\[\s*(?:feat\.?|ft\.?|featuring)\b|\s+(?:feat\.?|ft\.?|featuring)\s+/gi
-
-export function splitArtistNames(raw: string): string[] {
-  const trimmed = raw.trim()
-  if (!trimmed) return []
-  const marked = trimmed.replace(FEATURE_RE, '\x1F')
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const part of marked.split(/[,;\x1F]/)) {
-    let p = part.trim()
-    if (p.endsWith(')') && !p.includes('(')) p = p.slice(0, -1).trim()
-    if (p.endsWith(']') && !p.includes('[')) p = p.slice(0, -1).trim()
-    if (!p) continue
-    const key = p.toLowerCase()
-    if (!seen.has(key)) {
-      seen.add(key)
-      out.push(p)
-    }
-  }
-  return out
-}
+export { splitArtistNames } from './artistNames'
 
 class ArtistStore {
   #navigator: ((name: string) => void) | null = null

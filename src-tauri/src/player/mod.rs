@@ -450,6 +450,7 @@ impl Player {
             replaygain: s.replaygain,
             ..SessionState::default()
         }
+        .normalized()
     }
 
     /// The path of the loaded (current) queue entry, if any.
@@ -511,6 +512,25 @@ impl Player {
             s.queue.append(paths);
             s.sync_next()
         })
+    }
+
+    /// Insert `track` right after the queue entry `anchor`. Returns the new
+    /// entry's id, or `None` when `anchor` is gone (the queue was replaced or
+    /// the entry removed), so background fillers know to stop.
+    pub fn insert_after(
+        &self,
+        anchor: EntryId,
+        track: impl Into<Track>,
+    ) -> Result<Option<EntryId>, PlayerError> {
+        let mut inserted = None;
+        self.run(|s| {
+            inserted = s.queue.insert_after(anchor, track);
+            if inserted.is_some() {
+                s.sync_next()?;
+            }
+            Ok(())
+        })?;
+        Ok(inserted)
     }
 
     pub fn remove(&self, index: usize) -> Result<PlayerSnapshot, PlayerError> {
@@ -1605,5 +1625,41 @@ mod tests {
         assert_eq!(listens[1].path, "c.mp3");
         assert!(listens[1].completed);
         assert!(!listens[1].skipped);
+    }
+
+    #[test]
+    fn insert_after_current_fills_the_next_slot_and_stops_when_queue_replaced() {
+        let (p, calls, _) = setup();
+        let snap = p.replace_queue(pbs(&["a"]), 0).unwrap();
+        calls.take();
+        let a = snap.current.unwrap().id;
+        let b = p.insert_after(a, pb("b")).unwrap().unwrap();
+        assert_eq!(calls.take(), vec![Call::SetNext(Some(pb("b")))]);
+        p.insert_after(b, pb("c")).unwrap().unwrap();
+        assert_eq!(calls.take(), vec![], "next slot is still b");
+        assert_eq!(p.snapshot().queue_length, 3);
+
+        p.replace_queue(pbs(&["z"]), 0).unwrap();
+        assert_eq!(p.insert_after(b, pb("late")).unwrap(), None);
+        assert_eq!(p.snapshot().queue_length, 1);
+    }
+
+    #[test]
+    fn exported_session_leaves_out_online_streams() {
+        let (p, _, _) = setup();
+        p.replace_queue(
+            pbs(&["a.flac", "https://cdn.example/stream?x=1", "b.flac"]),
+            2,
+        )
+        .unwrap();
+        let saved = p.export_session();
+        let paths: Vec<_> = saved.queue.iter().map(|t| t.path.clone()).collect();
+        assert_eq!(paths, pbs(&["a.flac", "b.flac"]));
+        assert_eq!(saved.current_index, Some(1), "still points at b.flac");
+
+        p.play_index(1).unwrap();
+        let saved = p.export_session();
+        assert_eq!(saved.current_index, None);
+        assert_eq!(saved.position_seconds, 0.0);
     }
 }

@@ -51,7 +51,7 @@ export interface OnlineAlbumDetail {
 }
 
 export type DownloadKind = 'track' | 'album'
-export type DownloadState = 'queued' | 'downloading' | 'done' | 'failed'
+export type DownloadState = 'queued' | 'downloading' | 'done' | 'failed' | 'cancelled'
 
 export interface DownloadJob {
   id: number
@@ -201,11 +201,17 @@ class OnlineStore {
     this.albumError = null
   }
 
-  async playTrack(track: OnlineTrack): Promise<void> {
+  /** Plays `tracks[index]`; the tracks after it follow in the queue. */
+  async playTracks(tracks: OnlineTrack[], index: number): Promise<void> {
+    const track = tracks[index]
+    if (!track) return
     this.playingId = track.id
     this.error = null
     try {
-      const snap = await invoke<PlayerSnapshot>('online_play_track', { track })
+      const snap = await invoke<PlayerSnapshot>('online_play_tracks', {
+        tracks,
+        startIndex: index,
+      })
       player.applySnapshot(snap)
     } catch (e) {
       this.error = String(e)
@@ -232,6 +238,14 @@ class OnlineStore {
     try {
       const job = await invoke<DownloadJob>('online_download_album', { album, tracks })
       this.#upsertJob(job)
+    } catch (e) {
+      this.error = String(e)
+    }
+  }
+
+  async cancelDownload(id: number): Promise<void> {
+    try {
+      this.downloads = await invoke<DownloadJob[]>('online_cancel_download', { id })
     } catch (e) {
       this.error = String(e)
     }

@@ -33,8 +33,11 @@ are the ones every coding session must follow.
 
 ## Scope
 
-v0 scope is locked (see the decisions document, section 6). New ideas go to a
-"later" list, not into the code.
+v0 is done; the current feature set is listed in `docs/ROADMAP.md`. New
+features need the owner's decision first (recorded in the decisions
+document); ideas without one go to a "later" list, not into the code.
+`yt-dlp` and other external programs are only run from
+`src-tauri/src/online`, always with a time limit.
 
 ## Conventions
 
@@ -49,6 +52,7 @@ v0 scope is locked (see the decisions document, section 6). New ideas go to a
 npm ci
 npm run tauri dev          # run the app
 npm run check              # svelte-check + tsc
+npm test                   # UI unit tests (node --test)
 cd src-tauri && cargo test # Rust tests (needs libmpv)
 ```
 

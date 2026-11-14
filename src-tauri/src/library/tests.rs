@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 7);
+    assert_eq!(v, 8);
 }
 
 #[test]
@@ -662,7 +662,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 7);
+    assert_eq!(v, 8);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -675,7 +675,7 @@ fn migrates_a_v1_database_to_latest() {
 }
 
 #[test]
-fn migrates_a_v2_database_to_v3_and_splits_album_years() {
+fn migrates_a_v2_database_and_keeps_a_folder_album_whole() {
     let tmp = tempfile::tempdir().unwrap();
     let db_path = tmp.path().join("library.sqlite3");
     {
@@ -703,7 +703,7 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -714,7 +714,8 @@ fn migrates_a_v2_database_to_v3_and_splits_album_years() {
     }
     let albums = lib.albums_page(0, 10).unwrap();
     let years: Vec<_> = albums.iter().map(|a| (a.year, a.track_count)).collect();
-    assert_eq!(years, [(Some(1995), 1), (Some(2020), 1)]);
+    // Both tracks sit in `/m`: one album, the later year on a tie.
+    assert_eq!(years, [(Some(2020), 2)]);
     assert_eq!(lib.playlists().unwrap()[0].track_count, 2);
 }
 
@@ -1236,9 +1237,9 @@ mod tag_editing {
     }
 
     #[test]
-    fn editing_year_splits_and_regroups_albums() {
+    fn editing_a_track_year_keeps_the_album_whole_and_updates_its_year() {
         let e = env();
-        for (name, title, track) in [("a", "One", 1), ("b", "Two", 2)] {
+        for (name, title, track) in [("a", "One", 1), ("b", "Two", 2), ("c", "Three", 3)] {
             tagged_wav(
                 &e.music.join(format!("{name}.wav")),
                 &Meta {
@@ -1253,44 +1254,35 @@ mod tag_editing {
             );
         }
         e.scan();
-        let rows = e.tracks(SortOrder::Title);
-        write_for_tracks(
-            &e.lib,
-            &[rows[0].id],
-            &TagChanges {
-                year: Some(Some(2010)),
-                ..TagChanges::default()
-            },
-            None,
-        )
-        .unwrap();
-        let split: Vec<_> = e
-            .lib
-            .albums_page(0, 10)
-            .unwrap()
-            .into_iter()
-            .map(|a| (a.year, a.track_count))
-            .collect();
-        assert_eq!(split, [(Some(1990), 1), (Some(2010), 1)]);
+        let albums = |e: &Env| -> Vec<_> {
+            e.lib
+                .albums_page(0, 10)
+                .unwrap()
+                .into_iter()
+                .map(|a| (a.year, a.track_count))
+                .collect()
+        };
+        let ids: Vec<i64> = e.tracks(SortOrder::Title).iter().map(|t| t.id).collect();
+        let set_year = |ids: &[i64], year| {
+            write_for_tracks(
+                &e.lib,
+                ids,
+                &TagChanges {
+                    year: Some(Some(year)),
+                    ..TagChanges::default()
+                },
+                None,
+            )
+            .unwrap();
+        };
 
-        write_for_tracks(
-            &e.lib,
-            &[rows[1].id],
-            &TagChanges {
-                year: Some(Some(2010)),
-                ..TagChanges::default()
-            },
-            None,
-        )
-        .unwrap();
-        let merged: Vec<_> = e
-            .lib
-            .albums_page(0, 10)
-            .unwrap()
-            .into_iter()
-            .map(|a| (a.year, a.track_count))
-            .collect();
-        assert_eq!(merged, [(Some(2010), 2)]);
+        // One mistyped year does not split the album; the common year wins.
+        set_year(&ids[..1], 2010);
+        assert_eq!(albums(&e), [(Some(1990), 3)]);
+
+        // Retagging the whole album moves its year.
+        set_year(&ids, 2010);
+        assert_eq!(albums(&e), [(Some(2010), 3)]);
     }
 
     #[test]
@@ -1604,4 +1596,166 @@ fn artist_splitting_profiles_and_meta_cache() {
         e.lib.artist_profile("Artist Two").unwrap().image.as_deref(),
         Some("/cache/a2.jpg")
     );
+}
+
+#[test]
+fn artist_splitting_matches_the_shared_cases() {
+    let raw = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../fixtures/artist-split-cases.json"
+    ));
+    let doc: serde_json::Value = serde_json::from_str(raw).unwrap();
+    let cases = doc["cases"].as_array().unwrap();
+    assert!(!cases.is_empty());
+    for case in cases {
+        let input = case[0].as_str().unwrap();
+        let expected: Vec<String> = serde_json::from_value(case[1].clone()).unwrap();
+        assert_eq!(
+            super::db::split_artists(input),
+            expected,
+            "input: {input:?}"
+        );
+    }
+}
+
+#[test]
+fn album_year_is_picked_by_majority_then_latest() {
+    use super::db::pick_album_year;
+    assert_eq!(pick_album_year([]), None);
+    assert_eq!(pick_album_year([None, None]), None);
+    assert_eq!(pick_album_year([None, Some(1994), None]), Some(1994));
+    assert_eq!(
+        pick_album_year([Some(1994), Some(1994), Some(1987)]),
+        Some(1994)
+    );
+    assert_eq!(
+        pick_album_year([Some(1975), Some(1983), Some(1991)]),
+        Some(1991)
+    );
+}
+
+#[test]
+fn a_folder_album_stays_whole_with_mixed_or_missing_years() {
+    let e = env();
+    let track = |title, track, year| Meta {
+        title,
+        artist: "Queen",
+        album: "Greatest Hits",
+        album_artist: "Queen",
+        track,
+        year,
+        ..Default::default()
+    };
+    tagged_wav(&e.music.join("gh/1.wav"), &track("One", 1, 1975));
+    tagged_wav(&e.music.join("gh/2.wav"), &track("Two", 2, 1981));
+    tagged_wav(&e.music.join("gh/3.wav"), &track("Three", 3, 1981));
+    tagged_wav(&e.music.join("gh/4.wav"), &track("Four", 4, 0));
+    e.scan();
+    let albums = |e: &Env| -> Vec<_> {
+        e.lib
+            .albums_page(0, 10)
+            .unwrap()
+            .into_iter()
+            .map(|a| (a.year, a.track_count))
+            .collect()
+    };
+    assert_eq!(albums(&e), [(Some(1981), 4)]);
+
+    // A file added later with yet another year joins the same album.
+    tagged_wav(&e.music.join("gh/5.wav"), &track("Five", 5, 1991));
+    e.scan();
+    assert_eq!(albums(&e), [(Some(1981), 5)]);
+
+    // Removing tracks re-derives the year of what is left.
+    for n in [2, 3] {
+        std::fs::remove_file(e.music.join(format!("gh/{n}.wav"))).unwrap();
+    }
+    e.scan();
+    assert_eq!(albums(&e), [(Some(1991), 3)]);
+}
+
+#[test]
+fn disc_folders_of_one_album_share_the_album() {
+    let e = env();
+    for (dir, title, disc) in [("cd1", "A", 1), ("cd2", "B", 2)] {
+        tagged_wav(
+            &e.music.join(format!("Album/{dir}/1.wav")),
+            &Meta {
+                title,
+                artist: "Band",
+                album: "Double",
+                album_artist: "Band",
+                track: 1,
+                disc,
+                year: 2001,
+                ..Default::default()
+            },
+        );
+    }
+    e.scan();
+    let albums = e.lib.albums_page(0, 10).unwrap();
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].track_count, 2);
+}
+
+#[test]
+fn migrating_to_v8_merges_year_split_albums_and_resplits_artists() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db_path = tmp.path().join("library.sqlite3");
+    let covers = tmp.path().join("covers");
+    std::fs::create_dir_all(&covers).unwrap();
+    let stray_cover = covers.join("stray.jpg");
+    std::fs::write(&stray_cover, b"jpg").unwrap();
+    {
+        let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+        let conn = lib.conn();
+        // The state a v7 database is in after the v3 split: one folder's
+        // tracks spread over one album per track year, and track artists
+        // mangled by the old splitter.
+        conn.execute_batch(&format!(
+            "INSERT INTO folders(id, path) VALUES (1, '/m');
+             INSERT INTO albums(id, title, album_artist, year, cover)
+             VALUES (1, 'Gold', 'İbrahim Tatlıses', 1994, NULL),
+                    (2, 'Gold', 'İbrahim Tatlıses', NULL, '{}'),
+                    (3, 'Gold', 'İbrahim Tatlıses', 1987, NULL);
+             INSERT INTO tracks(id, folder_id, path, mtime, size, title, artist, album_id,
+                                year, added_at)
+             VALUES (10, 1, '/m/gold/a.flac', 1, 1, 'A', 'İbrahim Tatlıses feat. Sibel Can',
+                     1, 1994, 1),
+                    (11, 1, '/m/gold/b.flac', 1, 1, 'B', 'İbrahim Tatlıses', 1, 1994, 1),
+                    (12, 1, '/m/gold/c.flac', 1, 1, 'C', 'İbrahim Tatlıses', 2, NULL, 1),
+                    (13, 1, '/m/gold/d.flac', 1, 1, 'D', 'İbrahim Tatlıses', 3, 1987, 1);
+             DELETE FROM track_artists;
+             INSERT INTO track_artists(track_id, artist, position)
+             VALUES (10, 'İbrahim Tatlıses', 0), (10, 'ibel Can', 1);
+             PRAGMA user_version = 7;",
+            stray_cover.display()
+        ))
+        .unwrap();
+    }
+    let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+    let v: i64 = lib
+        .conn()
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(v, 8);
+    let albums = lib.albums_page(0, 10).unwrap();
+    assert_eq!(albums.len(), 1);
+    assert_eq!((albums[0].year, albums[0].track_count), (Some(1994), 4));
+    // The surviving album adopted the only cover, so the file is kept.
+    assert_eq!(
+        albums[0].cover.as_deref(),
+        Some(stray_cover.to_string_lossy().as_ref())
+    );
+    assert!(stray_cover.exists());
+
+    let names: Vec<String> = lib
+        .search_artists_page(0, 20, "")
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|a| a.name)
+        .collect();
+    assert!(names.contains(&"Sibel Can".to_string()), "{names:?}");
+    assert!(!names.contains(&"ibel Can".to_string()), "{names:?}");
 }

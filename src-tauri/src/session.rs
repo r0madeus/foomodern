@@ -98,7 +98,15 @@ impl SessionState {
         } else {
             default_volume()
         };
-        self.current_index = self.current_index.filter(|&i| i < self.queue.len());
+        // Online streams (`http(s)://`) are resolved URLs that expire within
+        // hours; a restored one would never play. Drop them, keeping the
+        // current entry pointed at the same track when it survives.
+        let current_path = self
+            .current_index
+            .and_then(|i| self.queue.get(i))
+            .map(|t| t.path.clone());
+        self.queue.retain(|t| !is_stream_url(&t.path));
+        self.current_index = current_path.and_then(|p| self.queue.iter().position(|t| t.path == p));
         self.position_seconds = if self.current_index.is_some() && self.position_seconds.is_finite()
         {
             self.position_seconds.max(0.0)
@@ -114,6 +122,12 @@ impl SessionState {
         self.pinned = seen;
         self
     }
+}
+
+/// Whether a queue path is a resolved online stream rather than a file.
+pub fn is_stream_url(path: &Path) -> bool {
+    let s = path.to_string_lossy();
+    s.starts_with("http://") || s.starts_with("https://")
 }
 
 pub fn load(path: &Path) -> SessionState {

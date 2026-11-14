@@ -271,3 +271,182 @@ fn parses_deezer_artist_and_filters_wikipedia_bio() {
     }"#;
     assert!(parse_wikipedia_bio(band).is_some());
 }
+
+#[cfg(unix)]
+mod ytdlp_process {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// A stand-in `yt-dlp` that runs `body` as a shell script.
+    fn fake_ytdlp(dir: &Path, body: &str) -> String {
+        let path = dir.join("yt-dlp");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn passes_utf8_flags_and_reads_large_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Echo the arguments and the UTF-8 env, then 1 MB more than a pipe holds.
+        let bin = fake_ytdlp(
+            tmp.path(),
+            r#"echo "$@ $PYTHONUTF8"; head -c 1048576 /dev/zero | tr '\0' 'x'"#,
+        );
+        let out = run_ytdlp_bytes(&bin, &["-g", "q"], Duration::from_secs(10), &|| false).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.starts_with("--encoding utf-8 -g q 1\n"),
+            "{}",
+            &text[..40]
+        );
+        assert_eq!(text.len(), "--encoding utf-8 -g q 1\n".len() + 1_048_576);
+    }
+
+    #[test]
+    fn kills_a_hung_process_after_the_timeout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "sleep 30");
+        let started = std::time::Instant::now();
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_millis(300), &|| false).unwrap_err();
+        assert!(err.to_string().contains("timed out"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn stops_when_cancelled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "sleep 30");
+        let started = std::time::Instant::now();
+        let cancel_after = started + Duration::from_millis(200);
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_secs(60), &|| {
+            std::time::Instant::now() >= cancel_after
+        })
+        .unwrap_err();
+        assert!(matches!(err, OnlineError::Cancelled), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn reports_stderr_of_a_failed_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "echo 'ERROR: no video' >&2; exit 1");
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_secs(10), &|| false).unwrap_err();
+        assert_eq!(err.to_string(), "ERROR: no video");
+    }
+
+    #[test]
+    fn finds_the_download_when_the_printed_path_is_unusable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("Şebnem Ferah").join("Kelebek (1996)");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.m4a.part"), b"partial").unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.webp"), b"thumb").unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.m4a"), b"audio").unwrap();
+        // The printed path came back mangled; the download still succeeds.
+        let bin = fake_ytdlp(tmp.path(), "echo '/garbled/01 - ??ak?l Ta?lar?.m4a'");
+        let track = OnlineTrack {
+            id: "itunes:1".into(),
+            title: "Çakıl Taşları".into(),
+            artist: "Şebnem Ferah".into(),
+            album: "Kelebek".into(),
+            album_artist: "Şebnem Ferah".into(),
+            track_no: Some(1),
+            disc_no: Some(1),
+            year: Some(1996),
+            duration_seconds: None,
+            source_url: None,
+            cover: None,
+            cover_url: None,
+        };
+        let path = download_one_track(&track, tmp.path(), &bin, true, None, &|| false).unwrap();
+        assert_eq!(path, dir.join("01 - Çakıl Taşları.m4a"));
+    }
+}
+
+fn album_track(title: &str, artist: &str, seconds: f64) -> OnlineTrack {
+    OnlineTrack {
+        id: "itunes:1".into(),
+        title: title.into(),
+        artist: artist.into(),
+        album: "Album".into(),
+        album_artist: artist.into(),
+        track_no: Some(1),
+        disc_no: Some(1),
+        year: Some(1996),
+        duration_seconds: Some(seconds),
+        source_url: None,
+        cover: None,
+        cover_url: None,
+    }
+}
+
+fn hit(url: &str, title: &str, channel: &str, seconds: f64) -> YtCandidate {
+    YtCandidate {
+        url: url.into(),
+        title: title.into(),
+        channel: channel.into(),
+        duration_seconds: Some(seconds),
+    }
+}
+
+#[test]
+fn chooses_the_album_recording_over_live_and_wrong_length_hits() {
+    let track = album_track("Bu Akşam", "Duman", 245.0);
+    let hits = [
+        hit("u/live", "Duman - Bu Akşam (Live)", "Duman", 251.0),
+        hit(
+            "u/clip",
+            "Duman - Bu Akşam (Official Video)",
+            "DumanVEVO",
+            290.0,
+        ),
+        hit("u/topic", "Bu Akşam", "Duman - Topic", 246.0),
+        hit("u/cover", "Bu Akşam cover", "Someone", 244.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/topic"));
+
+    // Without a Topic upload the closest plain upload wins, not the live one.
+    let hits = [
+        hits[0].clone(),
+        hits[1].clone(),
+        hit("u/plain", "Duman - Bu Akşam", "x", 247.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/plain"));
+}
+
+#[test]
+fn a_live_track_may_pick_a_live_upload_and_bad_hits_fall_back() {
+    let track = album_track("Hayatı Tespih Yapmışım (Live)", "Barış Manço", 300.0);
+    let hits = [hit("u/live", "Hayatı Tespih Yapmışım (Live)", "x", 301.0)];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/live"));
+
+    // Every hit is far too short or long: no pick, the caller falls back.
+    let track = album_track("Song", "Band", 200.0);
+    let hits = [
+        hit("u/a", "Song", "x", 60.0),
+        hit("u/b", "Song", "x", 600.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits), None);
+}
+
+#[test]
+fn whole_words_only_for_variant_markers() {
+    let track = album_track("Oliver", "Band", 200.0);
+    let hits = [hit("u/a", "Band - Oliver", "x", 200.0)];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/a"));
+}
+
+#[test]
+fn parses_search_hits_with_channel_and_duration() {
+    let json = r#"{"_type":"playlist","entries":[
+        {"id":"abc","title":"Bu Akşam","channel":"Duman - Topic","duration":246.0},
+        {"id":"def","title":"Other","uploader":"Up","url":"https://www.youtube.com/watch?v=def"}
+    ]}"#;
+    let hits = parse_yt_candidates(json).unwrap();
+    assert_eq!(hits.len(), 2);
+    assert_eq!(hits[0].url, "https://www.youtube.com/watch?v=abc");
+    assert_eq!(hits[0].channel, "Duman - Topic");
+    assert_eq!(hits[1].channel, "Up");
+    assert_eq!(hits[1].duration_seconds, None);
+}
