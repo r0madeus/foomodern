@@ -1,15 +1,15 @@
 [package]
-name = "foomodern"
+name = "neomodern"
 version = "0.2.0"
 description = "A fast, modern music player"
 authors = ["r0madeus"]
 license = ""
-repository = "https://github.com/r0madeus/foomodern"
+repository = "https://github.com/r0madeus/neomodern"
 edition = "2024"
 rust-version = "1.90"
 
 [lib]
-name = "foomodern_lib"
+name = "neomodern_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

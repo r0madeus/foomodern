@@ -71,7 +71,7 @@ export function isOwnLyrics(res: LyricsResult | null): boolean {
   )
 }
 
-const KEY = 'foomodern.lyricsOpen'
+const KEY = 'neomodern.lyricsOpen'
 
 function loadOpen(): boolean {
   try {

@@ -9,9 +9,9 @@ use std::time::Duration;
 
 pub const DEFAULT_BASE_URL: &str = "https://lrclib.net";
 const USER_AGENT: &str = concat!(
-    "FooModern/",
+    "NeoModern/",
     env!("CARGO_PKG_VERSION"),
-    " (https://github.com/r0madeus/foomodern)"
+    " (https://github.com/r0madeus/neomodern)"
 );
 const SEARCH_DURATION_TOLERANCE_SECS: f64 = 5.0;
 

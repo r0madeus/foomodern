@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.r0madeus.foomodern.audio"
+    namespace = "io.github.r0madeus.neomodern.audio"
     compileSdk = 36
 
     defaultConfig {

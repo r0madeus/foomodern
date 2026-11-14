@@ -8,7 +8,7 @@ export type Lang = 'en' | 'tr'
 export type LangChoice = 'system' | Lang
 type Params = Record<string, string | number>
 
-const KEY = 'foomodern.lang'
+const KEY = 'neomodern.lang'
 
 function loadChoice(): LangChoice {
   try {
@@ -236,7 +236,7 @@ const TR: Record<string, string> = {
   'Save as an M3U file, e.g. to open on another device': 'M3U dosyası olarak kaydet (örneğin başka bir cihazda açmak için)',
   'Import playlist': 'Çalma listesi içe aktar',
   'Import playlist (M3U)': 'Çalma listesi içe aktar (M3U)',
-  'An M3U file exported from FooModern on another device': 'Başka bir cihazdaki FooModern’den dışa aktarılmış M3U dosyası',
+  'An M3U file exported from NeoModern on another device': 'Başka bir cihazdaki NeoModern’den dışa aktarılmış M3U dosyası',
   'Playlist not found.': 'Çalma listesi bulunamadı.',
   'This playlist is empty. Use the “…” button on a song or album to add tracks.':
     'Bu çalma listesi boş. Şarkı eklemek için bir şarkının ya da albümün “…” düğmesini kullan.',
@@ -318,8 +318,8 @@ const TR: Record<string, string> = {
     'Şarkı satırlarına ve albüm parça listelerine küçük bir biçim rozeti (FLAC, MP3…) ekler.',
   Window: 'Pencere',
   'Keep playing in the tray when the window is closed': 'Pencere kapatılınca sistem tepsisinde çalmaya devam et',
-  'Closing the window hides FooModern to the system tray and playback continues. Use the tray menu to show the window again or to quit.':
-    'Pencereyi kapatmak FooModern’i sistem tepsisine gizler ve çalma sürer. Pencereyi geri getirmek ya da çıkmak için tepsi menüsünü kullan.',
+  'Closing the window hides NeoModern to the system tray and playback continues. Use the tray menu to show the window again or to quit.':
+    'Pencereyi kapatmak NeoModern’i sistem tepsisine gizler ve çalma sürer. Pencereyi geri getirmek ya da çıkmak için tepsi menüsünü kullan.',
   'No system tray is available here, so closing the window always quits.':
     'Burada sistem tepsisi yok, bu yüzden pencereyi kapatmak her zaman uygulamadan çıkar.',
   Storage: 'Depolama',
@@ -344,7 +344,7 @@ const TR: Record<string, string> = {
   Copied: 'Kopyalandı',
 
   // Updates
-  'FooModern {v} is available.': 'FooModern {v} çıktı.',
+  'NeoModern {v} is available.': 'NeoModern {v} çıktı.',
   Download: 'İndir',
   Dismiss: 'Kapat',
 
@@ -395,8 +395,8 @@ const TR: Record<string, string> = {
   'Finds album and track tags and covers on MusicBrainz.':
     'Albüm ve şarkı etiketlerini ve kapaklarını MusicBrainz’de bulur.',
   'Update check (GitHub)': 'Güncelleme denetimi (GitHub)',
-  'Checks once a day whether a new version of FooModern is available.':
-    'FooModern’in yeni bir sürümü olup olmadığını günde bir kez denetler.',
+  'Checks once a day whether a new version of NeoModern is available.':
+    'NeoModern’in yeni bir sürümü olup olmadığını günde bir kez denetler.',
   'Search your library…': 'Kütüphanende ara…',
   'Online search is turned off in Settings.': 'Çevrimiçi arama Ayarlar’dan kapalı.',
   'Type to search your local library.': 'Yerel kütüphanende aramak için yaz.',
@@ -504,8 +504,8 @@ const TR: Record<string, string> = {
   'Clear history': 'Geçmişi temizle',
   'Clear all listening history?': 'Tüm dinleme geçmişi silinsin mi?',
   'No listening history yet': 'Henüz dinleme geçmişi yok',
-  'Play any song for a few seconds and FooModern will build your listening summary here automatically.':
-    'Herhangi bir şarkıyı birkaç saniye dinle; FooModern dinleme özetini burada otomatik oluşturur.',
+  'Play any song for a few seconds and NeoModern will build your listening summary here automatically.':
+    'Herhangi bir şarkıyı birkaç saniye dinle; NeoModern dinleme özetini burada otomatik oluşturur.',
   'No tracks found in this period.': 'Bu aralıkta kayıtlı dinleme yok.',
   Mon: 'Pzt',
   Tue: 'Sal',
@@ -563,8 +563,8 @@ const TR: Record<string, string> = {
   Theme: 'Tema',
   Dark: 'Koyu',
   Light: 'Açık',
-  'Choose whether FooModern follows your system theme or stays dark or light.':
-    'FooModern’in sistem temasını mı izleyeceğini yoksa hep koyu ya da açık mı kalacağını seç.',
+  'Choose whether NeoModern follows your system theme or stays dark or light.':
+    'NeoModern’in sistem temasını mı izleyeceğini yoksa hep koyu ya da açık mı kalacağını seç.',
   All: 'Tümü',
   General: 'Genel',
   'Collapse sidebar': 'Kenar çubuğunu daralt',

@@ -6,7 +6,7 @@ set -euo pipefail
 
 apk="$1"
 out="$2"
-pkg="io.github.r0madeus.foomodern"
+pkg="io.github.r0madeus.neomodern"
 mkdir -p "$out"
 
 adb wait-for-device

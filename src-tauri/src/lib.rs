@@ -223,7 +223,7 @@ pub fn run() {
                 .path()
                 .audio_dir()
                 .unwrap_or_else(|_| data_dir.join("Downloads"))
-                .join("FooModern");
+                .join("NeoModern");
             let online_handle = app.handle().clone();
             let online = Arc::new(OnlineService::new(
                 cache_dir.join("covers/online"),

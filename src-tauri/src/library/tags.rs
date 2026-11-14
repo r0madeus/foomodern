@@ -265,7 +265,7 @@ fn temp_path(path: &Path) -> PathBuf {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    path.with_file_name(format!(".{name}.foomodern-tags.tmp"))
+    path.with_file_name(format!(".{name}.neomodern-tags.tmp"))
 }
 
 /// Writes the (modified) tags of `tagged` to a temporary copy of `path` and

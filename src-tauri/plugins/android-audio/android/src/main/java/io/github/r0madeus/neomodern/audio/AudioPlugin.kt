@@ -1,4 +1,4 @@
-package io.github.r0madeus.foomodern.audio
+package io.github.r0madeus.neomodern.audio
 
 import android.Manifest
 import android.app.Activity
@@ -66,7 +66,7 @@ class VolumeArgs {
 }
 
 /**
- * Android implementation of FooModern's `AudioEngine` (see
+ * Android implementation of NeoModern's `AudioEngine` (see
  * `src-tauri/src/audio/android.rs`). Commands come from Rust only.
  *
  * Like the mpv engine, ExoPlayer holds at most two items: the current track

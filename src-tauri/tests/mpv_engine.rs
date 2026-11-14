@@ -1,8 +1,8 @@
 //! Integration tests against real libmpv with the `null` audio output.
 
-use foomodern_lib::audio::mpv::{MpvEngine, MpvOptions};
-use foomodern_lib::audio::{AudioEngine, EndReason, EngineError, EngineEvent, ReplayGain};
-use foomodern_lib::player::{Player, PlayerEvent, Status};
+use neomodern_lib::audio::mpv::{MpvEngine, MpvOptions};
+use neomodern_lib::audio::{AudioEngine, EndReason, EngineError, EngineEvent, ReplayGain};
+use neomodern_lib::player::{Player, PlayerEvent, Status};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

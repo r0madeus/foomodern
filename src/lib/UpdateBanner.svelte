@@ -10,7 +10,7 @@
     role="status"
     class="flex items-center gap-3 rounded-lg bg-accent-600 px-3 py-2 text-sm text-white shadow-sm dark:bg-accent-700"
   >
-    <span class="min-w-0 flex-1">{t('FooModern {v} is available.', { v: updates.available.version })}</span>
+    <span class="min-w-0 flex-1">{t('NeoModern {v} is available.', { v: updates.available.version })}</span>
     <button class="shrink-0 rounded-md bg-white/15 px-2.5 py-1 font-medium hover:bg-white/25" onclick={() => void updates.open()}>
       {t("Download")}
     </button>

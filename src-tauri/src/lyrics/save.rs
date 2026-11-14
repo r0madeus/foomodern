@@ -68,7 +68,7 @@ pub fn write_sidecar(audio: &Path, text: &str) -> std::io::Result<bool> {
     if sidecar_exists(audio) {
         return Ok(false);
     }
-    let tmp = audio.with_file_name(format!(".{}.foomodern-lrc.tmp", name.to_string_lossy()));
+    let tmp = audio.with_file_name(format!(".{}.neomodern-lrc.tmp", name.to_string_lossy()));
     let result = std::fs::write(&tmp, text).and_then(|()| {
         // Re-check right before the replace: never clobber a file that
         // appeared while the temp file was written.

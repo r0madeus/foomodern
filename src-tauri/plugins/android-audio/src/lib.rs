@@ -14,7 +14,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             #[cfg(target_os = "android")]
             {
                 let handle = api
-                    .register_android_plugin("io.github.r0madeus.foomodern.audio", "AudioPlugin")?;
+                    .register_android_plugin("io.github.r0madeus.neomodern.audio", "AudioPlugin")?;
                 app.manage(AndroidAudio(handle));
             }
             #[cfg(not(target_os = "android"))]

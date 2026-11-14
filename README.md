@@ -1,4 +1,4 @@
-# FooModern
+# NeoModern
 
 A free, cross-platform music player: foobar2000-level audio (gapless,
 ReplayGain, every format FFmpeg plays) with a modern interface.

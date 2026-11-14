@@ -35,7 +35,7 @@ if ((Test-Path $dllOut) -and (Test-Path $libOut) -and -not $Force) {
 }
 
 # --- 1. Find the release asset -------------------------------------------
-$headers = @{ 'User-Agent' = 'foomodern-fetch-libmpv'; 'Accept' = 'application/vnd.github+json' }
+$headers = @{ 'User-Agent' = 'neomodern-fetch-libmpv'; 'Accept' = 'application/vnd.github+json' }
 if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)" }
 $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest'
 $pattern = "^mpv-dev-lgpl-$Arch-\d{8}-git-[0-9a-f]+\.7z$"
@@ -48,11 +48,11 @@ if (-not $asset) {
 Write-Host "Using $($asset.name) from release $($release.tag_name)"
 
 # --- 2. Download and extract ---------------------------------------------
-$work = Join-Path ([IO.Path]::GetTempPath()) ("foomodern-libmpv-" + [Guid]::NewGuid().ToString('N'))
+$work = Join-Path ([IO.Path]::GetTempPath()) ("neomodern-libmpv-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 try {
     $archive = Join-Path $work $asset.name
-    Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'foomodern-fetch-libmpv' } -Uri $asset.browser_download_url -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Headers @{ 'User-Agent' = 'neomodern-fetch-libmpv' } -Uri $asset.browser_download_url -OutFile $archive
     $extract = Join-Path $work 'x'
     New-Item -ItemType Directory -Force -Path $extract | Out-Null
 

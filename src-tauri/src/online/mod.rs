@@ -34,7 +34,7 @@ use std::process::Command;
 use std::sync::mpsc;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(12);
-const USER_AGENT: &str = concat!("FooModern/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("NeoModern/", env!("CARGO_PKG_VERSION"));
 #[cfg(not(target_os = "android"))]
 const MAX_KEPT_JOBS: usize = 25;
 /// Upper bounds for one yt-dlp run; a hung process is killed after them.
@@ -2059,7 +2059,7 @@ pub fn write_downloaded_tags(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let tmp = path.with_file_name(format!(".{name}.foomodern-dl.tmp"));
+    let tmp = path.with_file_name(format!(".{name}.neomodern-dl.tmp"));
     let res = (|| -> Result<(), OnlineError> {
         std::fs::copy(path, &tmp)?;
         tagged

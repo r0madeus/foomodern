@@ -136,7 +136,7 @@ jobs:
           } else {
             $isPrerelease = ($env:INPUT_PRERELEASE -eq 'true') -or ($tag -match '-')
             $releaseArgs = @('release', 'create', $tag) + $assets + @(
-              '--title', "FooModern $tag",
+              '--title', "NeoModern $tag",
               '--target', $env:GITHUB_SHA,
               '--generate-notes'
             )
@@ -226,7 +226,7 @@ jobs:
           out_dir="src-tauri/gen/android/app/build/outputs/apk"
           staging="$RUNNER_TEMP/android-assets"
           mkdir -p "$staging"
-          name="FooModern-${RELEASE_TAG}-android-arm64"
+          name="NeoModern-${RELEASE_TAG}-android-arm64"
           unsigned="$(find "$out_dir" -name '*release*.apk' | head -n 1)"
           [ -n "$unsigned" ] || { echo "No release APK found in $out_dir"; exit 1; }
           tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
@@ -241,7 +241,7 @@ jobs:
             export ANDROID_KEY_ALIAS=throwaway
             keytool -genkeypair -keystore "$ks" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
               -keypass "$ANDROID_KEY_PASSWORD" -alias "$ANDROID_KEY_ALIAS" \
-              -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=FooModern test" >/dev/null
+              -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=NeoModern test" >/dev/null
             out="$staging/$name-testkey.apk"
           fi
           "$tools/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"

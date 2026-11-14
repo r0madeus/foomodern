@@ -80,7 +80,7 @@
     search: 'search',
     stats: 'chart',
   }
-  const KEY = 'foomodern.view'
+  const KEY = 'neomodern.view'
 
   function loadView(): View {
     try {
@@ -111,7 +111,7 @@
     document.documentElement.lang = i18n.lang
   })
 
-  const SIDEBAR_KEY = 'foomodern.sidebar.collapsed'
+  const SIDEBAR_KEY = 'neomodern.sidebar.collapsed'
   let sidebarCollapsed = $state(false)
   try {
     sidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1'
@@ -368,7 +368,7 @@
             <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent-400 to-accent-700 text-white shadow-xs">
               <Icon name="music" class="size-4" />
             </span>
-            <h1 class="truncate text-base font-bold tracking-tight">FooModern</h1>
+            <h1 class="truncate text-base font-bold tracking-tight">NeoModern</h1>
           </div>
         {/if}
         <button

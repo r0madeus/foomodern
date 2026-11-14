@@ -179,7 +179,7 @@
       <Icon name="upload" class="size-6 text-zinc-400" />
       <span class="min-w-0 flex-1">
         <span class="block text-[15px]">{t("Import playlist")}</span>
-        <span class="block text-[13px] text-zinc-400">{t("An M3U file exported from FooModern on another device")}</span>
+        <span class="block text-[13px] text-zinc-400">{t("An M3U file exported from NeoModern on another device")}</span>
       </span>
     </button>
 

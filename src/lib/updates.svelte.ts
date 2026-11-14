@@ -8,8 +8,8 @@ export interface UpdateInfo {
   url: string
 }
 
-const LAST_CHECK = 'foomodern.update.lastCheck'
-const DISMISSED = 'foomodern.update.dismissed'
+const LAST_CHECK = 'neomodern.update.lastCheck'
+const DISMISSED = 'neomodern.update.dismissed'
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function read(key: string): string | null {

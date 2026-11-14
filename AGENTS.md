@@ -1,4 +1,4 @@
-# FooModern – rules for AI agents
+# NeoModern – rules for AI agents
 
 A free, cross-platform music player: foobar2000-level audio features with a
 modern UI. Decisions and their reasons live in the owner's notes

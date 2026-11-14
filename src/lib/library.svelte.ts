@@ -9,8 +9,8 @@ import { player, type PlayerSnapshot } from './player.svelte'
 export type Sort = 'artist' | 'title' | 'album' | 'added' | 'duration'
 export type SortDir = 'asc' | 'desc'
 
-const SORT_KEY = 'foomodern.library.sort'
-const SORT_DIR_KEY = 'foomodern.library.sortDir'
+const SORT_KEY = 'neomodern.library.sort'
+const SORT_DIR_KEY = 'neomodern.library.sortDir'
 const SORTS: Sort[] = ['artist', 'title', 'album', 'added', 'duration']
 
 export function defaultSortDir(sort: Sort): SortDir {

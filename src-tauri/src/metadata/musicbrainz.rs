@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 pub const MB_BASE_URL: &str = "https://musicbrainz.org/ws/2";
 pub const CAA_BASE_URL: &str = "https://coverartarchive.org";
 const USER_AGENT: &str = concat!(
-    "FooModern/",
+    "NeoModern/",
     env!("CARGO_PKG_VERSION"),
-    " ( https://github.com/r0madeus/foomodern )"
+    " ( https://github.com/r0madeus/neomodern )"
 );
 /// MusicBrainz allows about one request per second per IP.
 const DEFAULT_MIN_INTERVAL: Duration = Duration::from_millis(1100);

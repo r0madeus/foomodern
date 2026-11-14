@@ -1,4 +1,4 @@
-# FooModern – status and roadmap
+# NeoModern – status and roadmap
 
 Last updated: 2026-11-14. The owner's decision notes live in the 2ncibeyn
 vault (`projects/muzik-calar/`); this file is the in-repo summary for
@@ -85,7 +85,7 @@ contributors and agents.
 - Desktop-only parts are gated (libmpv, souvlaki, tray menu); lyrics use
   rustls (ring + webpki roots) on Android.
 - Library: asks for `READ_MEDIA_AUDIO` and adds the shared `Music` folder.
-- CI builds an aarch64 debug APK (artifact `foomodern-android-debug-apk`).
+- CI builds an aarch64 debug APK (artifact `neomodern-android-debug-apk`).
 
 ### Look and feel (phone and desktop)
 - Phone UI (`src/lib/mobile`, below 640 px): Home / Search / Library tabs

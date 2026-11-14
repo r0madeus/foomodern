@@ -117,7 +117,7 @@ fn build(app: &AppHandle) -> tauri::Result<tauri::tray::TrayIcon> {
     let menu = Menu::with_items(
         app,
         &[
-            &MenuItem::with_id(app, ID_SHOW, "Show FooModern", true, None::<&str>)?,
+            &MenuItem::with_id(app, ID_SHOW, "Show NeoModern", true, None::<&str>)?,
             &MenuItem::with_id(app, ID_PLAY_PAUSE, "Play/Pause", true, None::<&str>)?,
             &MenuItem::with_id(app, ID_NEXT, "Next", true, None::<&str>)?,
             &MenuItem::with_id(app, ID_PREVIOUS, "Previous", true, None::<&str>)?,
@@ -126,7 +126,7 @@ fn build(app: &AppHandle) -> tauri::Result<tauri::tray::TrayIcon> {
         ],
     )?;
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("FooModern")
+        .tooltip("NeoModern")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))

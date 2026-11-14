@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "FooModern",
+  "productName": "NeoModern",
   "version": "0.2.0",
-  "identifier": "io.github.r0madeus.foomodern",
+  "identifier": "io.github.r0madeus.neomodern",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "FooModern",
+        "title": "NeoModern",
         "width": 1100,
         "height": 720,
         "resizable": true,

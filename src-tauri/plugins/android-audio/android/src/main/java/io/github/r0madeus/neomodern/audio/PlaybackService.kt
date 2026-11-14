@@ -1,4 +1,4 @@
-package io.github.r0madeus.foomodern.audio
+package io.github.r0madeus.neomodern.audio
 
 import android.content.Intent
 import androidx.media3.common.ForwardingPlayer

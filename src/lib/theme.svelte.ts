@@ -1,7 +1,7 @@
 // Desktop theme preference ('system', 'dark', or 'light'). Phones stay dark.
 export type ThemeChoice = 'system' | 'dark' | 'light'
 
-const KEY = 'foomodern.theme'
+const KEY = 'neomodern.theme'
 
 function loadTheme(): ThemeChoice {
   try {

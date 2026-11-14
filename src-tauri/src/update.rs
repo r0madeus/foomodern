@@ -6,9 +6,9 @@ use crate::net::{Feature, NetPolicy};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const LATEST_URL: &str = "https://api.github.com/repos/r0madeus/foomodern/releases/latest";
+const LATEST_URL: &str = "https://api.github.com/repos/r0madeus/neomodern/releases/latest";
 /// Only release pages of this project may be opened from the app.
-pub const RELEASES_PREFIX: &str = "https://github.com/r0madeus/foomodern/releases/";
+pub const RELEASES_PREFIX: &str = "https://github.com/r0madeus/neomodern/releases/";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -73,7 +73,7 @@ async fn check_at(
 
 async fn fetch_release(url: &str, current: &str) -> Result<Option<UpdateInfo>, reqwest::Error> {
     let release: Release = crate::net::client_builder()
-        .user_agent(concat!("FooModern/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("NeoModern/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
         .build()?
@@ -147,7 +147,7 @@ mod tests {
     fn update_check_is_refused_without_a_request_when_off() {
         use std::sync::atomic::Ordering;
         let (url, count) = serve(
-            r#"{"tag_name":"v99.0.0","html_url":"https://github.com/r0madeus/foomodern/releases/tag/v99.0.0"}"#,
+            r#"{"tag_name":"v99.0.0","html_url":"https://github.com/r0madeus/neomodern/releases/tag/v99.0.0"}"#,
         );
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()

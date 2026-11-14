@@ -200,7 +200,7 @@ pub fn app_open_release(
         .require(crate::net::Feature::Updates)
         .map_err(str::to_owned)?;
     if !url.starts_with(crate::update::RELEASES_PREFIX) {
-        return Err("not a FooModern release page".into());
+        return Err("not a NeoModern release page".into());
     }
     app.opener()
         .open_url(url, None::<&str>)

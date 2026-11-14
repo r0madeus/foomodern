@@ -177,7 +177,7 @@
     {
       feature: 'updates',
       label: 'Update check (GitHub)',
-      help: 'Checks once a day whether a new version of FooModern is available.',
+      help: 'Checks once a day whether a new version of NeoModern is available.',
     },
   ]
   const NET_VALUE: Record<NetFeature, () => boolean> = {
@@ -238,7 +238,7 @@
               <div class="min-w-0">
                 <p id="theme-label" class="text-sm font-medium">{t('Appearance')}</p>
                 <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  {t('Choose whether FooModern follows your system theme or stays dark or light.')}
+                  {t('Choose whether NeoModern follows your system theme or stays dark or light.')}
                 </p>
               </div>
               <div role="radiogroup" aria-labelledby="theme-label" class={pillGroup}>
@@ -286,7 +286,7 @@
                   {t('Keep playing in the tray when the window is closed')}
                 </p>
                 <p id="tray-help" class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  {t('Closing the window hides FooModern to the system tray and playback continues. Use the tray menu to show the window again or to quit.')}
+                  {t('Closing the window hides NeoModern to the system tray and playback continues. Use the tray menu to show the window again or to quit.')}
                 </p>
                 {#if appSettings.loaded && !appSettings.trayAvailable}
                   <p class="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs text-amber-700 dark:text-amber-300" role="status">
@@ -793,7 +793,7 @@
               </span>
               <div>
                 <div class="flex items-center gap-2">
-                  <p class="text-sm font-semibold">FooModern</p>
+                  <p class="text-sm font-semibold">NeoModern</p>
                   {#if version}
                     <span class="rounded-full bg-zinc-200/80 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                       v{version}

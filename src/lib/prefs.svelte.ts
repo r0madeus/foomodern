@@ -1,7 +1,7 @@
 // UI-only preferences, kept per viewer in localStorage. Storage can be
 // unavailable, so every access is wrapped.
 
-const SHOW_EXT_KEY = 'foomodern.showExtensions'
+const SHOW_EXT_KEY = 'neomodern.showExtensions'
 
 function loadBool(key: string, fallback: boolean): boolean {
   try {

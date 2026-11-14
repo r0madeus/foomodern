@@ -300,7 +300,7 @@
         </h3>
         <p class="mt-1.5 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
           {t(
-            'Play any song for a few seconds and FooModern will build your listening summary here automatically.',
+            'Play any song for a few seconds and NeoModern will build your listening summary here automatically.',
           )}
         </p>
       </div>

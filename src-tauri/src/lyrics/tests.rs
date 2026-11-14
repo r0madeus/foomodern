@@ -310,7 +310,7 @@ fn lrclib_get_caches_and_force_refreshes() {
     assert!(
         server.requests()[0]
             .to_ascii_lowercase()
-            .contains("user-agent: foomodern/")
+            .contains("user-agent: neomodern/")
     );
     assert!(server.requests()[0].contains("/api/get?"));
 
@@ -1127,7 +1127,7 @@ fn reference_valid(prefix: &str, nonce: u64, target: &[u8; 32]) -> bool {
 #[test]
 fn proof_of_work_solver_matches_the_definition() {
     let cancel = AtomicBool::new(false);
-    let prefix = "FooModernTestPrefix";
+    let prefix = "NeoModernTestPrefix";
     let target = easy_target();
     let Solve::Found(nonce) = publish::solve(
         prefix,

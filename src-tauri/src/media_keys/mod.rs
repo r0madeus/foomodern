@@ -179,8 +179,8 @@ impl MediaKeys {
     /// D-Bus session bus) are returned for the caller to log and ignore.
     pub fn new(hwnd: Option<*mut c_void>, player: Weak<Player>) -> Result<Self, souvlaki::Error> {
         let mut controls = MediaControls::new(PlatformConfig {
-            display_name: "FooModern",
-            dbus_name: "foomodern",
+            display_name: "NeoModern",
+            dbus_name: "neomodern",
             hwnd,
         })?;
         controls.attach(move |event| {
