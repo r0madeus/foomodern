@@ -18,6 +18,7 @@ pub mod scoring;
 use crate::library::scan::cover_file_name;
 use crate::library::tags::{self, EditableTags, MbIds, TagChanges};
 use crate::library::{AlbumRow, Library};
+use crate::net::{Feature, NetPolicy};
 use musicbrainz::{MbClient, MbConfig, MbRecording, MbRelease, credit_string};
 use scoring::{CandRelease, LocalAlbum, LocalTrack, MIN_SCORE};
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,8 @@ pub enum MetadataError {
     Invalid(String),
     #[error("task error: {0}")]
     Task(String),
+    #[error("disabled in Settings")]
+    Disabled,
 }
 
 impl From<crate::library::LibraryError> for MetadataError {
@@ -426,6 +429,7 @@ pub struct MetadataService {
     /// Serialises apply and undo: a batch id is `MAX(batch_id) + 1`, so two
     /// writes at once would otherwise share one and undo together.
     writes: Arc<Mutex<()>>,
+    net: Arc<NetPolicy>,
 }
 
 impl MetadataService {
@@ -437,7 +441,22 @@ impl MetadataService {
         Ok(Self {
             mb: MbClient::new(cfg)?,
             writes: Arc::new(Mutex::new(())),
+            net: Arc::new(NetPolicy::default()),
         })
+    }
+
+    /// Ties the service to the app's internet switches: with "Find info"
+    /// off (or offline mode on) nothing is requested.
+    pub fn with_net_policy(mut self, policy: Arc<NetPolicy>) -> Self {
+        self.mb = self.mb.with_policy(Arc::clone(&policy));
+        self.net = policy;
+        self
+    }
+
+    fn require_net(&self) -> Result<()> {
+        self.net
+            .require(Feature::Metadata)
+            .map_err(|_| MetadataError::Disabled)
     }
 
     /// Downloads (once) the 250 px front cover of a release group into the
@@ -484,6 +503,7 @@ impl MetadataService {
         lib: &Arc<Library>,
         album_id: i64,
     ) -> Result<Vec<AlbumCandidate>> {
+        self.require_net()?;
         let (album, local) = {
             let lib = Arc::clone(lib);
             blocking(move || -> Result<(AlbumRow, Vec<LocalTagged>)> {
@@ -566,6 +586,7 @@ impl MetadataService {
         lib: &Arc<Library>,
         track_id: i64,
     ) -> Result<Vec<TrackCandidate>> {
+        self.require_net()?;
         let local = {
             let lib = Arc::clone(lib);
             blocking(move || -> Result<LocalTagged> {
@@ -644,7 +665,11 @@ impl MetadataService {
             })
             .await??
         };
-        if proposal.cover && !proposal.release_group_id.is_empty() && !track_ids.is_empty() {
+        if proposal.cover
+            && self.net.allowed(Feature::Metadata)
+            && !proposal.release_group_id.is_empty()
+            && !track_ids.is_empty()
+        {
             outcome.cover = self.add_missing_cover(lib, &proposal, &track_ids).await;
         }
         Ok(outcome)

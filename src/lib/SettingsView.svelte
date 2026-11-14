@@ -6,7 +6,7 @@
   import { player, type ReplayGain } from './player.svelte'
   import { prefs } from './prefs.svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { appSettings, type LyricsSave } from './appSettings.svelte'
+  import { appSettings, type LyricsSave, type NetFeature } from './appSettings.svelte'
   import { lyrics, type Coverage } from './lyrics.svelte'
   import FoldersView from './FoldersView.svelte'
   import { online } from './online.svelte'
@@ -112,6 +112,43 @@
   })
 
   const mode = $derived(player.snapshot.replaygain)
+
+  /** One switch per internet feature, in the order they are shown. */
+  const NET_FEATURES: { feature: NetFeature; label: string; help: string; desktopOnly?: boolean }[] = [
+    {
+      feature: 'lyrics',
+      label: 'Lyrics (LRCLIB, NetEase)',
+      help: 'Looks up lyrics online and lets you share your own on LRCLIB. Lyrics next to your songs and in their tags keep working.',
+    },
+    {
+      feature: 'online',
+      label: 'Online search and downloads (YouTube, iTunes)',
+      help: 'Online search, streaming and downloads, including album search and covers through iTunes.',
+      desktopOnly: true,
+    },
+    {
+      feature: 'artistInfo',
+      label: 'Artist info (Deezer, Wikipedia, iTunes)',
+      help: 'Artist portraits, biographies and missing albums. Anything already saved is still shown.',
+    },
+    {
+      feature: 'metadata',
+      label: 'Find info (MusicBrainz, Cover Art Archive)',
+      help: 'Finds album and track tags and covers on MusicBrainz.',
+    },
+    {
+      feature: 'updates',
+      label: 'Update check (GitHub)',
+      help: 'Checks once a day whether a new version of FooModern is available.',
+    },
+  ]
+  const NET_VALUE: Record<NetFeature, () => boolean> = {
+    lyrics: () => appSettings.netLyrics,
+    online: () => appSettings.netOnline,
+    artistInfo: () => appSettings.netArtistInfo,
+    metadata: () => appSettings.netMetadata,
+    updates: () => appSettings.netUpdates,
+  }
 </script>
 
 <div class="h-full overflow-y-auto px-5 pb-8">
@@ -192,6 +229,46 @@
       </div>
     </section>
 
+    <section aria-labelledby="set-internet" class="flex flex-col gap-3">
+      <h3 id="set-internet" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Internet")}</h3>
+      <label class="flex cursor-pointer items-start justify-between gap-6">
+        <span class="min-w-0">
+          <span class="block text-sm font-medium">{t("Offline mode")}</span>
+          <span id="offline-help" class="block text-sm text-zinc-500">
+            {t("Nothing connects to the internet")}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          class="mt-1 size-4 shrink-0 accent-teal-600"
+          aria-describedby="offline-help"
+          checked={appSettings.offlineMode}
+          disabled={!appSettings.loaded}
+          onchange={(e) => void appSettings.setOfflineMode(e.currentTarget.checked)}
+        />
+      </label>
+      {#each NET_FEATURES.filter((f) => !f.desktopOnly || appSettings.platform !== 'android') as f (f.feature)}
+        <label class={['flex items-start justify-between gap-6', appSettings.offlineMode ? 'opacity-60' : 'cursor-pointer']}>
+          <span class="min-w-0">
+            <span class="block text-sm font-medium">{t(f.label)}</span>
+            <span class="block text-sm text-zinc-500">{t(f.help)}</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            class="mt-1 size-4 shrink-0 accent-teal-600"
+            checked={NET_VALUE[f.feature]()}
+            disabled={!appSettings.loaded || appSettings.offlineMode}
+            onchange={(e) => void appSettings.setNetFeature(f.feature, e.currentTarget.checked)}
+          />
+        </label>
+      {/each}
+      {#if appSettings.offlineMode}
+        <p class="text-xs text-zinc-500" role="status">{t("Offline mode is on, so the switches above are off.")}</p>
+      {/if}
+    </section>
+
     <section aria-labelledby="set-lyrics" class="flex flex-col gap-3">
       <h3 id="set-lyrics" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Lyrics")}</h3>
       <div class="flex flex-col gap-2">
@@ -219,11 +296,14 @@
         </div>
       </div>
 
-      <label class="flex cursor-pointer items-start justify-between gap-6">
+      <label class={['flex items-start justify-between gap-6', appSettings.allowLyrics ? 'cursor-pointer' : 'opacity-60']}>
         <span class="min-w-0">
           <span class="block text-sm font-medium">{t("NetEase Cloud Music")}</span>
           <span class="block text-sm text-zinc-500">
             {t("Also search NetEase Cloud Music (unofficial; used when LRCLIB has nothing)")}
+            {#if !appSettings.allowLyrics}
+              <span class="block text-xs" role="status">{t("Turned off in Settings")}</span>
+            {/if}
           </span>
         </span>
         <input
@@ -231,7 +311,7 @@
           role="switch"
           class="mt-1 size-4 shrink-0 accent-teal-600"
           checked={appSettings.lyricsNetease}
-          disabled={!appSettings.loaded}
+          disabled={!appSettings.loaded || !appSettings.allowLyrics}
           onchange={(e) => void appSettings.setLyricsNetease(e.currentTarget.checked)}
         />
       </label>
@@ -338,6 +418,9 @@
       <h3 id="set-online" class="text-xs font-medium uppercase tracking-wide text-zinc-400">
         {t('Search & Downloads')}
       </h3>
+      {#if !appSettings.allowOnline}
+        <p class="text-xs text-zinc-500" role="status">{t("Turned off in Settings")}</p>
+      {/if}
       <div class="flex flex-col gap-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
@@ -368,7 +451,9 @@
           <div class="min-w-0 flex-1">
             <p class="text-sm font-medium">yt-dlp</p>
             <p class="mt-0.5 text-xs text-zinc-500">
-              {#if online.status?.ytdlpAvailable}
+              {#if !appSettings.allowOnline}
+                {t('Not checked')}
+              {:else if online.status?.ytdlpAvailable}
                 {t('Ready')}
                 {online.status.ytdlpVersion ? ` (${online.status.ytdlpVersion})` : ''} ·
                 {online.status.ffmpegAvailable ? t('ffmpeg available') : t('ffmpeg missing')}
@@ -420,13 +505,15 @@
         </p>
         <button
           class="rounded-lg px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/50"
-          disabled={updates.checking}
+          disabled={updates.checking || !appSettings.allowUpdates}
+          title={appSettings.allowUpdates ? undefined : t('Turned off in Settings')}
           onclick={() => void updates.check(true)}
         >
           {updates.checking ? t('Checking…') : t('Check for updates')}
         </button>
         <span class="text-sm text-zinc-500" role="status">
           {#if updates.status === 'upToDate'}{t('You have the latest version.')}
+          {:else if !appSettings.allowUpdates}{t('Turned off in Settings')}
           {:else if updates.status === 'failed'}{t('Could not reach GitHub.')}
           {:else if updates.status === 'found' && updates.available}{t('Version {v} is available.', { v: updates.available.version })}{/if}
         </span>

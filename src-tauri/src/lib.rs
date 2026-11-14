@@ -5,7 +5,7 @@ pub mod lyrics;
 #[cfg(not(target_os = "android"))]
 pub mod media_keys;
 pub mod metadata;
-mod net;
+pub mod net;
 pub mod online;
 pub mod player;
 pub mod queue;
@@ -86,7 +86,10 @@ pub fn run() {
             let handle = app.handle().clone();
             let observer_session = Arc::clone(&session_store);
             let player = Arc::new(Player::new(
-                Box::new(engine),
+                Box::new(audio::NetGuardedEngine::new(
+                    Box::new(engine),
+                    session_store.net_policy(),
+                )),
                 Box::new(move |event| {
                     let result = match event {
                         PlayerEvent::State(snap) => {
@@ -196,16 +199,24 @@ pub fn run() {
             );
             app.manage(library);
 
-            let lyrics = Arc::new(LyricsService::new(&cache_dir.join("lyrics")).map_err(|e| {
-                log::error!("failed to start lyrics service: {e}");
-                e
-            })?);
+            let lyrics = Arc::new(
+                LyricsService::new(&cache_dir.join("lyrics"))
+                    .map_err(|e| {
+                        log::error!("failed to start lyrics service: {e}");
+                        e
+                    })?
+                    .with_net_policy(app.state::<Arc<SessionStore>>().net_policy()),
+            );
             app.manage(lyrics);
 
-            let metadata = Arc::new(metadata::MetadataService::new().map_err(|e| {
-                log::error!("failed to start metadata service: {e}");
-                e
-            })?);
+            let metadata = Arc::new(
+                metadata::MetadataService::new()
+                    .map_err(|e| {
+                        log::error!("failed to start metadata service: {e}");
+                        e
+                    })?
+                    .with_net_policy(app.state::<Arc<SessionStore>>().net_policy()),
+            );
             app.manage(metadata);
 
             let default_downloads = app
@@ -222,6 +233,7 @@ pub fn run() {
                         log::warn!("failed to emit download jobs: {e}");
                     }
                 }),
+                app.state::<Arc<SessionStore>>().net_policy(),
             ));
             app.manage(online);
 
@@ -292,6 +304,8 @@ pub fn run() {
             commands::app_set_close_to_tray,
             commands::app_set_lyrics_save,
             commands::app_set_lyrics_netease,
+            commands::app_set_offline_mode,
+            commands::app_set_net_feature,
             commands::tags_read,
             commands::tags_write,
             commands::metadata_match_album,

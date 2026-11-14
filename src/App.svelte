@@ -184,8 +184,8 @@
     pinned.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
+      updates.autoCheck()
     })
-    updates.autoCheck()
   })
 
   // The full-screen player (desktop "now playing", or the phone UI) shows

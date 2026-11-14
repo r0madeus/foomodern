@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte'
+  import { appSettings } from './appSettings.svelte'
   import { t } from './i18n.svelte'
   import { isOwnLyrics, lyrics, type ShareBlock } from './lyrics.svelte'
   import { player } from './player.svelte'
@@ -38,7 +39,8 @@
   })
 
   const visible = $derived(
-    own &&
+    appSettings.allowLyrics &&
+      own &&
       (phase !== 'idle' ||
         status?.available === true ||
         status?.reason === 'needsMetadata'),

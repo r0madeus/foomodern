@@ -8,7 +8,7 @@ use super::musicbrainz::{
 use super::scoring::{
     CandRelease, LocalAlbum, LocalTrack, levenshtein, pick_release, score_album, similarity,
 };
-use super::{MetadataService, preview_dir};
+use super::{MetadataError, MetadataService, preview_dir};
 use crate::library::tags::{read_mb_ids, read_tags};
 use crate::library::{Hooks, Library};
 use lofty::config::WriteOptions;
@@ -753,6 +753,66 @@ fn match_apply_and_undo_album() {
     // A second undo has nothing left.
     assert!(block_on(svc.undo(&env.lib, outcome.batch_id, None)).is_err());
     let _ = &env.music;
+}
+
+#[test]
+fn offline_mode_and_the_metadata_switch_make_no_request() {
+    use crate::net::{Feature, NetPolicy};
+    let env = env();
+    let mock = Mock::start(handler());
+    let policy = Arc::new(NetPolicy::default());
+    let svc = MetadataService::with_config(mock.config())
+        .unwrap()
+        .with_net_policy(Arc::clone(&policy));
+    let album_id = env.album_id();
+    let track_id = env.lib.album(album_id).unwrap().tracks[0].id;
+
+    // Offline mode, then only the metadata switch.
+    for offline in [true, false] {
+        policy.set_offline(offline);
+        policy.set_feature(Feature::Metadata, offline);
+        let e = block_on(svc.match_album(&env.lib, album_id)).unwrap_err();
+        assert!(matches!(e, MetadataError::Disabled), "{e:?}");
+        assert_eq!(e.to_string(), "disabled in Settings");
+        let e = block_on(svc.match_track(&env.lib, track_id)).unwrap_err();
+        assert!(matches!(e, MetadataError::Disabled), "{e:?}");
+        // Other switches do not matter for matching.
+        policy.set_offline(false);
+        policy.set_feature(Feature::Metadata, false);
+        policy.set_feature(Feature::Lyrics, true);
+        assert!(block_on(svc.match_album(&env.lib, album_id)).is_err());
+    }
+    assert!(mock.targets().is_empty(), "{:?}", mock.targets());
+
+    // The low-level client refuses too (cover archive included).
+    let client = MbClient::new(mock.config())
+        .unwrap()
+        .with_policy(Arc::clone(&policy));
+    assert!(block_on(client.search_releases("A", "B", None)).is_err());
+    assert!(block_on(client.front_cover(RG, 250)).is_err());
+    assert!(mock.targets().is_empty());
+
+    // Everything else off, metadata on: matching works.
+    for f in [
+        Feature::Lyrics,
+        Feature::Online,
+        Feature::ArtistInfo,
+        Feature::Updates,
+    ] {
+        policy.set_feature(f, false);
+    }
+    policy.set_feature(Feature::Metadata, true);
+    assert!(block_on(svc.match_album(&env.lib, album_id)).is_ok());
+    assert!(!mock.targets().is_empty());
+
+    // Applying a proposal is local: it still writes tags offline, and adds
+    // no cover request.
+    let candidates = block_on(svc.match_album(&env.lib, album_id)).unwrap();
+    policy.set_offline(true);
+    let before = mock.targets().len();
+    let outcome = block_on(svc.apply(&env.lib, candidates[0].proposal.clone(), None)).unwrap();
+    assert_eq!(outcome.updated, 3);
+    assert_eq!(mock.targets().len(), before);
 }
 
 #[test]

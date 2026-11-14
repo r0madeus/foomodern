@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { appSettings } from './appSettings.svelte'
   import { count, i18n, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import { fade, scale } from 'svelte/transition'
@@ -319,8 +320,12 @@
               <button
                 type="button"
                 class="mr-auto rounded-lg px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
-                disabled={saving || dirty}
-                title={dirty ? t('Save or discard your edits first.') : undefined}
+                disabled={saving || dirty || !appSettings.allowMetadata}
+                title={!appSettings.allowMetadata
+                  ? t('Turned off in Settings')
+                  : dirty
+                    ? t('Save or discard your edits first.')
+                    : undefined}
                 onclick={findInfo}
               >
                 {t('Find info')}

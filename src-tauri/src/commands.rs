@@ -149,17 +149,26 @@ pub fn library_track_cover(
 
 /// The latest GitHub release if it is newer than this build.
 #[tauri::command]
-pub async fn app_check_update(app: tauri::AppHandle) -> Res<Option<crate::update::UpdateInfo>> {
+pub async fn app_check_update(
+    app: tauri::AppHandle,
+    store: State<'_, Arc<SessionStore>>,
+) -> Res<Option<crate::update::UpdateInfo>> {
     let current = app.package_info().version.to_string();
-    crate::update::check(&current)
-        .await
-        .map_err(|e| e.to_string())
+    crate::update::check(&current, &store.net_policy()).await
 }
 
 /// Opens a release page of this project in the browser.
 #[tauri::command]
-pub fn app_open_release(app: tauri::AppHandle, url: String) -> Res<()> {
+pub fn app_open_release(
+    app: tauri::AppHandle,
+    store: State<'_, Arc<SessionStore>>,
+    url: String,
+) -> Res<()> {
     use tauri_plugin_opener::OpenerExt;
+    store
+        .net_policy()
+        .require(crate::net::Feature::Updates)
+        .map_err(str::to_owned)?;
     if !url.starts_with(crate::update::RELEASES_PREFIX) {
         return Err("not a FooModern release page".into());
     }
@@ -631,6 +640,7 @@ pub fn playlist_from_queue(
 // ---------------------------------------------------------------------
 
 use crate::lyrics::SaveMode;
+use crate::net::Feature;
 use crate::session::SessionStore;
 use crate::tray::TrayStatus;
 
@@ -648,6 +658,21 @@ pub struct AppSettings {
     lyrics_save: SaveMode,
     /// Also search NetEase Cloud Music when LRCLIB has nothing.
     lyrics_netease: bool,
+    /// Master switch: nothing contacts the internet.
+    offline_mode: bool,
+    /// The user's own per-feature switches (kept while offline mode is on).
+    net_lyrics: bool,
+    net_online: bool,
+    net_artist_info: bool,
+    net_metadata: bool,
+    net_updates: bool,
+    /// What is really allowed right now (offline mode applied). The UI
+    /// uses these to hide or disable controls; Rust enforces them anyway.
+    allow_lyrics: bool,
+    allow_online: bool,
+    allow_artist_info: bool,
+    allow_metadata: bool,
+    allow_updates: bool,
 }
 
 fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
@@ -661,6 +686,17 @@ fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
         },
         lyrics_save: store.lyrics_save(),
         lyrics_netease: store.lyrics_netease(),
+        offline_mode: store.offline_mode(),
+        net_lyrics: store.net_feature(Feature::Lyrics),
+        net_online: store.net_feature(Feature::Online),
+        net_artist_info: store.net_feature(Feature::ArtistInfo),
+        net_metadata: store.net_feature(Feature::Metadata),
+        net_updates: store.net_feature(Feature::Updates),
+        allow_lyrics: store.net_allowed(Feature::Lyrics),
+        allow_online: store.net_allowed(Feature::Online),
+        allow_artist_info: store.net_allowed(Feature::ArtistInfo),
+        allow_metadata: store.net_allowed(Feature::Metadata),
+        allow_updates: store.net_allowed(Feature::Updates),
     }
 }
 
@@ -704,6 +740,33 @@ pub fn app_set_lyrics_netease(
     enabled: bool,
 ) -> AppSettings {
     store.set_lyrics_netease(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_offline_mode(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_offline_mode(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+/// Switches one internet feature (`lyrics`, `online`, `artistInfo`,
+/// `metadata`, `updates`).
+#[tauri::command]
+pub fn app_set_net_feature(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    feature: Feature,
+    enabled: bool,
+) -> AppSettings {
+    store.set_net_feature(feature, enabled);
     store.save_now(&player.export_session());
     app_settings_now(&store, &tray)
 }
@@ -905,7 +968,7 @@ pub async fn lyrics_for_track(
     let lyrics = Arc::clone(&lyrics);
     let opts = LyricsOptions::new(
         store.lyrics_save(),
-        store.lyrics_netease(),
+        store.lyrics_netease() && store.net_allowed(Feature::Lyrics),
         player.current_path(),
     );
     lyrics
@@ -1388,34 +1451,7 @@ pub async fn artist_enrich(
     name: String,
     lang: Option<String>,
 ) -> Res<crate::online::ArtistOnlineInfo> {
-    let existing = le(lib.artist_meta(&name))?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or(0);
-    let fresh = existing
-        .as_ref()
-        .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
-    let cached_image = existing
-        .as_ref()
-        .and_then(|m| m.image.clone())
-        .filter(|p| std::path::Path::new(p).exists());
-    let cached_bio = existing.as_ref().and_then(|m| m.bio.clone());
-    let need_image = !fresh || cached_image.is_none();
-    let need_bio = !fresh || cached_bio.is_none();
-
-    let fetched = online
-        .enrich_artist(&name, lang.as_deref() == Some("tr"), need_image, need_bio)
-        .await;
-
-    let final_image = fetched.image.or(cached_image);
-    let final_bio = fetched.bio.or(cached_bio);
-    if final_image.is_some() || final_bio.is_some() {
-        let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
-    }
-    Ok(crate::online::ArtistOnlineInfo {
-        image: final_image,
-        bio: final_bio,
-        albums: fetched.albums,
-    })
+    online
+        .artist_info(&lib, &name, lang.as_deref() == Some("tr"))
+        .await
 }

@@ -374,6 +374,32 @@ const TR: Record<string, string> = {
   '{n} active': '{n} etkin',
   'Clear finished': 'Bitenleri temizle',
   'Search & Downloads': 'Ara ve İndir',
+  // Offline mode and internet switches
+  Internet: 'İnternet',
+  'Offline mode': 'Çevrimdışı mod',
+  'Nothing connects to the internet': 'Hiçbir şey internete bağlanmaz',
+  'Offline mode is on, so the switches above are off.':
+    'Çevrimdışı mod açık, bu yüzden yukarıdaki anahtarlar kapalı.',
+  'Turned off in Settings': 'Ayarlar’dan kapalı',
+  'Not checked': 'Denetlenmedi',
+  'Lyrics (LRCLIB, NetEase)': 'Şarkı sözleri (LRCLIB, NetEase)',
+  'Looks up lyrics online and lets you share your own on LRCLIB. Lyrics next to your songs and in their tags keep working.':
+    'Sözleri internetten arar ve kendi sözlerini LRCLIB’de paylaşmanı sağlar. Şarkıların yanındaki ve etiketlerindeki sözler çalışmaya devam eder.',
+  'Online search and downloads (YouTube, iTunes)': 'Çevrimiçi arama ve indirme (YouTube, iTunes)',
+  'Online search, streaming and downloads, including album search and covers through iTunes.':
+    'Çevrimiçi arama, dinleme ve indirme; iTunes üzerinden albüm arama ve kapaklar dahil.',
+  'Artist info (Deezer, Wikipedia, iTunes)': 'Sanatçı bilgisi (Deezer, Wikipedia, iTunes)',
+  'Artist portraits, biographies and missing albums. Anything already saved is still shown.':
+    'Sanatçı fotoğrafları, biyografiler ve eksik albümler. Daha önce kaydedilenler yine gösterilir.',
+  'Find info (MusicBrainz, Cover Art Archive)': 'Bilgi bul (MusicBrainz, Cover Art Archive)',
+  'Finds album and track tags and covers on MusicBrainz.':
+    'Albüm ve şarkı etiketlerini ve kapaklarını MusicBrainz’de bulur.',
+  'Update check (GitHub)': 'Güncelleme denetimi (GitHub)',
+  'Checks once a day whether a new version of FooModern is available.':
+    'FooModern’in yeni bir sürümü olup olmadığını günde bir kez denetler.',
+  'Search your library…': 'Kütüphanende ara…',
+  'Online search is turned off in Settings.': 'Çevrimiçi arama Ayarlar’dan kapalı.',
+  'Type to search your local library.': 'Yerel kütüphanende aramak için yaz.',
   'Download folder': 'İndirme klasörü',
   'Choose download folder': 'İndirme klasörünü seç',
   'Locate yt-dlp executable': 'yt-dlp dosyasını seç',

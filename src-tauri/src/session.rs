@@ -3,12 +3,13 @@
 use crate::audio::ReplayGain;
 use crate::library::scan::write_atomic;
 use crate::lyrics::SaveMode;
+use crate::net::{Feature, NetPolicy};
 use crate::player::PlayerSnapshot;
 use crate::queue::RepeatMode;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const POSITION_SAVE_INTERVAL: Duration = Duration::from_secs(5);
@@ -23,6 +24,10 @@ fn default_close_to_tray() -> bool {
 }
 
 fn default_lyrics_netease() -> bool {
+    true
+}
+
+fn default_true() -> bool {
     true
 }
 
@@ -83,6 +88,22 @@ pub struct SessionState {
     /// [`SessionStore`].
     #[serde(default = "default_lyrics_netease")]
     pub lyrics_netease: bool,
+    /// Master switch: nothing in the app contacts the internet. Owned by
+    /// [`SessionStore`].
+    #[serde(default)]
+    pub offline_mode: bool,
+    /// Per-feature internet switches (effective while `offline_mode` is
+    /// off). Owned by [`SessionStore`].
+    #[serde(default = "default_true")]
+    pub net_lyrics: bool,
+    #[serde(default = "default_true")]
+    pub net_online: bool,
+    #[serde(default = "default_true")]
+    pub net_artist_info: bool,
+    #[serde(default = "default_true")]
+    pub net_metadata: bool,
+    #[serde(default = "default_true")]
+    pub net_updates: bool,
 }
 
 impl Default for SessionState {
@@ -101,6 +122,12 @@ impl Default for SessionState {
             pinned: Vec::new(),
             lyrics_save: SaveMode::default(),
             lyrics_netease: default_lyrics_netease(),
+            offline_mode: false,
+            net_lyrics: true,
+            net_online: true,
+            net_artist_info: true,
+            net_metadata: true,
+            net_updates: true,
         }
     }
 }
@@ -204,6 +231,7 @@ pub struct SessionStore {
     pinned: Mutex<Vec<PinnedRef>>,
     lyrics_save: Mutex<SaveMode>,
     lyrics_netease: AtomicBool,
+    net: Arc<NetPolicy>,
 }
 
 impl SessionStore {
@@ -217,7 +245,19 @@ impl SessionStore {
             pinned: Mutex::new(Vec::new()),
             lyrics_save: Mutex::new(SaveMode::default()),
             lyrics_netease: AtomicBool::new(default_lyrics_netease()),
+            net: Arc::new(NetPolicy::default()),
         }
+    }
+
+    /// The shared internet policy; services hold a clone of it.
+    pub fn net_policy(&self) -> Arc<NetPolicy> {
+        Arc::clone(&self.net)
+    }
+
+    /// Whether `feature` may contact the internet now: false in offline
+    /// mode or when its own switch is off.
+    pub fn net_allowed(&self, feature: Feature) -> bool {
+        self.net.allowed(feature)
     }
 
     /// Loads the saved state and adopts its window and download settings.
@@ -233,6 +273,13 @@ impl SessionStore {
         *self.lyrics_save.lock().unwrap_or_else(|e| e.into_inner()) = state.lyrics_save;
         self.lyrics_netease
             .store(state.lyrics_netease, Ordering::SeqCst);
+        self.net.set_offline(state.offline_mode);
+        self.net.set_feature(Feature::Lyrics, state.net_lyrics);
+        self.net.set_feature(Feature::Online, state.net_online);
+        self.net
+            .set_feature(Feature::ArtistInfo, state.net_artist_info);
+        self.net.set_feature(Feature::Metadata, state.net_metadata);
+        self.net.set_feature(Feature::Updates, state.net_updates);
         state
     }
 
@@ -250,6 +297,23 @@ impl SessionStore {
 
     pub fn set_lyrics_netease(&self, enabled: bool) {
         self.lyrics_netease.store(enabled, Ordering::SeqCst);
+    }
+
+    pub fn offline_mode(&self) -> bool {
+        self.net.offline()
+    }
+
+    pub fn set_offline_mode(&self, enabled: bool) {
+        self.net.set_offline(enabled);
+    }
+
+    /// The user's own switch for `feature` (ignores offline mode).
+    pub fn net_feature(&self, feature: Feature) -> bool {
+        self.net.feature_enabled(feature)
+    }
+
+    pub fn set_net_feature(&self, feature: Feature, enabled: bool) {
+        self.net.set_feature(feature, enabled);
     }
 
     pub fn close_to_tray(&self) -> bool {
@@ -307,6 +371,12 @@ impl SessionStore {
         state.pinned = self.pinned();
         state.lyrics_save = self.lyrics_save();
         state.lyrics_netease = self.lyrics_netease();
+        state.offline_mode = self.net.offline();
+        state.net_lyrics = self.net.feature_enabled(Feature::Lyrics);
+        state.net_online = self.net.feature_enabled(Feature::Online);
+        state.net_artist_info = self.net.feature_enabled(Feature::ArtistInfo);
+        state.net_metadata = self.net.feature_enabled(Feature::Metadata);
+        state.net_updates = self.net.feature_enabled(Feature::Updates);
         if let Err(e) = save(&self.path, &state) {
             log::warn!("failed to save session state: {e}");
         } else {
@@ -396,6 +466,12 @@ mod tests {
             ],
             lyrics_save: SaveMode::Embed,
             lyrics_netease: false,
+            offline_mode: true,
+            net_lyrics: false,
+            net_online: true,
+            net_artist_info: false,
+            net_metadata: true,
+            net_updates: false,
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);
@@ -493,6 +569,53 @@ mod tests {
         assert_eq!(state.lyrics_save, SaveMode::Off);
         assert_eq!(again.lyrics_save(), SaveMode::Off);
         assert!(!again.lyrics_netease());
+    }
+
+    #[test]
+    fn net_switches_default_on_and_persist_through_the_store() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+
+        // An old file without the fields: online, every feature allowed.
+        std::fs::write(&file, r#"{"volume":55.0}"#).unwrap();
+        let state = load(&file);
+        assert!(!state.offline_mode);
+        assert!(state.net_lyrics && state.net_online && state.net_artist_info);
+        assert!(state.net_metadata && state.net_updates);
+        let store = SessionStore::new(file.clone());
+        store.load();
+        for f in Feature::ALL {
+            assert!(store.net_allowed(f), "{f:?}");
+        }
+
+        // A feature switch only affects its own feature.
+        store.set_net_feature(Feature::Metadata, false);
+        assert!(!store.net_allowed(Feature::Metadata));
+        assert!(store.net_allowed(Feature::Lyrics));
+
+        // Offline mode wins over every switch but keeps them as they are.
+        store.set_offline_mode(true);
+        for f in Feature::ALL {
+            assert!(!store.net_allowed(f), "{f:?}");
+        }
+        assert!(store.net_feature(Feature::Lyrics));
+        store.save_now(&SessionState::default());
+
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(json["offlineMode"], true);
+        assert_eq!(json["netMetadata"], false);
+        assert_eq!(json["netLyrics"], true);
+
+        let again = SessionStore::new(file);
+        again.load();
+        assert!(again.offline_mode());
+        assert!(!again.net_feature(Feature::Metadata));
+        assert!(again.net_feature(Feature::Updates));
+        assert!(!again.net_allowed(Feature::Updates));
+        again.set_offline_mode(false);
+        assert!(again.net_allowed(Feature::Updates));
+        assert!(!again.net_allowed(Feature::Metadata));
     }
 
     #[test]

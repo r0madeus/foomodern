@@ -4,9 +4,10 @@
 //! fields are ignored, so a missing or new key never fails a whole lookup.
 
 use super::MetadataError;
+use crate::net::{Feature, NetPolicy};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub const MB_BASE_URL: &str = "https://musicbrainz.org/ws/2";
@@ -204,6 +205,7 @@ pub fn recording_query(title: &str, artist: &str) -> String {
 #[derive(Debug)]
 pub struct MbClient {
     http: Client,
+    policy: Arc<NetPolicy>,
     cfg: MbConfig,
     /// When the next MusicBrainz request may start.
     next_slot: Mutex<Option<Instant>>,
@@ -217,9 +219,25 @@ impl MbClient {
             .build()?;
         Ok(Self {
             http,
+            policy: Arc::new(NetPolicy::default()),
             cfg,
             next_slot: Mutex::new(None),
         })
+    }
+
+    /// Makes every request ask `policy` first.
+    pub fn with_policy(mut self, policy: Arc<NetPolicy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// The HTTP client; every request goes through here, so the metadata
+    /// switch in Settings cannot be bypassed.
+    fn http(&self) -> Result<&Client, MetadataError> {
+        self.policy
+            .require(Feature::Metadata)
+            .map_err(|_| MetadataError::Disabled)?;
+        Ok(&self.http)
     }
 
     /// Waits until at least `min_interval` has passed since the previous
@@ -242,9 +260,10 @@ impl MbClient {
         let url = format!("{}{path}", self.cfg.mb_base_url.trim_end_matches('/'));
         let mut retried = false;
         loop {
+            self.http()?;
             self.wait_for_slot().await;
             let res = self
-                .http
+                .http()?
                 .get(&url)
                 .query(query)
                 .query(&[("fmt", "json")])
@@ -321,7 +340,7 @@ impl MbClient {
             "{}/release-group/{release_group_id}/front-{size}",
             self.cfg.caa_base_url.trim_end_matches('/')
         );
-        let res = self.http.get(url).send().await?;
+        let res = self.http()?.get(url).send().await?;
         match res.status() {
             StatusCode::OK => Ok(Some(res.bytes().await?.to_vec())),
             StatusCode::NOT_FOUND => Ok(None),

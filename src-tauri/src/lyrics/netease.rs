@@ -5,8 +5,10 @@
 //! several field spellings) and the base URL is configurable for tests.
 
 use super::{LyricLine, LyricsError, LyricsResult, LyricsSource, TrackQuery, lrc};
+use crate::net::{Feature, NetPolicy};
 use reqwest::Client;
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub const DEFAULT_BASE_URL: &str = "https://music.163.com";
@@ -307,6 +309,7 @@ fn form_encode(s: &str) -> String {
 pub struct NeteaseClient {
     http: Client,
     base_url: String,
+    policy: Arc<NetPolicy>,
 }
 
 impl NeteaseClient {
@@ -319,13 +322,28 @@ impl NeteaseClient {
         Ok(Self {
             http,
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            policy: Arc::new(NetPolicy::default()),
         })
+    }
+
+    /// Makes every request ask `policy` first.
+    pub fn with_policy(mut self, policy: Arc<NetPolicy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// The HTTP client; every request goes through here (lyrics switch).
+    fn http(&self) -> Result<&Client, LyricsError> {
+        self.policy
+            .require(Feature::Lyrics)
+            .map_err(|_| LyricsError::Disabled)?;
+        Ok(&self.http)
     }
 
     async fn search_post(&self, term: &str) -> Result<Vec<Candidate>, LyricsError> {
         let body = format!("s={}&type=1&limit=10&offset=0", form_encode(term));
         let res = self
-            .http
+            .http()?
             .post(format!("{}/api/search/get", self.base_url))
             .header("Referer", REFERER)
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -340,7 +358,7 @@ impl NeteaseClient {
 
     async fn search_get(&self, term: &str) -> Result<Vec<Candidate>, LyricsError> {
         let res = self
-            .http
+            .http()?
             .get(format!("{}/api/search/get", self.base_url))
             .header("Referer", REFERER)
             .query(&[("s", term), ("type", "1"), ("limit", "10"), ("offset", "0")])
@@ -365,7 +383,7 @@ impl NeteaseClient {
 
     pub async fn lyric(&self, id: i64) -> Result<Option<LyricsResult>, LyricsError> {
         let res = self
-            .http
+            .http()?
             .get(format!("{}/api/song/lyric", self.base_url))
             .header("Referer", REFERER)
             .query(&[

@@ -11,6 +11,7 @@ pub mod save;
 
 use crate::library::tags::{self, is_playing_path};
 use crate::library::{Library, SortOrder, scan};
+use crate::net::{Feature, NetPolicy};
 use cache::{LyricsCache, cache_key, now_unix_secs};
 use lrclib::{DEFAULT_BASE_URL, LrclibClient, PublishBody};
 use netease::NeteaseClient;
@@ -40,6 +41,8 @@ pub enum LyricsError {
     Cancelled,
     #[error("{0}")]
     Share(String),
+    #[error("disabled in Settings")]
+    Disabled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +261,7 @@ pub struct LyricsService {
     share_cancel: Arc<AtomicBool>,
     sharing: Arc<AtomicBool>,
     challenge_ttl: Duration,
+    net: Arc<NetPolicy>,
 }
 
 fn blocking_err(e: tokio::task::JoinError) -> LyricsError {
@@ -288,7 +292,17 @@ impl LyricsService {
             share_cancel: Arc::new(AtomicBool::new(false)),
             sharing: Arc::new(AtomicBool::new(false)),
             challenge_ttl: publish::CHALLENGE_TTL,
+            net: Arc::new(NetPolicy::default()),
         })
+    }
+
+    /// Ties the service to the app's internet switches: with the lyrics
+    /// feature off (or offline mode on) nothing is requested.
+    pub fn with_net_policy(mut self, policy: Arc<NetPolicy>) -> Self {
+        self.client = self.client.with_policy(Arc::clone(&policy));
+        self.netease = self.netease.with_policy(Arc::clone(&policy));
+        self.net = policy;
+        self
     }
 
     /// Tests: how long one LRCLIB challenge may be worked on.
@@ -358,6 +372,13 @@ impl LyricsService {
             {
                 return Ok(hit);
             }
+        }
+
+        // Offline or switched off: only local sources count. Return before
+        // anything is cached, otherwise the song would look "checked" for
+        // days although no service was asked.
+        if !self.net.allowed(Feature::Lyrics) {
+            return Ok(LyricsResult::NotFound);
         }
 
         let mut result = match self.client.fetch(&query).await? {
@@ -599,6 +620,9 @@ impl LyricsService {
             available: false,
             reason: Some(reason),
         };
+        if !self.net.allowed(Feature::Lyrics) {
+            return Ok(blocked(ShareBlock::Offline));
+        }
         if self.sharing.load(Ordering::SeqCst) {
             return Ok(blocked(ShareBlock::Busy));
         }
@@ -649,6 +673,9 @@ impl LyricsService {
         path: String,
         duration_hint_secs: Option<f64>,
     ) -> Result<ShareOutcome, LyricsError> {
+        self.net
+            .require(Feature::Lyrics)
+            .map_err(|m| LyricsError::Share(m.into()))?;
         if self.sharing.swap(true, Ordering::SeqCst) {
             return Err(LyricsError::Share(
                 "Another share is already running.".into(),

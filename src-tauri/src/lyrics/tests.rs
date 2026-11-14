@@ -1524,6 +1524,115 @@ fn coverage_counts_lyrics_checked_and_unchecked() {
     assert_eq!(json["unchecked"], 1);
 }
 
+fn track_cache_key() -> String {
+    super::cache::cache_key("Nadia Okafor", "Morning Light", "Daybreak", Some(2))
+}
+
+#[test]
+fn offline_mode_and_the_lyrics_switch_make_no_request_and_cache_nothing() {
+    use crate::net::{Feature, NetPolicy};
+    let dir = TempDir::new().unwrap();
+    let wav = dir.path().join("off.wav");
+    write_tagged_wav(&wav, "Morning Light", "Nadia Okafor", "Daybreak");
+    let lib = empty_library(dir.path());
+    let lrclib = MockServer::start(vec![(200, synced_hit_body()), (200, synced_hit_body())]);
+    let ne = MockServer::start(vec![]);
+    let policy = Arc::new(NetPolicy::default());
+    let cache_dir = dir.path().join("cache");
+    let svc = LyricsService::with_base_urls(&cache_dir, &lrclib.addr, &ne.addr)
+        .unwrap()
+        .with_net_policy(Arc::clone(&policy));
+    let cache = LyricsCache::new(&cache_dir);
+    let now = super::cache::now_unix_secs();
+    let o = opts(SaveMode::Off, true, None);
+
+    // Offline mode: not found, no request to either service, and no
+    // "not found" cache entry that would hide the song for a week.
+    policy.set_offline(true);
+    let res = lookup(&svc, &lib, &wav, false, &o).unwrap();
+    assert_eq!(res, LyricsResult::NotFound);
+    assert!(lrclib.requests().is_empty() && ne.requests().is_empty());
+    assert_eq!(cache.get(&track_cache_key(), now), None);
+    assert!(!wav.with_extension("lrc").exists());
+
+    // The same with only the lyrics switch off.
+    policy.set_offline(false);
+    policy.set_feature(Feature::Lyrics, false);
+    assert_eq!(
+        lookup(&svc, &lib, &wav, true, &o).unwrap(),
+        LyricsResult::NotFound
+    );
+    assert!(lrclib.requests().is_empty() && ne.requests().is_empty());
+    assert_eq!(cache.get(&track_cache_key(), now), None);
+
+    // The other switches do not stop lyrics.
+    policy.set_feature(Feature::Lyrics, true);
+    for f in [
+        Feature::Online,
+        Feature::ArtistInfo,
+        Feature::Metadata,
+        Feature::Updates,
+    ] {
+        policy.set_feature(f, false);
+    }
+    let found = lookup(&svc, &lib, &wav, false, &o).unwrap();
+    assert!(matches!(found, LyricsResult::Synced { .. }));
+    assert_eq!(lrclib.requests().len(), 1);
+
+    // Cached lyrics and a sidecar still work offline.
+    policy.set_offline(true);
+    assert_eq!(lookup(&svc, &lib, &wav, false, &o).unwrap(), found);
+    let side = dir.path().join("side.wav");
+    write_tagged_wav(&side, "Other Song", "Nadia Okafor", "Daybreak");
+    std::fs::write(side.with_extension("lrc"), "[00:01.00]Local line").unwrap();
+    let local = lookup(&svc, &lib, &side, false, &o).unwrap();
+    assert!(matches!(local, LyricsResult::Synced { .. }));
+    assert_eq!(lrclib.requests().len(), 1);
+    assert!(ne.requests().is_empty());
+}
+
+#[test]
+fn the_netease_client_itself_refuses_when_lyrics_are_off() {
+    use crate::net::{Feature, NetPolicy};
+    let ne = MockServer::start(vec![(200, netease_search_json())]);
+    let policy = Arc::new(NetPolicy::default());
+    let client = netease::NeteaseClient::new(ne.addr.clone())
+        .unwrap()
+        .with_policy(Arc::clone(&policy));
+    policy.set_feature(Feature::Lyrics, false);
+    let err = block_on(client.search("anything")).unwrap_err();
+    assert!(matches!(err, LyricsError::Disabled), "{err:?}");
+    assert!(ne.requests().is_empty());
+    policy.set_feature(Feature::Lyrics, true);
+    assert!(block_on(client.search("anything")).is_ok());
+    assert_eq!(ne.requests().len(), 1);
+}
+
+#[test]
+fn sharing_is_refused_without_requests_when_lyrics_are_off() {
+    use crate::net::{Feature, NetPolicy};
+    let dir = TempDir::new().unwrap();
+    let wav = shareable_track(dir.path(), "offshare.wav", "Daybreak");
+    let path = wav.to_string_lossy().into_owned();
+    let lib = empty_library(dir.path());
+    let server = MockServer::start(vec![]);
+
+    let offline = NetPolicy::default();
+    offline.set_offline(true);
+    let switched_off = NetPolicy::default();
+    switched_off.set_feature(Feature::Lyrics, false);
+    for policy in [offline, switched_off] {
+        let svc = LyricsService::with_base_url(&dir.path().join("cache"), &server.addr)
+            .unwrap()
+            .with_net_policy(Arc::new(policy));
+        let status = block_on(svc.share_status(Arc::clone(&lib), path.clone(), None)).unwrap();
+        assert!(!status.available);
+        let err = block_on(svc.share(Arc::clone(&lib), path.clone(), None)).unwrap_err();
+        assert_eq!(err.to_string(), "disabled in Settings");
+    }
+    assert!(server.requests().is_empty());
+}
+
 // ---- live (network) checks: cargo test -- --ignored ----
 
 #[test]

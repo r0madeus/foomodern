@@ -4,7 +4,7 @@
 
 use crate::library::Library;
 use crate::library::scan::{display_path, fnv1a};
-use crate::net::client_builder;
+use crate::net::{Feature, NetPolicy, client_builder};
 use crate::session::SessionStore;
 use image::ImageFormat;
 use serde::{Deserialize, Serialize};
@@ -56,6 +56,8 @@ pub enum OnlineError {
     Io(#[from] std::io::Error),
     #[error("cancelled")]
     Cancelled,
+    #[error("disabled in Settings")]
+    Disabled,
     #[cfg(target_os = "android")]
     #[error("online search and download are only available on desktop")]
     Unsupported,
@@ -189,12 +191,18 @@ pub struct OnlineService {
     #[cfg(not(target_os = "android"))]
     on_jobs: JobsObserver,
     client: reqwest::Client,
+    net: Arc<NetPolicy>,
     #[cfg(not(target_os = "android"))]
     worker_tx: mpsc::Sender<DownloadWork>,
 }
 
 impl OnlineService {
-    pub fn new(covers_dir: PathBuf, default_download_dir: PathBuf, on_jobs: JobsObserver) -> Self {
+    pub fn new(
+        covers_dir: PathBuf,
+        default_download_dir: PathBuf,
+        on_jobs: JobsObserver,
+        net: Arc<NetPolicy>,
+    ) -> Self {
         #[cfg(target_os = "android")]
         let _ = on_jobs;
         #[cfg(not(target_os = "android"))]
@@ -215,6 +223,7 @@ impl OnlineService {
             let worker_observer = Arc::clone(&on_jobs);
             let worker_covers = covers_dir.clone();
             let worker_client = client.clone();
+            let worker_net = Arc::clone(&net);
             let spawned = std::thread::Builder::new()
                 .name("online-downloads".into())
                 .spawn(move || {
@@ -225,6 +234,7 @@ impl OnlineService {
                         worker_observer,
                         worker_covers,
                         worker_client,
+                        worker_net,
                     );
                 });
             if let Err(e) = spawned {
@@ -242,9 +252,20 @@ impl OnlineService {
             #[cfg(not(target_os = "android"))]
             on_jobs,
             client,
+            net,
             #[cfg(not(target_os = "android"))]
             worker_tx,
         }
+    }
+
+    /// The HTTP client for `feature`; every request of this service goes
+    /// through here (or through the worker's own check), so the switches
+    /// in Settings cannot be bypassed.
+    fn http(&self, feature: Feature) -> Result<&reqwest::Client, OnlineError> {
+        self.net
+            .require(feature)
+            .map_err(|_| OnlineError::Disabled)?;
+        Ok(&self.client)
     }
 
     pub fn resolve_download_dir(&self, store: &SessionStore, lib: &Library) -> PathBuf {
@@ -340,6 +361,16 @@ impl OnlineService {
 
     #[cfg(not(target_os = "android"))]
     pub fn status(&self, store: &SessionStore, lib: &Library) -> OnlineStatus {
+        if !self.net.allowed(Feature::Online) {
+            // Do not even start yt-dlp: report the tools as unavailable.
+            return OnlineStatus {
+                ytdlp_available: false,
+                ytdlp_version: None,
+                ffmpeg_available: false,
+                download_dir: display_path(&self.resolve_download_dir(store, lib)),
+                ytdlp_path: store.ytdlp_path().map(|p| display_path(&p)),
+            };
+        }
         let ytdlp_bin = self.resolve_ytdlp_bin(store);
         let ytdlp_version = command_first_line(&ytdlp_bin, &["--version"]);
         let ffmpeg_available = command_first_line("ffmpeg", &["-version"]).is_some();
@@ -363,6 +394,7 @@ impl OnlineService {
 
     #[cfg(not(target_os = "android"))]
     pub async fn search(&self, query: &str, ytdlp_bin: &str) -> Result<SearchResults, OnlineError> {
+        let client = self.http(Feature::Online)?.clone();
         let q = query.trim();
         if q.is_empty() {
             return Ok(SearchResults {
@@ -383,7 +415,6 @@ impl OnlineService {
             return Ok(results);
         }
 
-        let client = self.client.clone();
         let q_albums = q.to_owned();
         let albums_handle =
             tokio::task::spawn(async move { fetch_itunes_albums(&client, &q_albums).await });
@@ -435,8 +466,9 @@ impl OnlineService {
         album: &OnlineAlbum,
         #[cfg_attr(target_os = "android", allow(unused_variables))] ytdlp_bin: &str,
     ) -> Result<OnlineAlbumDetail, OnlineError> {
+        let client = self.http(Feature::Online)?;
         let mut detail = if let Some(cid) = album.id.strip_prefix("itunes:") {
-            fetch_itunes_album_detail(&self.client, cid, album).await?
+            fetch_itunes_album_detail(client, cid, album).await?
         } else {
             #[cfg(target_os = "android")]
             {
@@ -471,7 +503,7 @@ impl OnlineService {
         if detail.album.cover.is_none()
             && let Some(url) = detail.album.cover_url.clone()
         {
-            detail.album.cover = ensure_cached_cover(&self.client, &self.covers_dir, &url).await;
+            detail.album.cover = ensure_cached_cover(client, &self.covers_dir, &url).await;
         }
         let album_cover = detail.album.cover.clone();
         let album_cover_url = detail.album.cover_url.clone();
@@ -501,9 +533,10 @@ impl OnlineService {
         track: &OnlineTrack,
         ytdlp_bin: &str,
     ) -> Result<(String, Option<String>), OnlineError> {
+        let client = self.http(Feature::Online)?;
         let cover = match (&track.cover, &track.cover_url) {
             (Some(c), _) => Some(c.clone()),
-            (None, Some(url)) => ensure_cached_cover(&self.client, &self.covers_dir, url).await,
+            (None, Some(url)) => ensure_cached_cover(client, &self.covers_dir, url).await,
             (None, None) => None,
         };
         let bin = ytdlp_bin.to_owned();
@@ -539,6 +572,7 @@ impl OnlineService {
         store: &SessionStore,
         lib: &Arc<Library>,
     ) -> Result<DownloadJob, OnlineError> {
+        self.http(Feature::Online)?;
         if req.tracks.is_empty() {
             return Err(OnlineError::Message("no tracks to download".into()));
         }
@@ -580,12 +614,15 @@ impl OnlineService {
     }
 
     async fn cache_search_covers(&self, results: &mut SearchResults) {
+        let Ok(client) = self.http(Feature::Online).cloned() else {
+            return;
+        };
         let mut handles = Vec::new();
         for a in results.albums.iter().take(12) {
             if a.cover.is_none()
                 && let Some(url) = a.cover_url.clone()
             {
-                let client = self.client.clone();
+                let client = client.clone();
                 let dir = self.covers_dir.clone();
                 handles.push(tokio::task::spawn(async move {
                     let cached = ensure_cached_cover(&client, &dir, &url).await;
@@ -609,6 +646,56 @@ impl OnlineService {
         }
     }
 
+    /// Portrait, bio and missing albums of an artist: what `artists_meta`
+    /// holds, topped up from the internet when the entry is stale or
+    /// incomplete. With the artist-info feature off (or offline mode on)
+    /// only the cache is returned: no request, and the cache entry (with its
+    /// `fetched_at`) stays untouched.
+    pub async fn artist_info(
+        &self,
+        lib: &Library,
+        name: &str,
+        prefer_tr: bool,
+    ) -> Result<ArtistOnlineInfo, String> {
+        let existing = lib.artist_meta(name).map_err(|e| e.to_string())?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+            .unwrap_or(0);
+        let fresh = existing
+            .as_ref()
+            .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
+        let cached_image = existing
+            .as_ref()
+            .and_then(|m| m.image.clone())
+            .filter(|p| Path::new(p).exists());
+        let cached_bio = existing.as_ref().and_then(|m| m.bio.clone());
+        if !self.net.allowed(Feature::ArtistInfo) {
+            return Ok(ArtistOnlineInfo {
+                image: cached_image,
+                bio: cached_bio,
+                albums: Vec::new(),
+            });
+        }
+        let need_image = !fresh || cached_image.is_none();
+        let need_bio = !fresh || cached_bio.is_none();
+
+        let fetched = self
+            .enrich_artist(name, prefer_tr, need_image, need_bio)
+            .await;
+
+        let final_image = fetched.image.or(cached_image);
+        let final_bio = fetched.bio.or(cached_bio);
+        if final_image.is_some() || final_bio.is_some() {
+            let _ = lib.save_artist_meta(name, final_image.as_deref(), final_bio.as_deref());
+        }
+        Ok(ArtistOnlineInfo {
+            image: final_image,
+            bio: final_bio,
+            albums: fetched.albums,
+        })
+    }
+
     pub async fn enrich_artist(
         &self,
         artist: &str,
@@ -620,9 +707,13 @@ impl OnlineService {
         if q.is_empty() {
             return ArtistOnlineInfo::default();
         }
-        let c1 = self.client.clone();
-        let c2 = self.client.clone();
-        let c3 = self.client.clone();
+        // Switched off: nothing is fetched (the caller keeps what is cached).
+        let Ok(client) = self.http(Feature::ArtistInfo).cloned() else {
+            return ArtistOnlineInfo::default();
+        };
+        let c1 = client.clone();
+        let c2 = client.clone();
+        let c3 = client.clone();
         let q1 = q.to_owned();
         let q2 = q.to_owned();
         let q3 = q.to_owned();
@@ -648,7 +739,7 @@ impl OnlineService {
         let raw_albums = h_alb.await.ok().unwrap_or_default();
 
         let image = match img_url {
-            Some(url) => ensure_cached_cover(&self.client, &self.covers_dir, &url).await,
+            Some(url) => ensure_cached_cover(&client, &self.covers_dir, &url).await,
             None => None,
         };
 
@@ -902,6 +993,7 @@ fn download_worker(
     on_jobs: JobsObserver,
     covers_dir: PathBuf,
     client: reqwest::Client,
+    net: Arc<NetPolicy>,
 ) {
     let Ok(rt) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -922,6 +1014,19 @@ fn download_worker(
             // Cancelled while queued; the job is already marked.
             continue;
         }
+        // Queued before the user went offline or switched online features
+        // off: never start yt-dlp for it.
+        if !net.allowed(Feature::Online) {
+            cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&work.job_id);
+            update_job(&jobs, &on_jobs, work.job_id, |j| {
+                j.state = DownloadState::Failed;
+                j.error = Some(OnlineError::Disabled.to_string());
+            });
+            continue;
+        }
         let ffmpeg_ok = command_first_line("ffmpeg", &["-version"]).is_some();
         update_job(&jobs, &on_jobs, work.job_id, |j| {
             j.state = DownloadState::Downloading;
@@ -936,6 +1041,12 @@ fn download_worker(
         for track in &work.tracks {
             if is_cancelled() {
                 was_cancelled = true;
+                break;
+            }
+            // Switched off while this job was running: stop before the
+            // next request or yt-dlp process.
+            if !net.allowed(Feature::Online) {
+                last_error = Some(OnlineError::Disabled.to_string());
                 break;
             }
             update_job(&jobs, &on_jobs, work.job_id, |j| {

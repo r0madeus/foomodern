@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { appSettings } from './appSettings.svelte'
   import { count, t } from './i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
@@ -102,6 +103,8 @@
           <button
             type="button"
             class="rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-white/90 outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60"
+            disabled={!appSettings.allowMetadata}
+            title={appSettings.allowMetadata ? undefined : t('Turned off in Settings')}
             onclick={() => metadataMatch.openAlbum(albumId)}
           >
             {t("Find info")}

@@ -1,6 +1,7 @@
 // "New version available" notice. Rust asks GitHub for the latest release;
 // the UI checks at most once a day and remembers a dismissed version.
 import { invoke } from '@tauri-apps/api/core'
+import { appSettings } from './appSettings.svelte'
 
 export interface UpdateInfo {
   version: string
@@ -32,10 +33,16 @@ class Updates {
   available = $state<UpdateInfo | null>(null)
   checking = $state(false)
   /** Result of the last manual check, for Settings. */
-  status = $state<'idle' | 'upToDate' | 'found' | 'failed'>('idle')
+  status = $state<'idle' | 'upToDate' | 'found' | 'failed' | 'disabled'>('idle')
 
   async check(manual = false): Promise<void> {
     if (this.checking) return
+    // Rust refuses the request too; this only avoids a pointless call.
+    if (!appSettings.allowUpdates) {
+      this.status = 'disabled'
+      this.available = null
+      return
+    }
     this.checking = true
     try {
       const found = await invoke<UpdateInfo | null>('app_check_update')
