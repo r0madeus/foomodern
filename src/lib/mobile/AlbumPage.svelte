@@ -119,6 +119,8 @@
           subtitle={track.artist}
           path={track.path}
           trackId={track.id}
+          {track}
+          album=""
           number={track.trackNo ?? i + 1}
           onPlay={() => library.playAlbum(albumId, i)}
         />

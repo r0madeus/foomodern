@@ -1,17 +1,20 @@
 <script lang="ts">
   import { t } from './i18n.svelte'
   import { fly } from 'svelte/transition'
+  import AlbumLink from './AlbumLink.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
   import TintedBackdrop from './TintedBackdrop.svelte'
+  import type { TrackRow } from './library.svelte'
   import { motionDuration } from './motion'
   import { player } from './player.svelte'
   import { lyrics } from './lyrics.svelte'
   import { nowCover } from './nowCover.svelte'
   import { tintFrom } from './tint'
+  import { trackMenu } from './contextMenu.svelte'
 
   // Desktop "now playing": the cover large on the cover's tint, the line
   // being sung under it, and the lyrics alongside. The player bar below
@@ -40,27 +43,54 @@
   </header>
 
   {#if snap.current}
+    {@const cur = snap.current}
+    {@const menuRow: TrackRow = nowCover.track ?? {
+      id: -1,
+      title: cur.title,
+      artist: cur.artist,
+      album: '',
+      albumId: null,
+      trackNo: null,
+      discNo: null,
+      year: null,
+      durationMs: null,
+      path: cur.path,
+      cover: nowCover.cover,
+    }}
     <div class={['grid min-h-0 flex-1 gap-10 px-10 pt-4 pb-6', hasLyrics ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]' : 'grid-cols-1 place-items-center']}>
       <div class="flex min-h-0 flex-col justify-center">
         <Cover
           cover={nowCover.cover}
-          title={snap.current.title}
+          title={cur.title}
           class="aspect-square max-h-[min(56vh,480px)] w-auto max-w-full self-center rounded-lg text-8xl shadow-2xl shadow-black/50"
         />
-        <div class="mx-auto mt-6 w-full max-w-[480px]">
+        <div
+          role="region"
+          aria-label={t('Now playing')}
+          class="mx-auto mt-6 w-full max-w-[480px]"
+          oncontextmenu={(e) => trackMenu.fromEvent(e, menuRow)}
+        >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
-              <h2 class="truncate text-3xl leading-tight font-bold">{snap.current.title}</h2>
+              <h2 class="truncate text-3xl leading-tight font-bold">{cur.title}</h2>
               <p class="mt-1 truncate text-lg text-white/70">
-                {#if snap.current.artist}
-                  <ArtistLinks artist={snap.current.artist} onNavigate={onClose} />
+                {#if cur.artist}
+                  <ArtistLinks artist={cur.artist} onNavigate={onClose} />
                 {:else}
                   {t('Unknown artist')}
                 {/if}
+                {#if nowCover.track?.album}
+                  <span class="opacity-60"> · </span>
+                  <AlbumLink
+                    album={nowCover.track.album}
+                    albumId={nowCover.track.albumId}
+                    onNavigate={onClose}
+                  />
+                {/if}
               </p>
             </div>
-            {#if !snap.current.path.startsWith('http://') && !snap.current.path.startsWith('https://')}
-              <FavoriteButton path={snap.current.path} title={snap.current.title} size="size-5" light />
+            {#if !cur.path.startsWith('http://') && !cur.path.startsWith('https://')}
+              <FavoriteButton path={cur.path} title={cur.title} size="size-5" light />
             {/if}
           </div>
           {#if !hasLyrics}

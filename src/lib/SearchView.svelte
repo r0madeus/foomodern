@@ -1,5 +1,7 @@
 <script lang="ts">
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
+  import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
@@ -15,6 +17,7 @@
     online,
   } from './online.svelte'
   import { formatTime, player } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   let {
     onOpenSettings,
@@ -230,16 +233,25 @@
               {#if localTracks.length > 0}
                 <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
                   {#each localTracks as track, i (track.id)}
-                    <li class="group flex items-center gap-1 py-0.5">
-                      <button
-                        type="button"
+                    <li
+                      class="group flex items-center gap-1 py-0.5"
+                      oncontextmenu={(e) =>
+                        trackMenu.fromEvent(e, track, {
+                          onPlay: () => void library.playQuery(debouncedLocalQuery, i),
+                        })}
+                    >
+                      <div
+                        role="button"
+                        tabindex="0"
                         class={[
-                          'flex h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left text-sm',
+                          'flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
                           track.path === currentPath
                             ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                             : 'text-zinc-800 hover:bg-zinc-100/80 dark:text-zinc-200 dark:hover:bg-zinc-800/50',
                         ]}
                         onclick={() => void library.playQuery(debouncedLocalQuery, i)}
+                        onkeydown={(e) =>
+                          e.key === 'Enter' && void library.playQuery(debouncedLocalQuery, i)}
                       >
                         <Cover
                           cover={track.cover}
@@ -252,18 +264,20 @@
                             <ExtBadge path={track.path} />
                           </p>
                           <p class="truncate text-xs text-zinc-500">
-                            {track.artist}{track.album ? ` · ${track.album}` : ''}
+                            <ArtistLinks artist={track.artist} />{#if track.album} · <AlbumLink album={track.album} albumId={track.albumId} />{/if}
                           </p>
                         </div>
                         <span class="text-xs tabular-nums text-zinc-500">
                           {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
                         </span>
-                      </button>
+                      </div>
                       <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
                       <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                         <AddToPlaylist
                           trackIds={[track.id]}
+                          {track}
                           editTags
+                          onPlay={() => void library.playQuery(debouncedLocalQuery, i)}
                           label={t('More actions for “{title}”', { title: track.title })}
                         />
                       </span>

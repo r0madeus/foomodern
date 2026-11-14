@@ -4,6 +4,7 @@
   import EmptyLibrary from './EmptyLibrary.svelte'
   import SearchInput from './SearchInput.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
@@ -11,6 +12,7 @@
   import Equalizer from './Equalizer.svelte'
   import { library, PagedRows, type Sort } from './library.svelte'
   import { player, formatTime } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   const ROW = 48
   const SORTS: { value: Sort; label: string }[] = [
@@ -18,14 +20,15 @@
     { value: 'title', label: 'Title' },
     { value: 'album', label: 'Album' },
     { value: 'added', label: 'Recently added' },
+    { value: 'duration', label: 'Duration' },
   ]
   const COLS = 'grid grid-cols-[3rem_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_4rem_4.25rem] items-center gap-3 px-5'
 
   const q = $derived(library.debouncedQuery)
-  // A fresh cache whenever the library version, sort, or search query changes.
+  // A fresh cache whenever the library version, sort, direction, or search query changes.
   const rows = $derived.by(() => {
     void library.stats.version
-    return new PagedRows(library.tracksPage(library.sort, q))
+    return new PagedRows(library.tracksPage(library.sort, q, library.sortDir))
   })
   $effect(() => {
     // Capture this instance: the cleanup runs after `rows` has already been
@@ -61,9 +64,9 @@
                   ? 'bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-zinc-950'
                   : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
               ]}
-              onclick={() => (library.sort = s.value)}
+              onclick={() => library.toggleColumnSort(s.value)}
             >
-              {t(s.label)}
+              {t(s.label)}{library.sort === s.value ? (library.sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
             </button>
           {/each}
         </div>
@@ -74,7 +77,35 @@
       <SearchInput placeholder={t("Filter songs, artists, albums…")} />
     </div>
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
-      <span class="text-right">#</span><span>{t("Title")}</span><span>{t("Artist")}</span><span>{t("Album")}</span><span class="text-right">{t("Time")}</span><span></span>
+      {#each [
+        { col: 'added' as Sort, label: '#', align: 'justify-end text-right' },
+        { col: 'title' as Sort, label: t('Title'), align: 'justify-start text-left' },
+        { col: 'artist' as Sort, label: t('Artist'), align: 'justify-start text-left' },
+        { col: 'album' as Sort, label: t('Album'), align: 'justify-start text-left' },
+        { col: 'duration' as Sort, label: t('Time'), align: 'justify-end text-right' },
+      ] as h (h.col)}
+        {@const active = library.sort === h.col}
+        <button
+          type="button"
+          class={[
+            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-teal-500',
+            h.align,
+            active
+              ? 'font-semibold text-teal-600 dark:text-teal-400'
+              : 'hover:text-zinc-700 dark:hover:text-zinc-200',
+          ]}
+          aria-pressed={active}
+          onclick={() => library.toggleColumnSort(h.col)}
+        >
+          <span>{h.label}</span>
+          {#if active}
+            <span aria-hidden="true" class="text-[10px] leading-none">
+              {library.sortDir === 'asc' ? '▲' : '▼'}
+            </span>
+          {/if}
+        </button>
+      {/each}
+      <span></span>
     </div>
     {#if q !== '' && rows.total === 0}
       <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
@@ -88,7 +119,7 @@
         </button>
       </div>
     {:else}
-      {#key `${library.sort}\0${q}`}
+      {#key `${library.sort}\0${library.sortDir}\0${q}`}
         <VirtualList
           class="min-h-0 flex-1"
           count={totalCount}
@@ -110,6 +141,8 @@
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
               ondblclick={() => library.playAll(i)}
+              oncontextmenu={(e) =>
+                trackMenu.fromEvent(e, track, { onPlay: () => library.playAll(i) })}
               onkeydown={(e) => e.key === 'Enter' && library.playAll(i)}
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -122,14 +155,22 @@
                 <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
               </span>
               <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
-              <span class="truncate text-zinc-500">{track.album}</span>
+              <span class="truncate text-zinc-500">
+                <AlbumLink album={track.album} albumId={track.albumId} />
+              </span>
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
               <span class="flex items-center justify-end gap-1">
                 <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
                 <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-                  <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+                  <AddToPlaylist
+                    trackIds={[track.id]}
+                    {track}
+                    editTags
+                    onPlay={() => library.playAll(i)}
+                    label={t('More actions for “{title}”', { title: track.title })}
+                  />
                 </span>
               </span>
             </div>

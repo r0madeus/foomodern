@@ -8,6 +8,7 @@
   import ToggleSwitch from './ToggleSwitch.svelte'
   import FoldersView from './FoldersView.svelte'
   import { player, type ReplayGain } from './player.svelte'
+  import { artists } from './artists.svelte'
   import { prefs } from './prefs.svelte'
   import { appSettings, type LyricsSave, type NetFeature } from './appSettings.svelte'
   import { lyrics, type Coverage } from './lyrics.svelte'
@@ -471,6 +472,88 @@
               {t('Offline mode is on, so the switches above are off.')}
             </p>
           {/if}
+
+          <div class="flex flex-col gap-3 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium">{t('Artist profiles')}</p>
+                <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t(
+                    'Download artist photos and biographies from Deezer and Wikipedia for artists in your library.',
+                  )}
+                </p>
+              </div>
+              <div class="flex shrink-0 flex-wrap items-center gap-2">
+                {#if artists.scan.scanning}
+                  <button
+                    type="button"
+                    class={actionBtn}
+                    onclick={() => void artists.cancelScan()}
+                  >
+                    {t('Cancel')}
+                  </button>
+                {:else}
+                  <button
+                    type="button"
+                    class={actionBtn}
+                    disabled={!appSettings.loaded || !appSettings.allowArtistInfo}
+                    onclick={() => void artists.refreshAll(false, i18n.locale)}
+                  >
+                    {t('Refresh missing')}
+                  </button>
+                  <button
+                    type="button"
+                    class={actionBtn}
+                    disabled={!appSettings.loaded || !appSettings.allowArtistInfo}
+                    onclick={() => void artists.refreshAll(true, i18n.locale)}
+                  >
+                    {t('Rescan all')}
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            {#if artists.scan.scanning}
+              <div class="flex flex-col gap-1.5" role="status">
+                <div class="flex items-center justify-between gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span class="truncate">
+                    {artists.scan.currentArtist ?? ''}
+                  </span>
+                  <span class="shrink-0 tabular-nums">
+                    {artists.scan.done} / {artists.scan.total}
+                  </span>
+                </div>
+                <div class="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                  <div
+                    class="h-full rounded-full bg-teal-500 transition-[width]"
+                    style:width="{artists.scan.total > 0 ? Math.round((artists.scan.done / artists.scan.total) * 100) : 0}%"
+                  ></div>
+                </div>
+              </div>
+            {:else if artists.scan.error}
+              <p class="text-xs text-red-600 dark:text-red-400" role="alert">
+                {artists.scan.error}
+              </p>
+            {:else if artists.scan.cancelled}
+              <p class="text-xs text-zinc-500 dark:text-zinc-400" role="status">
+                {t('Artist scan cancelled ({done}/{total}).', {
+                  done: artists.scan.done,
+                  total: artists.scan.total,
+                })}
+              </p>
+            {:else if artists.scan.total > 0}
+              <p class="text-xs text-teal-700 dark:text-teal-400" role="status">
+                {t('Updated {updated} of {total} artists.', {
+                  updated: artists.scan.updated,
+                  total: artists.scan.total,
+                })}
+              </p>
+            {:else if !appSettings.allowArtistInfo && appSettings.loaded}
+              <p class="text-xs text-zinc-500 dark:text-zinc-400">
+                {t('Turn on “Artist profiles & albums” above to fetch artist info online.')}
+              </p>
+            {/if}
+          </div>
         </div>
       </section>
 

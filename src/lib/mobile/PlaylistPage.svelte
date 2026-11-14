@@ -93,6 +93,7 @@
           path={track.path}
           cover={track.cover}
           trackId={track.id}
+          {track}
           onPlay={() => playlists.play(id, i)}
         />
       {/each}

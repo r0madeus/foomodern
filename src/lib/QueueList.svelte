@@ -3,12 +3,45 @@
   import Equalizer from './Equalizer.svelte'
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
-  import { player } from './player.svelte'
+  import { library, type TrackRow } from './library.svelte'
+  import { player, type TrackInfo } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   // Plain list for now; the virtualised list arrives with the library view
   // (roadmap step 4).
   const current = $derived(player.snapshot.currentIndex)
   const status = $derived(player.snapshot.status)
+
+  function fallbackRow(track: TrackInfo): TrackRow {
+    return {
+      id: -1,
+      title: track.title,
+      artist: track.artist,
+      album: '',
+      albumId: null,
+      trackNo: null,
+      discNo: null,
+      year: null,
+      durationMs: null,
+      path: track.path,
+      cover: null,
+    }
+  }
+
+  async function openMenu(e: MouseEvent, track: TrackInfo, index: number) {
+    e.preventDefault()
+    e.stopPropagation()
+    const x = e.clientX
+    const y = e.clientY
+    const row = (await library.trackByPath(track.path)) ?? fallbackRow(track)
+    trackMenu.open({
+      track: row,
+      x,
+      y,
+      onPlay: () => void player.playIndex(index),
+      onRemoveFromQueue: () => void player.removeIndex(index),
+    })
+  }
 </script>
 
 <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
@@ -21,6 +54,7 @@
           : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
       ]}
       ondblclick={() => player.playIndex(i)}
+      oncontextmenu={(e) => void openMenu(e, track, i)}
     >
       <span class="w-8 shrink-0 text-right text-xs tabular-nums text-zinc-400">
         {#if i === current && status === 'playing'}

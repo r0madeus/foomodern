@@ -222,6 +222,9 @@
                 path={item.track.path}
                 cover={item.track.cover}
                 trackId={item.track.id}
+                track={item.track}
+                artist=""
+                extraMeta={item.playCount > 0 ? count(item.playCount, '{n} play', '{n} plays') : ''}
                 number={idx + 1}
                 onPlay={() => void artists.play(profile!.name, qIdx)}
               />
@@ -306,6 +309,9 @@
                 path={track.path}
                 cover={track.cover}
                 trackId={track.id}
+                {track}
+                artist=""
+                extraMeta={track.year ? String(track.year) : ''}
                 onPlay={() => void artists.play(profile!.name, idx)}
               />
             {/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../i18n.svelte'
   import { fly } from 'svelte/transition'
+  import AlbumLink from '../AlbumLink.svelte'
   import ArtistLinks from '../ArtistLinks.svelte'
   import Cover from '../Cover.svelte'
   import FavoriteButton from '../FavoriteButton.svelte'
@@ -107,9 +108,17 @@
               <h2 class="truncate text-[22px] leading-tight font-bold">{snap.current.title}</h2>
               <p class="mt-0.5 truncate text-base text-white/70">
                 {#if snap.current.artist}
-                  <ArtistLinks artist={snap.current.artist} />
+                  <ArtistLinks artist={snap.current.artist} linkClass="hover:text-teal-400 active:underline" />
                 {:else}
                   {t('Unknown artist')}
+                {/if}
+                {#if nowCover.track?.album}
+                  <span class="opacity-60"> · </span>
+                  <AlbumLink
+                    album={nowCover.track.album}
+                    albumId={nowCover.track.albumId}
+                    linkClass="hover:text-teal-400 active:underline"
+                  />
                 {/if}
               </p>
             </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import Cover from './Cover.svelte'
   import Equalizer from './Equalizer.svelte'
   import ExtBadge from './ExtBadge.svelte'
@@ -11,6 +12,7 @@
   import { count, t } from './i18n.svelte'
   import { PagedRows } from './library.svelte'
   import { formatTime, player } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   const ROW = 48
   const COLS =
@@ -96,6 +98,8 @@
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             ondblclick={() => void favorites.play(i)}
+            oncontextmenu={(e) =>
+              trackMenu.fromEvent(e, track, { onPlay: () => void favorites.play(i) })}
             onkeydown={(e) => e.key === 'Enter' && void favorites.play(i)}
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -112,7 +116,9 @@
               <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
             </span>
             <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
-            <span class="truncate text-zinc-500">{track.album}</span>
+            <span class="truncate text-zinc-500">
+              <AlbumLink album={track.album} albumId={track.albumId} />
+            </span>
             <span class="text-right text-xs tabular-nums text-zinc-500">
               {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
             </span>
@@ -121,7 +127,9 @@
               <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                 <AddToPlaylist
                   trackIds={[track.id]}
+                  {track}
                   editTags
+                  onPlay={() => void favorites.play(i)}
                   label={t('More actions for “{title}”', { title: track.title })}
                 />
               </span>

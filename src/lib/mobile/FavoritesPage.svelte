@@ -86,6 +86,7 @@
             path={track.path}
             cover={track.cover}
             trackId={track.id}
+            {track}
             onPlay={() => void favorites.play(i)}
           />
         {:else}

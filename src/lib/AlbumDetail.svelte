@@ -16,6 +16,7 @@
   import { pinned } from './pinned.svelte'
   import { player, formatTime } from './player.svelte'
   import { tintFrom } from './tint'
+  import { trackMenu } from './contextMenu.svelte'
   import type { Rgb } from './nowCover.svelte'
 
   let { albumId, onBack }: { albumId: number; onBack: () => void } = $props()
@@ -114,7 +115,11 @@
     </div>
     <ol class="divide-y divide-zinc-100 dark:divide-zinc-800/70">
       {#each data.tracks as track, i (track.id)}
-        <li class="group flex items-center gap-1">
+        <li
+          class="group flex items-center gap-1"
+          oncontextmenu={(e) =>
+            trackMenu.fromEvent(e, track, { onPlay: () => void library.playAlbum(albumId, i) })}
+        >
           <button
             class={[
               'flex h-10 min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm',
@@ -141,7 +146,13 @@
           <span class="flex items-center gap-1">
             <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
             <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-              <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+              <AddToPlaylist
+                trackIds={[track.id]}
+                {track}
+                editTags
+                onPlay={() => void library.playAlbum(albumId, i)}
+                label={t('More actions for “{title}”', { title: track.title })}
+              />
             </span>
           </span>
         </li>

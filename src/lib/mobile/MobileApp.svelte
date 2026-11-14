@@ -94,21 +94,24 @@
   const openQueue = () => open(() => (queueOpen = true), () => (queueOpen = false))
   const openLyrics = () => open(() => (lyricsOpen = true), () => (lyricsOpen = false))
 
-  $effect(() => {
-    artists.registerNavigator((name) => {
-      const overlayCount = Number(playerOpen) + Number(queueOpen) + Number(lyricsOpen)
-      if (overlayCount === 0) {
-        openArtist(name)
-        return
-      }
-      lyricsOpen = false
-      queueOpen = false
-      playerOpen = false
-      sheets = [...sheets, { type: 'artist', name }]
-      replaceTopLayers(overlayCount, () => {
-        sheets = sheets.slice(0, -1)
-      })
+  function navigateFromOverlays(sheet: Sheet) {
+    const overlayCount = Number(playerOpen) + Number(queueOpen) + Number(lyricsOpen)
+    if (overlayCount === 0) {
+      pushSheet(sheet)
+      return
+    }
+    lyricsOpen = false
+    queueOpen = false
+    playerOpen = false
+    sheets = [...sheets, sheet]
+    replaceTopLayers(overlayCount, () => {
+      sheets = sheets.slice(0, -1)
     })
+  }
+
+  $effect(() => {
+    artists.registerNavigator((name) => navigateFromOverlays({ type: 'artist', name }))
+    library.registerAlbumNavigator((id) => navigateFromOverlays({ type: 'album', id }))
   })
 
   // A deleted playlist closes its page when it is on top.
@@ -131,6 +134,7 @@
   onMount(() => {
     lyrics.setOpen(false) // the desktop side panel state is not a phone screen
     home.init().catch((e) => (player.error = String(e)))
+    void artists.initScan()
     void applyInsets()
     window.addEventListener('resize', applyInsets)
     return () => window.removeEventListener('resize', applyInsets)

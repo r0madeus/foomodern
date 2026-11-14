@@ -16,12 +16,12 @@
     { value: 'title', label: 'Title' },
     { value: 'album', label: 'Album' },
     { value: 'added', label: 'Recent' },
+    { value: 'duration', label: 'Duration' },
   ]
 
-  let sort = $state<Sort>(library.sort)
   const rows = $derived.by(() => {
     void library.stats.version
-    return new PagedRows(library.tracksPage(sort, ''))
+    return new PagedRows(library.tracksPage(library.sort, '', library.sortDir))
   })
   $effect(() => {
     const current = rows
@@ -29,11 +29,6 @@
     return () => current.dispose()
   })
   const total = $derived(rows.total ?? library.stats.tracks)
-
-  function setSort(next: Sort) {
-    sort = next
-    library.sort = next
-  }
 
   async function shuffleAll() {
     if (total === 0) return
@@ -63,15 +58,15 @@
         <button
           class={[
             'shrink-0 rounded-full px-3.5 py-1.5 text-[13px]',
-            sort === s.value ? 'bg-teal-500 font-medium text-zinc-950' : 'bg-zinc-800 text-zinc-100',
+            library.sort === s.value ? 'bg-teal-500 font-medium text-zinc-950' : 'bg-zinc-800 text-zinc-100',
           ]}
-          onclick={() => setSort(s.value)}
+          onclick={() => library.toggleColumnSort(s.value)}
         >
-          {t(s.label)}
+          {t(s.label)}{library.sort === s.value ? (library.sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
         </button>
       {/each}
     </div>
-    {#key sort}
+    {#key `${library.sort}\0${library.sortDir}`}
       <VirtualList class="min-h-0 flex-1 pb-[var(--mobile-bar-clear,5rem)]" count={total} rowHeight={ROW} onRangeChange={(s, e) => rows.ensureRange(s, e)}>
         {#snippet row(i)}
           {@const track = rows.get(i)}
@@ -82,6 +77,7 @@
               path={track.path}
               cover={track.cover}
               trackId={track.id}
+              {track}
               onPlay={() => library.playAll(i)}
             />
           {:else}

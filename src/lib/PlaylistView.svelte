@@ -8,6 +8,7 @@
   import Equalizer from './Equalizer.svelte'
   import TintedBackdrop from './TintedBackdrop.svelte'
   import PlaylistCover from './PlaylistCover.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import PlaylistCoverModal from './PlaylistCoverModal.svelte'
   import AddToPlaylist from './AddToPlaylist.svelte'
@@ -18,6 +19,7 @@
   import { pinned } from './pinned.svelte'
   import { playlists } from './playlists.svelte'
   import { player, formatTime } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
   import {
     fallbackPalette,
     heroImageForPlaylist,
@@ -52,7 +54,46 @@
     return () => (stale = true)
   })
 
-  const visible = $derived(loadedId === id ? tracks : [])
+  type PlSortCol = 'added' | 'title' | 'artist' | 'album' | 'duration'
+  let sortCol = $state<PlSortCol>('added')
+  let sortDir = $state<'asc' | 'desc'>('asc')
+
+  function toggleSort(col: PlSortCol) {
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc'
+      return
+    }
+    sortCol = col
+    sortDir = 'asc'
+  }
+
+  const rawTracks = $derived(loadedId === id ? tracks : [])
+  const isNaturalOrder = $derived(sortCol === 'added' && sortDir === 'asc')
+  const visible = $derived.by(() => {
+    const entries = rawTracks.map((track, origIndex) => ({ track, origIndex }))
+    if (isNaturalOrder) return entries
+    const mult = sortDir === 'asc' ? 1 : -1
+    return [...entries].sort((a, b) => {
+      switch (sortCol) {
+        case 'added':
+          return (a.origIndex - b.origIndex) * mult
+        case 'title':
+          return a.track.title.localeCompare(b.track.title) * mult || a.origIndex - b.origIndex
+        case 'artist':
+          return a.track.artist.localeCompare(b.track.artist) * mult || a.origIndex - b.origIndex
+        case 'album':
+          return a.track.album.localeCompare(b.track.album) * mult || a.origIndex - b.origIndex
+        case 'duration': {
+          const da = a.track.durationMs
+          const db = b.track.durationMs
+          if (da === null && db === null) return a.origIndex - b.origIndex
+          if (da === null) return 1
+          if (db === null) return -1
+          return (da - db) * mult || a.origIndex - b.origIndex
+        }
+      }
+    })
+  })
   const currentPath = $derived(player.snapshot.current?.path ?? null)
 
   let renaming = $state(false)
@@ -98,6 +139,8 @@
     renaming = false
     confirmingDelete = false
     editingCover = false
+    sortCol = 'added'
+    sortDir = 'asc'
   })
 
   async function startRename() {
@@ -129,16 +172,16 @@
       ?.focus()
   }
 
-  function onRowKey(e: KeyboardEvent, i: number) {
+  function onRowKey(e: KeyboardEvent, i: number, origIndex: number) {
     if (e.target !== e.currentTarget) return
-    if (e.key === 'Enter') void playlists.play(id, i)
-    else if (e.altKey && e.key === 'ArrowUp') {
+    if (e.key === 'Enter') void playlists.play(id, origIndex)
+    else if (isNaturalOrder && e.altKey && e.key === 'ArrowUp') {
       e.preventDefault()
       void moveRow(i, i - 1, 'up')
-    } else if (e.altKey && e.key === 'ArrowDown') {
+    } else if (isNaturalOrder && e.altKey && e.key === 'ArrowDown') {
       e.preventDefault()
       void moveRow(i, i + 1, 'down')
-    } else if (e.key === 'Delete') void playlists.removeAt(id, [i])
+    } else if (e.key === 'Delete') void playlists.removeAt(id, [origIndex])
   }
 
   const btn =
@@ -273,7 +316,35 @@
     </div>
 
     <div class={[COLS, 'border-b border-zinc-200 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800']}>
-      <span class="text-right">#</span><span>{t("Title")}</span><span>{t("Artist")}</span><span>{t("Album")}</span><span class="text-right">{t("Time")}</span><span></span>
+      {#each [
+        { col: 'added' as PlSortCol, label: '#', align: 'justify-end text-right' },
+        { col: 'title' as PlSortCol, label: t('Title'), align: 'justify-start text-left' },
+        { col: 'artist' as PlSortCol, label: t('Artist'), align: 'justify-start text-left' },
+        { col: 'album' as PlSortCol, label: t('Album'), align: 'justify-start text-left' },
+        { col: 'duration' as PlSortCol, label: t('Time'), align: 'justify-end text-right' },
+      ] as h (h.col)}
+        {@const active = sortCol === h.col}
+        <button
+          type="button"
+          class={[
+            'flex items-center gap-1 uppercase transition-colors outline-none focus-visible:text-teal-500',
+            h.align,
+            active
+              ? 'font-semibold text-teal-600 dark:text-teal-400'
+              : 'hover:text-zinc-700 dark:hover:text-zinc-200',
+          ]}
+          aria-pressed={active}
+          onclick={() => toggleSort(h.col)}
+        >
+          <span>{h.label}</span>
+          {#if active}
+            <span aria-hidden="true" class="text-[10px] leading-none">
+              {sortDir === 'asc' ? '▲' : '▼'}
+            </span>
+          {/if}
+        </button>
+      {/each}
+      <span></span>
     </div>
 
     {#if info.trackCount === 0}
@@ -283,8 +354,10 @@
     {:else}
       <VirtualList class="min-h-0 flex-1" count={visible.length} rowHeight={ROW}>
         {#snippet row(i)}
-          {@const track = visible[i]}
-          {#if track}
+          {@const entry = visible[i]}
+          {#if entry}
+            {@const track = entry.track}
+            {@const orig = entry.origIndex}
             <div
               role="button"
               tabindex="0"
@@ -297,32 +370,46 @@
                   ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                   : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
               ]}
-              ondblclick={() => playlists.play(id, i)}
-              onkeydown={(e) => onRowKey(e, i)}
+              ondblclick={() => playlists.play(id, orig)}
+              oncontextmenu={(e) =>
+                trackMenu.fromEvent(e, track, {
+                  onPlay: () => void playlists.play(id, orig),
+                  onRemoveFromPlaylist: () => void playlists.removeAt(id, [orig]),
+                })}
+              onkeydown={(e) => onRowKey(e, i, orig)}
             >
               <span class="text-right text-xs tabular-nums text-zinc-400">
                 {#if track.path === currentPath && player.snapshot.status === 'playing'}
                   <Equalizer class="text-teal-600 dark:text-teal-400" />
-                {:else}{i + 1}{/if}
+                {:else}{orig + 1}{/if}
               </span>
               <span class="flex min-w-0 items-center gap-3">
                 <Cover cover={track.cover} title={track.title} class="size-9 shrink-0 rounded text-[10px]" />
                 <span class="truncate font-medium">{track.title}</span><ExtBadge path={track.path} />
               </span>
               <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
-              <span class="truncate text-zinc-500">{track.album}</span>
+              <span class="truncate text-zinc-500">
+                <AlbumLink album={track.album} albumId={track.albumId} />
+              </span>
               <span class="text-right text-xs tabular-nums text-zinc-500">
                 {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
               </span>
               <span class="flex items-center justify-end gap-0.5">
                 <FavoriteButton trackId={track.id} title={track.title} revealOnHover />
                 <span class="flex justify-end opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
-                  <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+                  <AddToPlaylist
+                    trackIds={[track.id]}
+                    {track}
+                    editTags
+                    onPlay={() => void playlists.play(id, orig)}
+                    onRemoveFromPlaylist={() => void playlists.removeAt(id, [orig])}
+                    label={t('More actions for “{title}”', { title: track.title })}
+                  />
                 <button
                   type="button"
                   data-action="up"
                   class={btn}
-                  disabled={i === 0}
+                  disabled={!isNaturalOrder || i === 0}
                   aria-label={t('Move “{title}” up', { title: track.title })}
                   onclick={() => moveRow(i, i - 1, 'up')}
                   ondblclick={(e) => e.stopPropagation()}
@@ -334,7 +421,7 @@
                   type="button"
                   data-action="down"
                   class={btn}
-                  disabled={i === visible.length - 1}
+                  disabled={!isNaturalOrder || i === visible.length - 1}
                   aria-label={t('Move “{title}” down', { title: track.title })}
                   onclick={() => moveRow(i, i + 1, 'down')}
                   ondblclick={(e) => e.stopPropagation()}
@@ -346,7 +433,7 @@
                   type="button"
                   class={btn}
                   aria-label={t('Remove “{title}” from playlist', { title: track.title })}
-                  onclick={() => playlists.removeAt(id, [i])}
+                  onclick={() => playlists.removeAt(id, [orig])}
                   ondblclick={(e) => e.stopPropagation()}
                   onkeydown={(e) => e.stopPropagation()}
                 >

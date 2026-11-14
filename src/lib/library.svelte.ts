@@ -6,10 +6,16 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { appSettings } from './appSettings.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
 
-export type Sort = 'artist' | 'title' | 'album' | 'added'
+export type Sort = 'artist' | 'title' | 'album' | 'added' | 'duration'
+export type SortDir = 'asc' | 'desc'
 
 const SORT_KEY = 'foomodern.library.sort'
-const SORTS: Sort[] = ['artist', 'title', 'album', 'added']
+const SORT_DIR_KEY = 'foomodern.library.sortDir'
+const SORTS: Sort[] = ['artist', 'title', 'album', 'added', 'duration']
+
+export function defaultSortDir(sort: Sort): SortDir {
+  return sort === 'added' ? 'desc' : 'asc'
+}
 
 function loadSort(): Sort {
   try {
@@ -19,6 +25,16 @@ function loadSort(): Sort {
     // storage unavailable: fall through
   }
   return 'artist'
+}
+
+function loadSortDir(sort: Sort): SortDir {
+  try {
+    const v = localStorage.getItem(SORT_DIR_KEY)
+    if (v === 'asc' || v === 'desc') return v
+  } catch {
+    // storage unavailable: fall through
+  }
+  return defaultSortDir(sort)
 }
 
 export interface FolderInfo {
@@ -133,6 +149,8 @@ class LibraryStore {
   folders = $state<FolderInfo[]>([])
   scan = $state<{ folder: string; scanned: number } | null>(null)
   #sort = $state<Sort>(loadSort())
+  #sortDir = $state<SortDir>(loadSortDir(this.#sort))
+  #albumNavigator: ((albumId: number) => void) | null = null
   query = $state('')
   debouncedQuery = $state('')
 
@@ -146,6 +164,45 @@ class LibraryStore {
       localStorage.setItem(SORT_KEY, next)
     } catch {
       // ignore
+    }
+    this.sortDir = defaultSortDir(next)
+  }
+
+  get sortDir(): SortDir {
+    return this.#sortDir
+  }
+
+  set sortDir(next: SortDir) {
+    this.#sortDir = next
+    try {
+      localStorage.setItem(SORT_DIR_KEY, next)
+    } catch {
+      // ignore
+    }
+  }
+
+  toggleColumnSort(column: Sort): void {
+    if (this.#sort === column) {
+      this.sortDir = this.#sortDir === 'asc' ? 'desc' : 'asc'
+      return
+    }
+    this.sort = column
+  }
+
+  registerAlbumNavigator(fn: (albumId: number) => void): void {
+    this.#albumNavigator = fn
+  }
+
+  openAlbum(albumId: number | null | undefined): void {
+    if (albumId === null || albumId === undefined) return
+    this.#albumNavigator?.(albumId)
+  }
+
+  async trackByPath(path: string): Promise<TrackRow | null> {
+    try {
+      return await invoke<TrackRow | null>('library_track_by_path', { path })
+    } catch {
+      return null
     }
   }
 
@@ -228,6 +285,7 @@ class LibraryStore {
     const query = this.debouncedQuery
     await this.#play('library_play_all', {
       sort: this.sort,
+      dir: this.sortDir,
       startIndex,
       query: query === '' ? null : query,
     })
@@ -236,18 +294,22 @@ class LibraryStore {
   async playQuery(query: string, startIndex: number): Promise<void> {
     await this.#play('library_play_all', {
       sort: this.sort,
+      dir: this.sortDir,
       startIndex,
       query: query === '' ? null : query,
     })
   }
 
-  tracksPage = (sort: Sort, query: string) => (offset: number, limit: number) =>
-    invoke<Page<TrackRow>>('library_tracks_page', {
-      offset,
-      limit,
-      sort,
-      query: query === '' ? null : query,
-    })
+  tracksPage =
+    (sort: Sort, query: string, dir: SortDir = defaultSortDir(sort)) =>
+    (offset: number, limit: number) =>
+      invoke<Page<TrackRow>>('library_tracks_page', {
+        offset,
+        limit,
+        sort,
+        dir,
+        query: query === '' ? null : query,
+      })
 
   albumsPage = (query: string) => (offset: number, limit: number) =>
     invoke<Page<AlbumRow>>('library_albums_page', {

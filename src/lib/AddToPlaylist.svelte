@@ -2,16 +2,21 @@
   import { count, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
+  import type { TrackRow } from './library.svelte'
   import { playlists, type PlaylistInfo } from './playlists.svelte'
   import { tagEditor } from './tags.svelte'
+  import { trackMenu, type TrackMenuOptions } from './contextMenu.svelte'
 
   // A button that opens a menu of playlists. Give it `trackIds` (library
-  // track ids) or an `albumId`. The menu is moved to <body> and positioned
-  // with fixed coordinates because it is used inside scrolling, transformed
-  // virtual lists that would clip it.
+  // track ids) or an `albumId`. When `track` is supplied on an inline icon
+  // button, it delegates to the unified Spotify-style `TrackMenu`.
   let {
     trackIds = [],
     albumId = null,
+    track = null,
+    onPlay,
+    onRemoveFromPlaylist,
+    onRemoveFromQueue,
     label = 'Add to playlist',
     text = false,
     editTags = false,
@@ -19,6 +24,10 @@
   }: {
     trackIds?: number[]
     albumId?: number | null
+    track?: TrackRow | null
+    onPlay?: TrackMenuOptions['onPlay']
+    onRemoveFromPlaylist?: TrackMenuOptions['onRemoveFromPlaylist']
+    onRemoveFromQueue?: TrackMenuOptions['onRemoveFromQueue']
     label?: string
     /** Show the label next to the icon (header buttons). */
     text?: boolean
@@ -151,6 +160,10 @@
   aria-expanded={open}
   onclick={(e) => {
     stop(e)
+    if (!text && track) {
+      trackMenu.fromButton(trigger, track, { onPlay, onRemoveFromPlaylist, onRemoveFromQueue })
+      return
+    }
     if (open) close()
     else void show()
   }}

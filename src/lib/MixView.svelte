@@ -1,5 +1,6 @@
 <script lang="ts">
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import Equalizer from './Equalizer.svelte'
@@ -17,6 +18,7 @@
     type HomeMixDetail,
   } from './home.svelte'
   import { formatTime, player } from './player.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   let {
     id,
@@ -187,6 +189,8 @@
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
             ondblclick={() => void home.playMix(detail!.mix.id, i)}
+            oncontextmenu={(e) =>
+              trackMenu.fromEvent(e, track, { onPlay: () => void home.playMix(detail!.mix.id, i) })}
             onkeydown={(e) => e.key === 'Enter' && void home.playMix(detail!.mix.id, i)}
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -207,17 +211,7 @@
             </span>
             <span class="truncate text-zinc-500"><ArtistLinks artist={track.artist} /></span>
             <span class="min-w-0 truncate text-zinc-500">
-              {#if track.albumId !== null}
-                <button
-                  type="button"
-                  class="max-w-full truncate text-left hover:underline"
-                  onclick={() => onOpenAlbum(track.albumId!)}
-                >
-                  {track.album}
-                </button>
-              {:else}
-                {track.album}
-              {/if}
+              <AlbumLink album={track.album} albumId={track.albumId} onNavigate={onOpenAlbum} />
             </span>
             <span class="text-right text-xs tabular-nums text-zinc-500">
               {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
@@ -227,7 +221,9 @@
               <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                 <AddToPlaylist
                   trackIds={[track.id]}
+                  {track}
                   editTags
+                  onPlay={() => void home.playMix(detail!.mix.id, i)}
                   label={t('More actions for “{title}”', { title: track.title })}
                 />
               </span>

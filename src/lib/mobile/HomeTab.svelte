@@ -260,6 +260,7 @@
               path={item.track.path}
               cover={item.track.cover}
               trackId={item.track.id}
+              track={item.track}
               onPlay={() => void player.openFiles([item.track.path])}
             />
           {/each}
@@ -286,6 +287,7 @@
               path={track.path}
               cover={track.cover}
               trackId={track.id}
+              {track}
               onPlay={() => void favorites.play(i)}
             />
           {/each}

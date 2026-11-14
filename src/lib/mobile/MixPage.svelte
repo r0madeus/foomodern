@@ -118,6 +118,7 @@
           path={track.path}
           cover={track.cover}
           trackId={track.id}
+          {track}
           onPlay={() => void home.playMix(detail!.mix.id, i)}
         />
       {/each}

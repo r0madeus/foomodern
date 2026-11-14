@@ -1,5 +1,6 @@
 <script lang="ts">
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import ArtistLinks from './ArtistLinks.svelte'
   import Cover from './Cover.svelte'
   import EmptyLibrary from './EmptyLibrary.svelte'
@@ -15,6 +16,7 @@
   import { pinned } from './pinned.svelte'
   import { formatTime, player } from './player.svelte'
   import { playlists } from './playlists.svelte'
+  import { trackMenu } from './contextMenu.svelte'
 
   let {
     onOpenAlbum,
@@ -340,11 +342,19 @@
               <div class="flex flex-col divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
                 {#each feed.recentlyPlayedTracks as item (item.track.id)}
                   {@const track = item.track}
-                  <div class="group flex items-center gap-3 py-2">
-                    <button
-                      type="button"
-                      class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  <div
+                    role="group"
+                    aria-label={track.title}
+                    class="group flex items-center gap-3 py-2"
+                    oncontextmenu={(e) =>
+                      trackMenu.fromEvent(e, track, { onPlay: () => void player.openFiles([track.path]) })}
+                  >
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                       onclick={() => void player.openFiles([track.path])}
+                      onkeydown={(e) => e.key === 'Enter' && void player.openFiles([track.path])}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">
@@ -355,15 +365,21 @@
                           <span class="truncate">{track.title}</span>
                         </span>
                         <span class="block truncate text-xs text-zinc-500">
-                          <ArtistLinks artist={track.artist} />
+                          <ArtistLinks artist={track.artist} />{#if track.album} · <AlbumLink album={track.album} albumId={track.albumId} />{/if}
                         </span>
                       </span>
-                    </button>
+                    </div>
                     <span class="hidden text-xs tabular-nums text-zinc-400 sm:inline">
                       {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
                     </span>
                     <FavoriteButton trackId={track.id} title={track.title} />
-                    <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+                    <AddToPlaylist
+                      trackIds={[track.id]}
+                      {track}
+                      editTags
+                      onPlay={() => void player.openFiles([track.path])}
+                      label={t('More actions for “{title}”', { title: track.title })}
+                    />
                   </div>
                 {/each}
               </div>
@@ -386,11 +402,19 @@
               </div>
               <div class="flex flex-col divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
                 {#each feed.favoriteTracks as track, i (track.id)}
-                  <div class="group flex items-center gap-3 py-2">
-                    <button
-                      type="button"
-                      class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  <div
+                    role="group"
+                    aria-label={track.title}
+                    class="group flex items-center gap-3 py-2"
+                    oncontextmenu={(e) =>
+                      trackMenu.fromEvent(e, track, { onPlay: () => void favorites.play(i) })}
+                  >
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                       onclick={() => void favorites.play(i)}
+                      onkeydown={(e) => e.key === 'Enter' && void favorites.play(i)}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">
@@ -401,15 +425,21 @@
                           <span class="truncate">{track.title}</span>
                         </span>
                         <span class="block truncate text-xs text-zinc-500">
-                          <ArtistLinks artist={track.artist} />
+                          <ArtistLinks artist={track.artist} />{#if track.album} · <AlbumLink album={track.album} albumId={track.albumId} />{/if}
                         </span>
                       </span>
-                    </button>
+                    </div>
                     <span class="hidden text-xs tabular-nums text-zinc-400 sm:inline">
                       {formatTime(track.durationMs === null ? null : track.durationMs / 1000)}
                     </span>
                     <FavoriteButton trackId={track.id} title={track.title} />
-                    <AddToPlaylist trackIds={[track.id]} editTags label={t('More actions for “{title}”', { title: track.title })} />
+                    <AddToPlaylist
+                      trackIds={[track.id]}
+                      {track}
+                      editTags
+                      onPlay={() => void favorites.play(i)}
+                      label={t('More actions for “{title}”', { title: track.title })}
+                    />
                   </div>
                 {/each}
               </div>

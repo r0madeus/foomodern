@@ -92,6 +92,7 @@ class PlayerStore {
   }
   openFiles = (paths: string[]) => this.#run('queue_replace', { paths, startIndex: 0 })
   appendFiles = (paths: string[]) => this.#run('queue_append', { paths })
+  playNext = (path: string) => this.#run('queue_play_next', { path })
   playIndex = (index: number) => this.#run('player_play_index', { index })
   removeIndex = (index: number) => this.#run('queue_remove', { index })
   togglePause = () => this.#run('player_toggle_pause')

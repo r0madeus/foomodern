@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type { AlbumRow, Page, TrackRow } from './library.svelte'
 import type { OnlineAlbum } from './online.svelte'
 import { player, type PlayerSnapshot } from './player.svelte'
@@ -41,10 +42,32 @@ export interface ArtistOnlineInfo {
   albums: OnlineAlbum[]
 }
 
+export interface ArtistScanProgress {
+  scanning: boolean
+  done: number
+  total: number
+  updated: number
+  currentArtist: string | null
+  cancelled: boolean
+  error: string | null
+}
+
 export { splitArtistNames } from './artistNames'
+
+const EMPTY_SCAN: ArtistScanProgress = {
+  scanning: false,
+  done: 0,
+  total: 0,
+  updated: 0,
+  currentArtist: null,
+  cancelled: false,
+  error: null,
+}
 
 class ArtistStore {
   #navigator: ((name: string) => void) | null = null
+  #scanInited = false
+  scan = $state<ArtistScanProgress>({ ...EMPTY_SCAN })
 
   registerNavigator(fn: (name: string) => void) {
     this.#navigator = fn
@@ -54,6 +77,35 @@ class ArtistStore {
     const clean = name.trim()
     if (!clean) return
     this.#navigator?.(clean)
+  }
+
+  async initScan(): Promise<void> {
+    if (this.#scanInited) return
+    this.#scanInited = true
+    try {
+      await listen<ArtistScanProgress>('artist://scan', (e) => {
+        this.scan = e.payload
+      })
+      this.scan = await invoke<ArtistScanProgress>('artist_enrich_status')
+    } catch {
+      // ignore if invoked before backend ready
+    }
+  }
+
+  async refreshAll(force: boolean, lang: string): Promise<void> {
+    try {
+      this.scan = await invoke<ArtistScanProgress>('artist_enrich_all', { force, lang })
+    } catch (e) {
+      this.scan = { ...this.scan, scanning: false, error: String(e) }
+    }
+  }
+
+  async cancelScan(): Promise<void> {
+    try {
+      await invoke('artist_enrich_cancel')
+    } catch {
+      // ignore
+    }
   }
 
   page = (query: string) => (offset: number, limit: number) =>

@@ -39,6 +39,7 @@
   import { updates } from './lib/updates.svelte'
   import { nowCover } from './lib/nowCover.svelte'
   import SidebarDownloads from './lib/SidebarDownloads.svelte'
+  import TrackMenu from './lib/TrackMenu.svelte'
 
   const AUDIO_EXTENSIONS = [
     'mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'm4b', 'aac', 'wav', 'wv', 'ape',
@@ -203,6 +204,8 @@
 
   onMount(() => {
     artists.registerNavigator(openArtist)
+    library.registerAlbumNavigator(openAlbum)
+    void artists.initScan()
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
     playlists.init().catch((e) => (player.error = String(e)))
@@ -649,3 +652,4 @@
 
 <TagEditor />
 <MetadataMatchModal />
+<TrackMenu />

@@ -116,6 +116,7 @@
               path={track.path}
               cover={track.cover}
               trackId={track.id}
+              {track}
               onPlay={() => library.playAll(i)}
             />
           {/if}

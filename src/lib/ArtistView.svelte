@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import AddToPlaylist from './AddToPlaylist.svelte'
+  import AlbumLink from './AlbumLink.svelte'
   import Cover from './Cover.svelte'
   import Equalizer from './Equalizer.svelte'
   import ExtBadge from './ExtBadge.svelte'
@@ -16,6 +17,7 @@
   import { online, type OnlineAlbum } from './online.svelte'
   import { formatTime, player } from './player.svelte'
   import { tintFrom } from './tint'
+  import { trackMenu } from './contextMenu.svelte'
 
   let {
     name,
@@ -223,6 +225,10 @@
                           : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
                       ]}
                       ondblclick={() => void artists.play(profile!.name, idx)}
+                      oncontextmenu={(e) =>
+                        trackMenu.fromEvent(e, tr, {
+                          onPlay: () => void artists.play(profile!.name, idx),
+                        })}
                       onkeydown={(e) => e.key === 'Enter' && void artists.play(profile!.name, idx)}
                     >
                       <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -239,7 +245,9 @@
                           <ExtBadge path={tr.path} />
                         </span>
                         {#if tr.album}
-                          <span class="block truncate text-xs text-zinc-500">{tr.album}</span>
+                          <span class="block truncate text-xs text-zinc-500">
+                            <AlbumLink album={tr.album} albumId={tr.albumId} />
+                          </span>
                         {/if}
                       </span>
                       <span class="text-xs tabular-nums text-zinc-400">
@@ -252,7 +260,9 @@
                         <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                           <AddToPlaylist
                             trackIds={[tr.id]}
+                            track={tr}
                             editTags
+                            onPlay={() => void artists.play(profile!.name, idx)}
                             label={t('More actions for “{title}”', { title: tr.title })}
                           />
                         </span>
@@ -351,6 +361,10 @@
                       : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
                   ]}
                   ondblclick={() => void artists.play(profile!.name, i)}
+                  oncontextmenu={(e) =>
+                    trackMenu.fromEvent(e, tr, {
+                      onPlay: () => void artists.play(profile!.name, i),
+                    })}
                   onkeydown={(e) => e.key === 'Enter' && void artists.play(profile!.name, i)}
                 >
                   <span class="text-right text-xs tabular-nums text-zinc-400">
@@ -364,13 +378,17 @@
                     <span class="truncate">{tr.title}</span>
                     <ExtBadge path={tr.path} />
                   </span>
-                  <span class="truncate text-xs text-zinc-500">{tr.album || '—'}</span>
+                  <span class="truncate text-xs text-zinc-500">
+                    <AlbumLink album={tr.album} albumId={tr.albumId} />
+                  </span>
                   <span class="flex items-center justify-end gap-0.5">
                     <FavoriteButton trackId={tr.id} title={tr.title} revealOnHover />
                     <span class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                       <AddToPlaylist
                         trackIds={[tr.id]}
+                        track={tr}
                         editTags
+                        onPlay={() => void artists.play(profile!.name, i)}
                         label={t('More actions for “{title}”', { title: tr.title })}
                       />
                     </span>

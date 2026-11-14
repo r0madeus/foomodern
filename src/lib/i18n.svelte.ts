@@ -570,4 +570,28 @@ const TR: Record<string, string> = {
   'WASAPI exclusive mode': 'WASAPI özel (exclusive) modu',
   'Bypasses the Windows mixer for direct output at each track’s native format. Other apps cannot play sound while active.':
     'Windows ses karıştırıcısını atlayıp parçanın doğal biçimini doğrudan ses cihazına verir. Etkin olduğunda diğer uygulamalar ses çalamaz.',
+
+  // Sort, context menu & bulk artist enrichment
+  Duration: 'Süre',
+  'Play next': 'Sıradaki olarak çal',
+  'Queued to play next': 'Sıradaki şarkı olarak eklendi',
+  'Added to queue': 'Sıraya eklendi',
+  'Add to favorites': 'Favorilere ekle',
+  'Remove from favorites': 'Favorilerden kaldır',
+  'Remove from playlist': 'Çalma listesinden çıkar',
+  'Go to artist': 'Sanatçıya git',
+  'Go to album': 'Albüme git',
+  'Show in folder': 'Klasörde göster',
+  'Copy song info': 'Şarkı bilgisini kopyala',
+  'Copied to clipboard': 'Panoya kopyalandı',
+  'Artist profiles': 'Sanatçı profilleri',
+  'Download artist photos and biographies from Deezer and Wikipedia for artists in your library.':
+    'Kütüphanendeki sanatçılar için Deezer ve Wikipedia’dan fotoğraf ve biyografi indirir.',
+  'Refresh missing': 'Eksikleri tamamla',
+  'Rescan all': 'Tümünü yeniden tara',
+  'All artist profiles are up to date.': 'Tüm sanatçı profilleri güncel.',
+  'Updated {updated} of {total} artists.': '{total} sanatçıdan {updated} tanesi güncellendi.',
+  'Artist scan cancelled ({done}/{total}).': 'Sanatçı taraması iptal edildi ({done}/{total}).',
+  'Turn on “Artist profiles & albums” above to fetch artist info online.':
+    'Çevrimiçi sanatçı bilgisi indirmek için yukarıdaki “Sanatçı profilleri ve albümleri” ayarını aç.',
 }
