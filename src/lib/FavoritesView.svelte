@@ -100,7 +100,7 @@
             ondblclick={() => void favorites.play(i)}
             oncontextmenu={(e) =>
               trackMenu.fromEvent(e, track, { onPlay: () => void favorites.play(i) })}
-            onkeydown={(e) => e.key === 'Enter' && void favorites.play(i)}
+            onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void favorites.play(i)}
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}

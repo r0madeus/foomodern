@@ -68,6 +68,8 @@ class HomeStore {
   error = $state<string | null>(null)
   version = $state(0)
   #initialized = false
+  #inFlight: Promise<void> | null = null
+  #queued = false
 
   async init(): Promise<void> {
     if (this.#initialized) return
@@ -81,7 +83,26 @@ class HomeStore {
     await this.refresh()
   }
 
-  async refresh(): Promise<void> {
+  // Bursts of change events are coalesced: one query in flight, and at most
+  // one more queued to run after it.
+  refresh(): Promise<void> {
+    if (this.#inFlight) {
+      this.#queued = true
+      return this.#inFlight
+    }
+    const run = async () => {
+      do {
+        this.#queued = false
+        await this.#load()
+      } while (this.#queued)
+    }
+    this.#inFlight = run().finally(() => {
+      this.#inFlight = null
+    })
+    return this.#inFlight
+  }
+
+  async #load(): Promise<void> {
     this.loading = true
     try {
       this.feed = await invoke<HomeFeed>('library_home')
@@ -98,13 +119,16 @@ class HomeStore {
     return invoke<HomeMixDetail | null>('library_home_mix', { mixId })
   }
 
-  async playMix(mixId: string, startIndex = 0, shuffle?: boolean): Promise<void> {
+  /** `startPath` is the clicked track's path, or null to play from the start. Returns false on failure. */
+  async playMix(mixId: string, startPath: string | null = null, shuffle?: boolean): Promise<boolean> {
     try {
       if (shuffle !== undefined) await player.setShuffle(shuffle)
-      const snap = await invoke<PlayerSnapshot>('library_play_mix', { mixId, startIndex })
+      const snap = await invoke<PlayerSnapshot>('library_play_mix', { mixId, startPath })
       player.applySnapshot(snap)
+      return true
     } catch (e) {
       player.error = String(e)
+      return false
     }
   }
 

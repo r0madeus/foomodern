@@ -251,7 +251,7 @@
                         ]}
                         onclick={() => void library.playQuery(debouncedLocalQuery, i)}
                         onkeydown={(e) =>
-                          e.key === 'Enter' && void library.playQuery(debouncedLocalQuery, i)}
+                          e.target === e.currentTarget && e.key === 'Enter' && void library.playQuery(debouncedLocalQuery, i)}
                       >
                         <Cover
                           cover={track.cover}

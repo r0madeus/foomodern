@@ -13,10 +13,12 @@ class NowCover {
   async update(path: string | null): Promise<void> {
     if (path === this.path) return
     this.path = path
+    // Drop the previous song's row right away so nothing links to its album.
+    // The old cover stays until the new one arrives, to avoid a blank flash.
+    this.track = null
     if (path === null) {
       this.cover = null
       this.color = null
-      this.track = null
       return
     }
     const [coverRes, trackRes] = await Promise.allSettled([

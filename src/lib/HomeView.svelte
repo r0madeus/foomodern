@@ -19,23 +19,20 @@
   import { trackMenu } from './contextMenu.svelte'
 
   let {
+    selectedMixId,
+    onSelectMix,
     onOpenAlbum,
     onOpenPlaylist,
     onOpenFavorites,
     onOpenStats,
   }: {
+    selectedMixId: string | null
+    onSelectMix: (mixId: string | null) => void
     onOpenAlbum: (albumId: number) => void
     onOpenPlaylist: (playlistId: number) => void
     onOpenFavorites: () => void
     onOpenStats: () => void
   } = $props()
-
-  let selectedMixId = $state<string | null>(null)
-
-  $effect(() => {
-    void player.snapshot.current?.path
-    void home.refresh()
-  })
 
   interface QuickTile {
     key: string
@@ -83,7 +80,9 @@
       })
       if (tiles.length >= 7) return tiles
     }
-    for (const a of feed?.recentlyPlayedAlbums ?? feed?.recentlyAddedAlbums ?? []) {
+    for (const a of feed?.recentlyPlayedAlbums.length
+        ? feed.recentlyPlayedAlbums
+        : (feed?.recentlyAddedAlbums ?? [])) {
       const key = `album:${a.id}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -123,7 +122,7 @@
 {#if selectedMixId !== null}
   <MixView
     id={selectedMixId}
-    onBack={() => (selectedMixId = null)}
+    onBack={() => onSelectMix(null)}
     {onOpenAlbum}
     onSavedPlaylist={onOpenPlaylist}
   />
@@ -257,7 +256,7 @@
                 <button
                   type="button"
                   class="block w-full text-left"
-                  onclick={() => (selectedMixId = mix.id)}
+                  onclick={() => onSelectMix(mix.id)}
                 >
                   <PlaylistCover
                     cover={null}
@@ -277,7 +276,7 @@
                   type="button"
                   aria-label={t('Play')}
                   class="absolute right-5 bottom-[4.75rem] flex size-10 items-center justify-center rounded-full bg-teal-500 text-zinc-950 opacity-0 shadow-lg transition group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 translate-y-1 hover:scale-105 hover:bg-teal-400"
-                  onclick={() => void home.playMix(mix.id, 0)}
+                  onclick={() => void home.playMix(mix.id)}
                 >
                   <Icon name="play" class="size-5" />
                 </button>
@@ -354,7 +353,7 @@
                       tabindex="0"
                       class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                       onclick={() => void player.openFiles([track.path])}
-                      onkeydown={(e) => e.key === 'Enter' && void player.openFiles([track.path])}
+                      onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void player.openFiles([track.path])}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">
@@ -414,7 +413,7 @@
                       tabindex="0"
                       class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                       onclick={() => void favorites.play(i)}
-                      onkeydown={(e) => e.key === 'Enter' && void favorites.play(i)}
+                      onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void favorites.play(i)}
                     >
                       <Cover cover={track.cover} title={track.title} class="size-10 shrink-0 rounded text-xs" />
                       <span class="min-w-0 flex-1">

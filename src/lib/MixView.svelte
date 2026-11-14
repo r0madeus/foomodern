@@ -40,29 +40,32 @@
   let loading = $state(true)
   let saving = $state(false)
 
-  $effect(() => {
-    const target = id
-    void home.version
-    let stale = false
+  let loadSeq = 0
+  async function load(target: string) {
+    const seq = ++loadSeq
     loading = true
-    home
-      .mixDetail(target)
-      .then((res) => {
-        if (!stale) {
-          detail = res
-          loading = false
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          detail = null
-          loading = false
-        }
-      })
-    return () => {
-      stale = true
+    let res: HomeMixDetail | null = null
+    try {
+      res = await home.mixDetail(target)
+    } catch {
+      res = null
     }
+    if (seq !== loadSeq) return
+    detail = res
+    loading = false
+  }
+
+  // Loaded when the page opens or the mix changes, not on every home refresh,
+  // so the list does not reorder while playing from it.
+  $effect(() => {
+    void load(id)
   })
+
+  async function play(startPath: string | null, shuffle?: boolean) {
+    if (!detail) return
+    const ok = await home.playMix(detail.mix.id, startPath, shuffle)
+    if (!ok) await load(detail.mix.id)
+  }
 
   const currentPath = $derived(player.snapshot.current?.path ?? null)
 
@@ -132,7 +135,7 @@
             type="button"
             disabled={detail.tracks.length === 0}
             class="flex items-center gap-2 rounded-full bg-teal-500 py-2 pr-5 pl-4 text-sm font-semibold text-zinc-950 transition hover:scale-[1.03] hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
-            onclick={() => void home.playMix(detail!.mix.id, 0, false)}
+            onclick={() => void play(null, false)}
           >
             <Icon name="play" class="size-5" />
             {t('Play')}
@@ -141,7 +144,7 @@
             type="button"
             disabled={detail.tracks.length === 0}
             class="flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
-            onclick={() => void home.playMix(detail!.mix.id, 0, true)}
+            onclick={() => void play(null, true)}
           >
             <Icon name="shuffle" class="size-4" />
             {t('Shuffle')}
@@ -188,10 +191,10 @@
                 ? 'bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
                 : 'text-zinc-700 hover:bg-zinc-100/70 dark:text-zinc-300 dark:hover:bg-zinc-800/50',
             ]}
-            ondblclick={() => void home.playMix(detail!.mix.id, i)}
+            ondblclick={() => void play(track.path)}
             oncontextmenu={(e) =>
-              trackMenu.fromEvent(e, track, { onPlay: () => void home.playMix(detail!.mix.id, i) })}
-            onkeydown={(e) => e.key === 'Enter' && void home.playMix(detail!.mix.id, i)}
+              trackMenu.fromEvent(e, track, { onPlay: () => void play(track.path) })}
+            onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void play(track.path)}
           >
             <span class="text-right text-xs tabular-nums text-zinc-400">
               {#if track.path === currentPath && player.snapshot.status === 'playing'}
@@ -223,7 +226,7 @@
                   trackIds={[track.id]}
                   {track}
                   editTags
-                  onPlay={() => void home.playMix(detail!.mix.id, i)}
+                  onPlay={() => void play(track.path)}
                   label={t('More actions for “{title}”', { title: track.title })}
                 />
               </span>

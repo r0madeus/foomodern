@@ -30,11 +30,6 @@
     onOpenStats: () => void
   } = $props()
 
-  $effect(() => {
-    void player.snapshot.current?.path
-    void home.refresh()
-  })
-
   interface QuickTile {
     key: string
     kind: 'album' | 'playlist'
@@ -75,7 +70,9 @@
       })
       if (tiles.length >= 5) return tiles
     }
-    for (const a of feed?.recentlyPlayedAlbums ?? feed?.recentlyAddedAlbums ?? []) {
+    for (const a of feed?.recentlyPlayedAlbums.length
+        ? feed.recentlyPlayedAlbums
+        : (feed?.recentlyAddedAlbums ?? [])) {
       const key = `album:${a.id}`
       if (seen.has(key)) continue
       seen.add(key)

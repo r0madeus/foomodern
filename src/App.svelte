@@ -131,6 +131,7 @@
   let playlistId = $state<number | null>(null)
   let selectedAlbumId = $state<number | null>(null)
   let selectedArtist = $state<string | null>(null)
+  let selectedMixId = $state<string | null>(null)
   let creatingPlaylist = $state(false)
   let newPlaylistName = $state('')
   let beforeQueue = $state<{ view: View; playlistId: number | null }>({ view: 'songs', playlistId: null })
@@ -204,9 +205,15 @@
     go('artists')
   }
 
-  onMount(() => {
+  // Desktop navigators; the phone UI (MobileApp) registers its own while it is
+  // shown, so the desktop ones must not overwrite them.
+  $effect(() => {
+    if (mobile) return
     artists.registerNavigator(openArtist)
     library.registerAlbumNavigator(openAlbum)
+  })
+
+  onMount(() => {
     void artists.initScan()
     player.init().catch((e) => (player.error = String(e)))
     library.init().catch((e) => (player.error = String(e)))
@@ -266,22 +273,6 @@
       const input = document.getElementById('global-search-input') as HTMLInputElement | null
       input?.focus()
       input?.select()
-      return
-    }
-
-    if (e.key === 'MediaPlayPause') {
-      e.preventDefault()
-      if (player.snapshot.current || player.snapshot.queueLength > 0) void player.togglePause()
-      return
-    }
-    if (e.key === 'MediaTrackNext') {
-      e.preventDefault()
-      if (player.snapshot.current) void player.next()
-      return
-    }
-    if (e.key === 'MediaTrackPrevious') {
-      e.preventDefault()
-      if (player.snapshot.current) void player.previous()
       return
     }
 
@@ -405,6 +396,7 @@
             aria-label={sidebarCollapsed ? t(LABELS[v]) : undefined}
             aria-current={view === v ? 'page' : undefined}
             onclick={() => {
+              if (v === 'home') selectedMixId = null
               if (v === 'albums') selectedAlbumId = null
               if (v === 'artists') selectedArtist = null
               go(v)
@@ -684,6 +676,8 @@
           <div class="animate-view-enter h-full">
             {#if view === 'home'}
               <HomeView
+                {selectedMixId}
+                onSelectMix={(id) => (selectedMixId = id)}
                 onOpenAlbum={(id) => openAlbum(id)}
                 onOpenPlaylist={(id) => openPlaylist(id)}
                 onOpenFavorites={() => go('favorites')}

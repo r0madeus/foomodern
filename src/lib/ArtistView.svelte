@@ -229,7 +229,7 @@
                         trackMenu.fromEvent(e, tr, {
                           onPlay: () => void artists.play(profile!.name, idx),
                         })}
-                      onkeydown={(e) => e.key === 'Enter' && void artists.play(profile!.name, idx)}
+                      onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void artists.play(profile!.name, idx)}
                     >
                       <span class="text-right text-xs tabular-nums text-zinc-400">
                         {#if active && player.snapshot.status === 'playing'}
@@ -365,7 +365,7 @@
                     trackMenu.fromEvent(e, tr, {
                       onPlay: () => void artists.play(profile!.name, i),
                     })}
-                  onkeydown={(e) => e.key === 'Enter' && void artists.play(profile!.name, i)}
+                  onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && void artists.play(profile!.name, i)}
                 >
                   <span class="text-right text-xs tabular-nums text-zinc-400">
                     {#if active && player.snapshot.status === 'playing'}
