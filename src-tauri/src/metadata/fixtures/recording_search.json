@@ -1,0 +1,236 @@
+{
+  "created": "2026-01-01T00:00:00.000Z",
+  "count": 2,
+  "offset": 0,
+  "recordings": [
+    {
+      "id": "cccccccc-0000-4000-8000-000000000001",
+      "score": 100,
+      "title": "Night Signals",
+      "length": 200000,
+      "artist-credit": [
+        {
+          "name": "The Lanterns",
+          "joinphrase": "",
+          "artist": {
+            "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+            "name": "The Lanterns"
+          }
+        }
+      ],
+      "releases": [
+        {
+          "id": "dddddddd-0000-4000-8000-000000000001",
+          "title": "Greatest Lights",
+          "status": "Official",
+          "date": "2022-05-01",
+          "country": "GB",
+          "release-group": {
+            "id": "eeeeeeee-0000-4000-8000-000000000001",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Compilation"
+            ]
+          },
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "media": [
+            {
+              "position": 1,
+              "format": "CD",
+              "track-offset": 6,
+              "track-count": 12,
+              "track": [
+                {
+                  "id": "dddddddd-0000-4000-8000-000000000001-trk",
+                  "number": "7",
+                  "title": "Night Signals",
+                  "length": 200000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000002",
+          "title": "Night Signals (Live)",
+          "status": "Official",
+          "date": "2021-01-01",
+          "country": "GB",
+          "release-group": {
+            "id": "eeeeeeee-0000-4000-8000-000000000002",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Live"
+            ]
+          },
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "media": [
+            {
+              "position": 1,
+              "format": "CD",
+              "track-offset": 0,
+              "track-count": 12,
+              "track": [
+                {
+                  "id": "dddddddd-0000-4000-8000-000000000002-trk",
+                  "number": "1",
+                  "title": "Night Signals",
+                  "length": 200000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000003",
+          "title": "Night Signals",
+          "status": "Official",
+          "date": "2018-11-01",
+          "country": "GB",
+          "release-group": {
+            "id": "eeeeeeee-0000-4000-8000-000000000003",
+            "primary-type": "Single",
+            "secondary-types": []
+          },
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "media": [
+            {
+              "position": 1,
+              "format": "CD",
+              "track-offset": 0,
+              "track-count": 12,
+              "track": [
+                {
+                  "id": "dddddddd-0000-4000-8000-000000000003-trk",
+                  "number": "1",
+                  "title": "Night Signals",
+                  "length": 200000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000004",
+          "title": "Night Signals",
+          "status": "Official",
+          "date": "2019-03-08",
+          "country": "GB",
+          "release-group": {
+            "id": "bbbbbbbb-0000-4000-8000-000000000001",
+            "primary-type": "Album",
+            "secondary-types": []
+          },
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "media": [
+            {
+              "position": 1,
+              "format": "CD",
+              "track-offset": 0,
+              "track-count": 12,
+              "track": [
+                {
+                  "id": "dddddddd-0000-4000-8000-000000000004-trk",
+                  "number": "1",
+                  "title": "Night Signals",
+                  "length": 200000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dddddddd-0000-4000-8000-000000000005",
+          "title": "Night Signals",
+          "status": "Official",
+          "date": "2020-01-10",
+          "country": "GB",
+          "release-group": {
+            "id": "bbbbbbbb-0000-4000-8000-000000000001",
+            "primary-type": "Album",
+            "secondary-types": []
+          },
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "media": [
+            {
+              "position": 1,
+              "format": "CD",
+              "track-offset": 0,
+              "track-count": 12,
+              "track": [
+                {
+                  "id": "dddddddd-0000-4000-8000-000000000005-trk",
+                  "number": "1",
+                  "title": "Night Signals",
+                  "length": 200000
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cccccccc-0000-4000-8000-000000000002",
+      "score": 71,
+      "title": "Night Signals (Radio Edit)",
+      "length": 172000,
+      "artist-credit": [
+        {
+          "name": "The Lanterns",
+          "joinphrase": "",
+          "artist": {
+            "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+            "name": "The Lanterns"
+          }
+        }
+      ],
+      "releases": []
+    }
+  ]
+}

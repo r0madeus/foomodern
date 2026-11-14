@@ -772,6 +772,86 @@ pub async fn tags_write(
 }
 
 // ---------------------------------------------------------------------
+// Metadata matching (MusicBrainz)
+// ---------------------------------------------------------------------
+
+use crate::metadata::{AlbumCandidate, ApplyOutcome, MetadataService, Proposal, TrackCandidate};
+
+#[tauri::command]
+pub async fn metadata_match_album(
+    lib: State<'_, Arc<Library>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    album_id: i64,
+) -> Res<Vec<AlbumCandidate>> {
+    let (lib, metadata) = (Arc::clone(&lib), Arc::clone(&metadata));
+    metadata
+        .match_album(&lib, album_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn metadata_match_track(
+    lib: State<'_, Arc<Library>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    track_id: i64,
+) -> Res<Vec<TrackCandidate>> {
+    let (lib, metadata) = (Arc::clone(&lib), Arc::clone(&metadata));
+    metadata
+        .match_track(&lib, track_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Shows written tags in the player bar and queue as well.
+fn refresh_player_meta(lib: &Library, player: &Player, outcome: &ApplyOutcome) {
+    for path in &outcome.updated_paths {
+        match lib.track_meta(path) {
+            Ok(Some(meta)) => {
+                player.update_track_meta(path, &meta.title, &meta.artist);
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!("could not read back {path}: {e}"),
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn metadata_apply(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    proposal: Proposal,
+) -> Res<ApplyOutcome> {
+    let (lib, player, metadata) = (Arc::clone(&lib), Arc::clone(&player), Arc::clone(&metadata));
+    // Never hold the player lock across the network or disk work.
+    let current = player.current_path();
+    let outcome = metadata
+        .apply(&lib, proposal, current)
+        .await
+        .map_err(|e| e.to_string())?;
+    refresh_player_meta(&lib, &player, &outcome);
+    Ok(outcome)
+}
+
+#[tauri::command]
+pub async fn metadata_undo(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    batch_id: i64,
+) -> Res<ApplyOutcome> {
+    let (lib, player, metadata) = (Arc::clone(&lib), Arc::clone(&player), Arc::clone(&metadata));
+    let current = player.current_path();
+    let outcome = metadata
+        .undo(&lib, batch_id, current)
+        .await
+        .map_err(|e| e.to_string())?;
+    refresh_player_meta(&lib, &player, &outcome);
+    Ok(outcome)
+}
+
+// ---------------------------------------------------------------------
 // Lyrics
 // ---------------------------------------------------------------------
 

@@ -223,6 +223,31 @@ const TR: Record<string, string> = {
   ' ({n} not found in this library)': ' ({n} tanesi bu kütüphanede bulunamadı)',
   Imported: 'İçe aktarılan',
 
+  // Find info (MusicBrainz)
+  'Find info': 'Bilgileri bul',
+  'Find info for this track': 'Bu parça için bilgileri bul',
+  Recommended: 'Önerilen',
+  Check: 'Kontrol et',
+  Apply: 'Uygula',
+  'Applying…': 'Uygulanıyor…',
+  Undo: 'Geri al',
+  'Undoing…': 'Geri alınıyor…',
+  'Searching MusicBrainz…': 'MusicBrainz aranıyor…',
+  'MusicBrainz could not be reached': 'MusicBrainz\'e ulaşılamadı',
+  'No matching release was found on MusicBrainz.': 'MusicBrainz\'te eşleşen bir sürüm bulunamadı.',
+  'Matches from MusicBrainz. Nothing is written until you apply.':
+    'MusicBrainz eşleşmeleri. Sen uygulamadan hiçbir şey yazılmaz.',
+  Matches: 'Eşleşmeler',
+  Changes: 'Değişiklikler',
+  'Match score {score}': 'Eşleşme puanı {score}',
+  'No matching track on this release; left unchanged.': 'Bu sürümde eşleşen parça yok; değiştirilmedi.',
+  'No visible changes': 'Görünür değişiklik yok',
+  'MusicBrainz ids are saved in the tags too, and a cover is added if the album has none.':
+    'MusicBrainz kimlikleri de etiketlere yazılır; albümün kapağı yoksa kapak eklenir.',
+  'The changes were undone.': 'Değişiklikler geri alındı.',
+  'Cover added': 'Kapak eklendi',
+  'Save or discard your edits first.': 'Önce düzenlemelerini kaydet ya da vazgeç.',
+
   // Tags
   'Edit tags': 'Etiketleri düzenle',
   'Edit tags…': 'Etiketleri düzenle…',

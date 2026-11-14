@@ -7,6 +7,7 @@
   import AddToPlaylist from '../AddToPlaylist.svelte'
   import TintedBackdrop from '../TintedBackdrop.svelte'
   import TrackItem from './TrackItem.svelte'
+  import { metadataMatch } from '../metadata.svelte'
   import { library, type AlbumRow, type TrackRow } from '../library.svelte'
   import type { Rgb } from '../nowCover.svelte'
   import { player, formatTime } from '../player.svelte'
@@ -91,6 +92,12 @@
       </div>
       <div class="flex items-center gap-2 px-4 pb-2">
         <AddToPlaylist {albumId} label="Add album to playlist" class="p-2.5 text-zinc-300" />
+        <button
+          class="rounded-full px-3 py-2 text-sm font-medium text-zinc-300 active:bg-white/10"
+          onclick={() => metadataMatch.openAlbum(albumId)}
+        >
+          {t("Find info")}
+        </button>
         <span class="flex-1"></span>
         <button class="rounded-full p-3 text-zinc-300 active:bg-white/10" aria-label={t("Shuffle play")} onclick={shufflePlay}>
           <Icon name="shuffle" class="size-6" />

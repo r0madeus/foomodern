@@ -76,6 +76,25 @@ pub struct TagChanges {
     pub year: Option<Option<i32>>,
     #[serde(deserialize_with = "keep_clear_set")]
     pub genre: Option<Option<String>>,
+    /// MusicBrainz identifiers (release, release group, recording, release
+    /// track). The editor never sets these; the metadata matcher does.
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_release_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_release_group_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_recording_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_track_id: Option<Option<String>>,
+}
+
+/// The MusicBrainz identifiers stored in a file's tags.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MbIds {
+    pub release_id: Option<String>,
+    pub release_group_id: Option<String>,
+    pub recording_id: Option<String>,
+    pub track_id: Option<String>,
 }
 
 impl TagChanges {
@@ -108,6 +127,10 @@ impl TagChanges {
             disc_no: self.disc_no,
             year: self.year,
             genre: text(&self.genre),
+            mb_release_id: text(&self.mb_release_id),
+            mb_release_group_id: text(&self.mb_release_group_id),
+            mb_recording_id: text(&self.mb_recording_id),
+            mb_track_id: text(&self.mb_track_id),
         })
     }
 }
@@ -128,6 +151,25 @@ fn from_tag(tag: &Tag) -> EditableTags {
         year: tag.date().map(|d| i32::from(d.year)).filter(|y| *y > 0),
         genre: non_empty(tag.genre()),
     }
+}
+
+fn mb_ids_from_tag(tag: &Tag) -> MbIds {
+    MbIds {
+        release_id: non_empty(tag.get_string(ItemKey::MusicBrainzReleaseId)),
+        release_group_id: non_empty(tag.get_string(ItemKey::MusicBrainzReleaseGroupId)),
+        recording_id: non_empty(tag.get_string(ItemKey::MusicBrainzRecordingId)),
+        track_id: non_empty(tag.get_string(ItemKey::MusicBrainzTrackId)),
+    }
+}
+
+/// MusicBrainz ids of a file (empty when the file has none).
+pub fn read_mb_ids(path: &Path) -> Result<MbIds, TagError> {
+    let tagged = lofty::read_from_path(path)?;
+    Ok(tagged
+        .primary_tag()
+        .or_else(|| tagged.first_tag())
+        .map(mb_ids_from_tag)
+        .unwrap_or_default())
 }
 
 /// Same tag the library scanner reads: the primary tag, else the first one.
@@ -186,6 +228,20 @@ fn apply(tag: &mut Tag, c: &TagChanges) {
         None => {}
         Some(None) => tag.remove_genre(),
         Some(Some(v)) => tag.set_genre(v.clone()),
+    }
+    for (change, key) in [
+        (&c.mb_release_id, ItemKey::MusicBrainzReleaseId),
+        (&c.mb_release_group_id, ItemKey::MusicBrainzReleaseGroupId),
+        (&c.mb_recording_id, ItemKey::MusicBrainzRecordingId),
+        (&c.mb_track_id, ItemKey::MusicBrainzTrackId),
+    ] {
+        match change {
+            None => {}
+            Some(None) => tag.remove_key(key),
+            Some(Some(v)) => {
+                tag.insert_text(key, v.clone());
+            }
+        }
     }
 }
 

@@ -4,6 +4,7 @@ pub mod library;
 pub mod lyrics;
 #[cfg(not(target_os = "android"))]
 pub mod media_keys;
+pub mod metadata;
 mod net;
 pub mod online;
 pub mod player;
@@ -201,6 +202,12 @@ pub fn run() {
             })?);
             app.manage(lyrics);
 
+            let metadata = Arc::new(metadata::MetadataService::new().map_err(|e| {
+                log::error!("failed to start metadata service: {e}");
+                e
+            })?);
+            app.manage(metadata);
+
             let default_downloads = app
                 .path()
                 .audio_dir()
@@ -285,6 +292,10 @@ pub fn run() {
             commands::app_set_close_to_tray,
             commands::tags_read,
             commands::tags_write,
+            commands::metadata_match_album,
+            commands::metadata_match_track,
+            commands::metadata_apply,
+            commands::metadata_undo,
             commands::lyrics_for_track,
             commands::lyrics_attach_file,
             commands::online_status,

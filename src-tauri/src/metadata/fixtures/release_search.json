@@ -1,0 +1,101 @@
+{
+  "created": "2026-01-01T00:00:00.000Z",
+  "count": 3,
+  "offset": 0,
+  "releases": [
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "score": 100,
+      "title": "Night Signals",
+      "status": "Official",
+      "date": "2019-03-08",
+      "country": "GB",
+      "track-count": 4,
+      "media": [
+        {
+          "format": "CD",
+          "track-count": 4
+        }
+      ],
+      "release-group": {
+        "id": "bbbbbbbb-0000-4000-8000-000000000001",
+        "primary-type": "Album",
+        "secondary-types": []
+      },
+      "artist-credit": [
+        {
+          "name": "The Lanterns",
+          "joinphrase": "",
+          "artist": {
+            "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+            "name": "The Lanterns"
+          }
+        }
+      ],
+      "unknown-field": {
+        "x": 1
+      }
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000002",
+      "score": 96,
+      "title": "Night Signals (Deluxe Edition)",
+      "status": "Official",
+      "date": "2020",
+      "country": "XW",
+      "track-count": 6,
+      "media": [
+        {
+          "format": "Digital Media",
+          "track-count": 6
+        }
+      ],
+      "release-group": {
+        "id": "bbbbbbbb-0000-4000-8000-000000000001",
+        "primary-type": "Album",
+        "secondary-types": []
+      },
+      "artist-credit": [
+        {
+          "name": "The Lanterns",
+          "joinphrase": "",
+          "artist": {
+            "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+            "name": "The Lanterns"
+          }
+        }
+      ]
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000003",
+      "score": 80,
+      "title": "Night Signals",
+      "status": "Bootleg",
+      "country": "US",
+      "track-count": 4,
+      "media": [
+        {
+          "format": "CD",
+          "track-count": 4
+        }
+      ],
+      "release-group": {
+        "id": "bbbbbbbb-0000-4000-8000-000000000009",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Live"
+        ]
+      },
+      "artist-credit": [
+        {
+          "name": "The Lanterns",
+          "joinphrase": "",
+          "artist": {
+            "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+            "name": "The Lanterns"
+          }
+        }
+      ]
+    }
+  ]
+}

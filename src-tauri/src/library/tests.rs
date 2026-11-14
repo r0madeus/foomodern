@@ -137,7 +137,7 @@ fn schema_version_is_set() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 8);
+    assert_eq!(v, 9);
 }
 
 #[test]
@@ -662,7 +662,7 @@ fn migrates_a_v1_database_to_latest() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 8);
+    assert_eq!(v, 9);
     let tracks = lib.tracks_page(0, 10, SortOrder::Title).unwrap();
     assert_eq!(tracks.len(), 1, "existing data survives the migration");
     let pl = lib.create_playlist("Mix", &[tracks[0].id]).unwrap();
@@ -703,7 +703,7 @@ fn migrates_a_v2_database_and_keeps_a_folder_album_whole() {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         let fk_issues = conn
             .prepare("PRAGMA foreign_key_check")
             .unwrap()
@@ -939,6 +939,7 @@ mod tag_editing {
             disc_no: Some(Some(2)),
             year: Some(Some(1999)),
             genre: set("Jazz"),
+            ..TagChanges::default()
         }
     }
 
@@ -1738,7 +1739,7 @@ fn migrating_to_v8_merges_year_split_albums_and_resplits_artists() {
         .conn()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 8);
+    assert_eq!(v, 9);
     let albums = lib.albums_page(0, 10).unwrap();
     assert_eq!(albums.len(), 1);
     assert_eq!((albums[0].year, albums[0].track_count), (Some(1994), 4));
@@ -1758,4 +1759,61 @@ fn migrating_to_v8_merges_year_split_albums_and_resplits_artists() {
         .collect();
     assert!(names.contains(&"Sibel Can".to_string()), "{names:?}");
     assert!(!names.contains(&"ibel Can".to_string()), "{names:?}");
+}
+
+#[test]
+fn migrating_a_v8_database_adds_tag_history() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db_path = tmp.path().join("library.sqlite3");
+    let covers = tmp.path().join("covers");
+    {
+        let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+        // Turn the fresh database back into a v8 one with data in it.
+        lib.conn()
+            .execute_batch(
+                "INSERT INTO folders(id, path) VALUES (1, '/m');
+                 DROP TABLE tag_history;
+                 PRAGMA user_version = 8;",
+            )
+            .unwrap();
+    }
+    let lib = Library::open(&db_path, &covers, Hooks::none()).unwrap();
+    let v: i64 = lib
+        .conn()
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(v, 9);
+    assert_eq!(lib.folders().unwrap().len(), 1);
+    let cols: Vec<String> = lib
+        .conn()
+        .prepare("SELECT name FROM pragma_table_info('tag_history') ORDER BY cid")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        cols,
+        ["id", "batch_id", "track_id", "path", "saved_at", "old_json"]
+    );
+
+    let batch = lib.next_tag_batch_id().unwrap();
+    assert_eq!(batch, 1);
+    let id = lib.save_tag_history(batch, None, "/m/a.mp3", "{}").unwrap();
+    assert_eq!(lib.next_tag_batch_id().unwrap(), 2);
+    assert_eq!(lib.tag_history_batch(batch).unwrap().len(), 1);
+    lib.delete_tag_history_row(id).unwrap();
+    assert!(lib.tag_history_batch(batch).unwrap().is_empty());
+}
+
+#[test]
+fn tag_changes_from_the_editor_keep_musicbrainz_ids() {
+    // The editor never sends the MusicBrainz fields: they must stay "keep".
+    let c: crate::library::tags::TagChanges = serde_json::from_str(r#"{"title":"X"}"#).unwrap();
+    assert_eq!(c.mb_release_id, None);
+    assert_eq!(c.mb_recording_id, None);
+    assert!(!c.is_empty());
+    let clear: crate::library::tags::TagChanges =
+        serde_json::from_str(r#"{"mbTrackId":null}"#).unwrap();
+    assert_eq!(clear.mb_track_id, Some(None));
 }
