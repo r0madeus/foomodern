@@ -1877,9 +1877,9 @@ fn home_feed_builds_dynamic_mixes_and_saves_playlist() {
 
     let now = 1_750_000_000i64;
     // 3 tracks played multiple times over 7 days -> weekly-favorites, on-repeat, focus-mix.
-    for track in &tracks[0..3] {
+    for (i, track) in tracks[0..3].iter().enumerate() {
         push_listen(&e, track, now - 86_400, 180_000, true, false);
-        push_listen(&e, track, now - 3_600, 120_000, false, false);
+        push_listen(&e, track, now - 3_600 + i as i64, 120_000, false, false);
     }
     // 3 older listens from 45 days ago -> rediscover mix.
     for track in &tracks[3..6] {
