@@ -421,79 +421,12 @@
         {/each}
       </nav>
 
-      {#if pinned.entries.length > 0 && !sidebarCollapsed}
-        <nav aria-labelledby="pinned-heading" class="flex max-h-48 shrink-0 flex-col gap-1">
-          <div class="flex items-center justify-between px-2">
-            <h2
-              id="pinned-heading"
-              class="text-xs font-medium uppercase tracking-wide text-zinc-400"
-            >
-              {t('Pinned items')}
-            </h2>
-          </div>
-          <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
-            {#each pinned.entries as entry (`${entry.kind}:${entry.id}`)}
-              {@const active =
-                (entry.kind === 'album' && view === 'albums' && selectedAlbumId === entry.id) ||
-                (entry.kind === 'playlist' && view === 'playlist' && playlistId === entry.id)}
-              <div class="group flex items-center gap-0.5">
-                <button
-                  type="button"
-                  class={[
-                    'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left',
-                    active
-                      ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/40 dark:text-accent-100'
-                      : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
-                  ]}
-                  aria-current={active ? 'page' : undefined}
-                  onclick={() =>
-                    entry.kind === 'album' ? openAlbum(entry.id) : openPlaylist(entry.id)}
-                >
-                  {#if entry.kind === 'album'}
-                    <Cover
-                      cover={entry.cover}
-                      title={entry.title}
-                      class="size-8 shrink-0 rounded text-xs"
-                    />
-                  {:else}
-                    <PlaylistCover
-                      cover={entry.cover}
-                      albumCovers={entry.albumCovers}
-                      name={entry.title}
-                      class="size-8 shrink-0 rounded"
-                      iconClass="size-4"
-                    />
-                  {/if}
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm leading-tight">{entry.title}</span>
-                    <span class="block truncate text-[11px] text-zinc-500">
-                      {#if entry.kind === 'album'}
-                        {t('Album')}{entry.subtitle ? ` · ${entry.subtitle}` : ''}
-                      {:else}
-                        {t('Playlist')} · {count(entry.trackCount, '{n} track', '{n} tracks')}
-                      {/if}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  title={t('Unpin')}
-                  aria-label={t('Unpin “{title}”', { title: entry.title })}
-                  class="shrink-0 rounded p-1 text-accent-600 opacity-75 hover:bg-zinc-200 hover:opacity-100 dark:text-accent-400 dark:hover:bg-zinc-800"
-                  onclick={() => void pinned.toggle(entry.kind, entry.id)}
-                >
-                  <Icon name="pin" class="size-3.5" />
-                </button>
-              </div>
-            {/each}
-          </div>
-        </nav>
-      {/if}
-
-      <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-1 flex-col gap-0.5">
+      <!-- One library list, Spotify style: Favorites, then pinned albums and
+           playlists, then the other playlists. Every row has the same size. -->
+      <nav aria-labelledby="library-heading" class="flex min-h-0 flex-1 flex-col gap-1">
         {#if !sidebarCollapsed}
           <div class="flex items-center justify-between px-2">
-            <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
+            <h2 id="library-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t('Your library')}</h2>
             <span class="flex items-center gap-0.5">
               <button
                 class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-accent-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
@@ -517,7 +450,7 @@
             </span>
           </div>
         {:else}
-          <h2 id="playlists-heading" class="sr-only">{t("Playlists")}</h2>
+          <h2 id="library-heading" class="sr-only">{t('Your library')}</h2>
         {/if}
         {#if creatingPlaylist && !sidebarCollapsed}
           <form
@@ -537,86 +470,125 @@
             />
           </form>
         {/if}
-        <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
-          <button
-            type="button"
-            class={[
-              'flex items-center rounded-lg px-2 py-1.5 text-sm',
-              sidebarCollapsed ? 'justify-center' : 'justify-between gap-2 text-left',
-              view === 'favorites'
-                ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
-                : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
-            ]}
-            title={sidebarCollapsed ? t('Favorites') : undefined}
-            aria-label={sidebarCollapsed ? t('Favorites') : undefined}
-            aria-current={view === 'favorites' ? 'page' : undefined}
-            onclick={() => go('favorites')}
-          >
-            <span class="flex min-w-0 items-center gap-2">
-              <span class="flex size-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
-                <Icon name="star" class="size-3" />
-              </span>
+
+        {#snippet libraryRow(
+          key: string,
+          title: string,
+          subtitle: string,
+          active: boolean,
+          open: () => void,
+          art: import('svelte').Snippet,
+          pin: { pinned: boolean; toggle: () => void } | null,
+        )}
+          <div class="group flex shrink-0 items-center gap-0.5" data-key={key}>
+            <button
+              type="button"
+              class={[
+                'flex min-w-0 flex-1 items-center rounded-lg p-1.5 text-left',
+                sidebarCollapsed ? 'justify-center' : 'gap-2.5',
+                active
+                  ? 'bg-accent-50 text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
+                  : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
+              ]}
+              title={sidebarCollapsed ? title : undefined}
+              aria-label={sidebarCollapsed ? title : undefined}
+              aria-current={active ? 'page' : undefined}
+              onclick={open}
+            >
+              {@render art()}
               {#if !sidebarCollapsed}
-                <span class="truncate">{t('Favorites')}</span>
+                <span class="min-w-0 flex-1">
+                  <span class={['block truncate text-sm leading-snug', active && 'font-medium']}>{title}</span>
+                  <span class="flex min-w-0 items-center gap-1 text-[11px] leading-snug text-zinc-500">
+                    {#if pin?.pinned}
+                      <Icon name="pin" class="size-3 shrink-0 text-accent-600 dark:text-accent-400" />
+                    {/if}
+                    <span class="truncate">{subtitle}</span>
+                  </span>
+                </span>
               {/if}
-            </span>
-            {#if !sidebarCollapsed && favorites.ids.size > 0}
-              <span class="text-xs tabular-nums text-zinc-400">
-                {favorites.ids.size.toLocaleString()}
-              </span>
-            {/if}
-          </button>
-          {#each playlists.list as p (p.id)}
-            {@const active = view === 'playlist' && playlistId === p.id}
-            {@const isPinned = pinned.isPinned('playlist', p.id)}
-            <div class="group flex items-center gap-0.5">
+            </button>
+            {#if pin && !sidebarCollapsed}
               <button
-                class={[
-                  'flex min-w-0 flex-1 items-center rounded-lg px-2 py-1.5 text-sm',
-                  sidebarCollapsed ? 'justify-center' : 'gap-2 text-left',
-                  active
-                    ? 'bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/50 dark:text-accent-100'
-                    : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
-                ]}
-                title={sidebarCollapsed ? p.name : undefined}
-                aria-label={sidebarCollapsed ? p.name : undefined}
-                aria-current={active ? 'page' : undefined}
-                onclick={() => openPlaylist(p.id)}
+                type="button"
+                title={t(pin.pinned ? 'Unpin' : 'Pin')}
+                aria-label={t(pin.pinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title })}
+                aria-pressed={pin.pinned}
+                class="shrink-0 rounded p-1 text-zinc-400 opacity-0 transition hover:bg-zinc-200 hover:text-zinc-700 focus-visible:opacity-100 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                onclick={pin.toggle}
               >
-                <PlaylistCover
-                  cover={p.cover}
-                  albumCovers={p.albumCovers}
-                  name={p.name}
-                  class="size-6 shrink-0 rounded"
-                  iconClass="size-3.5"
-                />
-                {#if !sidebarCollapsed}
-                  <span class="min-w-0 flex-1 truncate">{p.name}</span>
-                  <span class="shrink-0 text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
-                {/if}
+                <Icon name="pin" class="size-3.5" />
               </button>
-              {#if !sidebarCollapsed}
-                <button
-                  type="button"
-                  title={t(isPinned ? 'Unpin' : 'Pin')}
-                  aria-label={t(isPinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title: p.name })}
-                  class={[
-                    'shrink-0 rounded p-1 transition hover:bg-zinc-200 dark:hover:bg-zinc-800',
-                    isPinned
-                      ? 'text-accent-600 opacity-100 dark:text-accent-400'
-                      : 'text-zinc-400 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
-                  ]}
-                  onclick={() => void pinned.toggle('playlist', p.id)}
-                >
-                  <Icon name="pin" class="size-3.5" />
-                </button>
-              {/if}
-            </div>
-          {:else}
-            {#if !creatingPlaylist && !sidebarCollapsed}
-              <p class="px-2 text-xs text-zinc-400">{t("No playlists yet.")}</p>
             {/if}
+          </div>
+        {/snippet}
+
+        {#snippet favoritesArt()}
+          <span class="flex size-9 shrink-0 items-center justify-center rounded bg-gradient-to-br from-accent-400 to-indigo-600 text-white">
+            <Icon name="star" class="size-4" />
+          </span>
+        {/snippet}
+
+        <div class="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+          {@render libraryRow(
+            'favorites',
+            t('Favorites'),
+            `${t('Playlist')} · ${count(favorites.ids.size, '{n} track', '{n} tracks')}`,
+            view === 'favorites',
+            () => go('favorites'),
+            favoritesArt,
+            null,
+          )}
+          {#each pinned.entries as entry (`pin:${entry.kind}:${entry.id}`)}
+            {#snippet pinnedArt()}
+              {#if entry.kind === 'album'}
+                <Cover cover={entry.cover} title={entry.title} class="size-9 shrink-0 rounded text-xs" />
+              {:else}
+                <PlaylistCover
+                  cover={entry.cover}
+                  albumCovers={entry.albumCovers}
+                  name={entry.title}
+                  class="size-9 shrink-0 rounded"
+                  iconClass="size-4"
+                />
+              {/if}
+            {/snippet}
+            {@render libraryRow(
+              `pin:${entry.kind}:${entry.id}`,
+              entry.title,
+              entry.kind === 'album'
+                ? `${t('Album')}${entry.subtitle ? ` · ${entry.subtitle}` : ''}`
+                : `${t('Playlist')} · ${count(entry.trackCount, '{n} track', '{n} tracks')}`,
+              (entry.kind === 'album' && view === 'albums' && selectedAlbumId === entry.id) ||
+                (entry.kind === 'playlist' && view === 'playlist' && playlistId === entry.id),
+              () => (entry.kind === 'album' ? openAlbum(entry.id) : openPlaylist(entry.id)),
+              pinnedArt,
+              { pinned: true, toggle: () => void pinned.toggle(entry.kind, entry.id) },
+            )}
           {/each}
+          {#each playlists.list.filter((p) => !pinned.isPinned('playlist', p.id)) as p (p.id)}
+            {#snippet playlistArt()}
+              <PlaylistCover
+                cover={p.cover}
+                albumCovers={p.albumCovers}
+                name={p.name}
+                class="size-9 shrink-0 rounded"
+                iconClass="size-4"
+              />
+            {/snippet}
+            {@render libraryRow(
+              `pl:${p.id}`,
+              p.name,
+              `${t('Playlist')} · ${count(p.trackCount, '{n} track', '{n} tracks')}`,
+              view === 'playlist' && playlistId === p.id,
+              () => openPlaylist(p.id),
+              playlistArt,
+              { pinned: false, toggle: () => void pinned.toggle('playlist', p.id) },
+            )}
+          {/each}
+          {#if playlists.list.length === 0 && pinned.entries.length === 0 && !creatingPlaylist && !sidebarCollapsed}
+            <p class="px-2 pt-1 text-xs text-zinc-400">{t('Create a playlist with +, or pin an album from its page or a song’s menu.')}</p>
+          {/if}
         </div>
       </nav>
 

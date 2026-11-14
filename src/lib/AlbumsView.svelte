@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from './Icon.svelte'
+  import { pinned } from './pinned.svelte'
   import { t } from './i18n.svelte'
   import VirtualList from './VirtualList.svelte'
   import EmptyLibrary from './EmptyLibrary.svelte'
@@ -89,15 +91,31 @@
                   {#if idx < totalCount}
                     {@const a = rows.get(idx)}
                     {#if a}
-                      <button class="group min-w-0 text-left" onclick={() => selectAlbum(a.id)}>
-                        <Cover
-                          cover={a.cover}
-                          title={a.title}
-                          class="aspect-square w-full rounded-lg text-3xl shadow-sm group-hover:ring-2 group-hover:ring-accent-500"
-                        />
-                        <p class="mt-2 truncate text-sm font-medium">{a.title}</p>
-                        <p class="truncate text-xs text-zinc-500">{a.albumArtist}{a.year ? ` · ${a.year}` : ''}</p>
-                      </button>
+                      {@const isPinned = pinned.isPinned('album', a.id)}
+                      <div class="group relative min-w-0">
+                        <button class="w-full min-w-0 text-left" onclick={() => selectAlbum(a.id)}>
+                          <Cover
+                            cover={a.cover}
+                            title={a.title}
+                            class="aspect-square w-full rounded-lg text-3xl shadow-sm group-hover:ring-2 group-hover:ring-accent-500"
+                          />
+                          <p class="mt-2 truncate text-sm font-medium">{a.title}</p>
+                          <p class="truncate text-xs text-zinc-500">{a.albumArtist}{a.year ? ` · ${a.year}` : ''}</p>
+                        </button>
+                        <button
+                          type="button"
+                          title={t(isPinned ? 'Unpin album' : 'Pin album')}
+                          aria-label={t(isPinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title: a.title })}
+                          aria-pressed={isPinned}
+                          class={[
+                            'absolute top-2 right-2 rounded-full bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75 focus-visible:opacity-100',
+                            isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                          ]}
+                          onclick={() => void pinned.toggle('album', a.id)}
+                        >
+                          <Icon name="pin" class="size-3.5" />
+                        </button>
+                      </div>
                     {:else}
                       <div class="min-w-0 animate-pulse" aria-hidden="true">
                         <div class="aspect-square w-full rounded-lg bg-zinc-200 dark:bg-zinc-800"></div>

@@ -417,6 +417,11 @@ const TR: Record<string, string> = {
   Unpin: 'Sabitlemeyi kaldır',
   'Pin “{title}”': '“{title}” öğesini sabitle',
   'Unpin “{title}”': '“{title}” sabitlemesini kaldır',
+  'Your library': 'Kitaplığın',
+  'Pin album': 'Albümü sabitle',
+  'Unpin album': 'Albüm sabitlemesini kaldır',
+  'Create a playlist with +, or pin an album from its page or a song’s menu.':
+    '+ ile çalma listesi oluştur ya da bir albümü sayfasından veya şarkı menüsünden sabitle.',
 
   // Unified search & filters
   'Filter…': 'Filtrele…',

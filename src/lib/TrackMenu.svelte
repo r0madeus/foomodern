@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pinned } from './pinned.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { tick } from 'svelte'
   import Icon from './Icon.svelte'
@@ -211,6 +212,13 @@
     library.openAlbum(albumId)
   }
 
+  function toggleAlbumPin() {
+    const albumId = ctx?.track.albumId
+    if (albumId === null || albumId === undefined) return
+    close()
+    void pinned.toggle('album', albumId)
+  }
+
   function doEditTags() {
     const c = ctx
     if (!c || c.track.id <= 0) return
@@ -364,6 +372,11 @@
         <button type="button" role="menuitem" class={itemCls} onclick={goAlbum}>
           <Icon name="album" class="size-4 shrink-0 text-zinc-500" />
           <span class="truncate">{t('Go to album')}</span>
+        </button>
+        {@const albumPinned = pinned.isPinned('album', ctx.track.albumId!)}
+        <button type="button" role="menuitem" class={itemCls} onclick={toggleAlbumPin}>
+          <Icon name="pin" class="size-4 shrink-0 text-zinc-500" />
+          <span class="truncate">{t(albumPinned ? 'Unpin album' : 'Pin album')}</span>
         </button>
       {/if}
     {/if}
