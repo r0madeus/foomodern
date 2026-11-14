@@ -121,7 +121,7 @@ contributors and agents.
 
 ### Colours (decision K14)
 - The experience stays close to Spotify on purpose. Only the identity layer
-  changes: lavender-blue `accent` (#7C8CFF) instead of teal, and a neutral
+  changes: soft blue `accent` (#7CAAFF) instead of teal, and a neutral
   grey with a slight cool tint (`zinc` overridden in `src/app.css`).
 
 ### Library navigation and desktop controls (v0.8)

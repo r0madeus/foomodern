@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
-/* Brand colours. `accent` is the lavender-blue used for controls, the
+/* Brand colours. `accent` is the soft blue used for controls, the
    playing row and focus rings; `zinc` is replaced by a neutral grey with a
    slight cool tint so dark surfaces are not pure grey and not navy. */
 @theme {
-  --color-accent-50: #f0f2ff;
-  --color-accent-100: #e2e6ff;
-  --color-accent-200: #c9d0ff;
-  --color-accent-300: #a8b3ff;
-  --color-accent-400: #929fff;
-  --color-accent-500: #7c8cff;
-  --color-accent-600: #5661e8;
-  --color-accent-700: #4a53d6;
-  --color-accent-800: #3c43ab;
-  --color-accent-900: #343a86;
-  --color-accent-950: #1f2250;
+  --color-accent-50: #f0f5ff;
+  --color-accent-100: #e2ecff;
+  --color-accent-200: #c9dcff;
+  --color-accent-300: #a8c6ff;
+  --color-accent-400: #92b8ff;
+  --color-accent-500: #7caaff;
+  --color-accent-600: #3a68d0;
+  --color-accent-700: #335cc0;
+  --color-accent-800: #2b4b99;
+  --color-accent-900: #263f78;
+  --color-accent-950: #172647;
 
   --color-zinc-50: #fafafb;
   --color-zinc-100: #f3f4f6;
