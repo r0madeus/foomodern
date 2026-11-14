@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { appSettings } from './appSettings.svelte'
   import { count, i18n, t } from './i18n.svelte'
   import { tick } from 'svelte'
   import { fade, scale } from 'svelte/transition'
   import { invoke } from '@tauri-apps/api/core'
   import { motionDuration } from './motion'
+  import { metadataMatch } from './metadata.svelte'
   import { playlists } from './playlists.svelte'
   import {
     tagEditor,
@@ -158,6 +160,15 @@
     if (back?.isConnected) back.focus()
   }
 
+  /** Single track: hand over to the MusicBrainz matcher in track mode. */
+  function findInfo() {
+    if (!request || request.trackIds.length !== 1 || saving || dirty) return
+    const id = request.trackIds[0]
+    tagEditor.close()
+    previousFocus = null
+    metadataMatch.openTrack(id)
+  }
+
   function fileName(path: string): string {
     return path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
   }
@@ -304,7 +315,22 @@
             </div>
           {/if}
 
-          <div class="flex justify-end gap-2">
+          <div class="flex flex-wrap justify-end gap-2">
+            {#if request.trackIds.length === 1}
+              <button
+                type="button"
+                class="mr-auto rounded-lg px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                disabled={saving || dirty || !appSettings.allowMetadata}
+                title={!appSettings.allowMetadata
+                  ? t('Turned off in Settings')
+                  : dirty
+                    ? t('Save or discard your edits first.')
+                    : undefined}
+                onclick={findInfo}
+              >
+                {t('Find info')}
+              </button>
+            {/if}
             <button
               type="button"
               class="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"

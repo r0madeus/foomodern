@@ -1,0 +1,119 @@
+{
+  "id": "aaaaaaaa-0000-4000-8000-000000000001",
+  "title": "Night Signals",
+  "date": "2019-03-08",
+  "country": "GB",
+  "status": "Official",
+  "release-group": {
+    "id": "bbbbbbbb-0000-4000-8000-000000000001",
+    "primary-type": "Album",
+    "secondary-types": []
+  },
+  "artist-credit": [
+    {
+      "name": "The Lanterns",
+      "joinphrase": "",
+      "artist": {
+        "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+        "name": "The Lanterns"
+      }
+    }
+  ],
+  "media": [
+    {
+      "position": 1,
+      "format": "CD",
+      "track-count": 4,
+      "tracks": [
+        {
+          "id": "std-t1",
+          "number": "1",
+          "position": 1,
+          "title": "Night Signals",
+          "length": 200000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "std-r1",
+            "title": "Night Signals",
+            "length": 200000
+          }
+        },
+        {
+          "id": "std-t2",
+          "number": "2",
+          "position": 2,
+          "title": "Paper Moons",
+          "length": 215000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "std-r2",
+            "title": "Paper Moons",
+            "length": 215000
+          }
+        },
+        {
+          "id": "std-t3",
+          "number": "3",
+          "position": 3,
+          "title": "Glass Harbour",
+          "length": 187000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "std-r3",
+            "title": "Glass Harbour",
+            "length": 187000
+          }
+        },
+        {
+          "id": "std-t4",
+          "number": "4",
+          "position": 4,
+          "title": "Slow Static",
+          "length": 240000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "std-r4",
+            "title": "Slow Static",
+            "length": 240000
+          }
+        }
+      ]
+    }
+  ]
+}

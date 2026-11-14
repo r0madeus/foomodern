@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { appSettings } from './appSettings.svelte'
   import { count, t } from './i18n.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import Cover from './Cover.svelte'
@@ -9,6 +10,7 @@
   import ArtistLinks from './ArtistLinks.svelte'
   import ExtBadge from './ExtBadge.svelte'
   import FavoriteButton from './FavoriteButton.svelte'
+  import { metadataMatch } from './metadata.svelte'
   import { tagEditor } from './tags.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import { pinned } from './pinned.svelte'
@@ -97,6 +99,15 @@
             onclick={() => tagEditor.open(data!.tracks.map((track) => track.id), t('Edit album tags'))}
           >
             {t("Edit tags…")}
+          </button>
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-white/90 outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60"
+            disabled={!appSettings.allowMetadata}
+            title={appSettings.allowMetadata ? undefined : t('Turned off in Settings')}
+            onclick={() => metadataMatch.openAlbum(albumId)}
+          >
+            {t("Find info")}
           </button>
         </div>
       </div>

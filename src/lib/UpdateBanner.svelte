@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { appSettings } from './appSettings.svelte'
   import { t } from './i18n.svelte'
   import Icon from './Icon.svelte'
   import { updates } from './updates.svelte'
 </script>
 
-{#if updates.available}
+{#if updates.available && appSettings.allowUpdates}
   <div
     role="status"
     class="flex items-center gap-3 rounded-lg bg-teal-600 px-3 py-2 text-sm text-white shadow-sm dark:bg-teal-700"

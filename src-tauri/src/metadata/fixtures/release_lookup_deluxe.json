@@ -1,0 +1,163 @@
+{
+  "id": "aaaaaaaa-0000-4000-8000-000000000002",
+  "title": "Night Signals (Deluxe Edition)",
+  "date": "2020",
+  "country": "XW",
+  "status": "Official",
+  "release-group": {
+    "id": "bbbbbbbb-0000-4000-8000-000000000001",
+    "primary-type": "Album",
+    "secondary-types": []
+  },
+  "artist-credit": [
+    {
+      "name": "The Lanterns",
+      "joinphrase": "",
+      "artist": {
+        "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+        "name": "The Lanterns"
+      }
+    }
+  ],
+  "media": [
+    {
+      "position": 1,
+      "format": "Digital Media",
+      "track-count": 6,
+      "tracks": [
+        {
+          "id": "dlx-t1",
+          "number": "1",
+          "position": 1,
+          "title": "Night Signals",
+          "length": 200000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r1",
+            "title": "Night Signals",
+            "length": 200000
+          }
+        },
+        {
+          "id": "dlx-t2",
+          "number": "2",
+          "position": 2,
+          "title": "Paper Moons",
+          "length": 215000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r2",
+            "title": "Paper Moons",
+            "length": 215000
+          }
+        },
+        {
+          "id": "dlx-t3",
+          "number": "3",
+          "position": 3,
+          "title": "Glass Harbour",
+          "length": 187000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r3",
+            "title": "Glass Harbour",
+            "length": 187000
+          }
+        },
+        {
+          "id": "dlx-t4",
+          "number": "4",
+          "position": 4,
+          "title": "Slow Static",
+          "length": 240000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r4",
+            "title": "Slow Static",
+            "length": 240000
+          }
+        },
+        {
+          "id": "dlx-t5",
+          "number": "5",
+          "position": 5,
+          "title": "Night Signals (Live)",
+          "length": 250000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r5",
+            "title": "Night Signals (Live)",
+            "length": 250000
+          }
+        },
+        {
+          "id": "dlx-t6",
+          "number": "6",
+          "position": 6,
+          "title": "Paper Moons (Demo)",
+          "length": 190000,
+          "artist-credit": [
+            {
+              "name": "The Lanterns",
+              "joinphrase": "",
+              "artist": {
+                "id": "11111111-aaaa-4aaa-8aaa-000000000001",
+                "name": "The Lanterns"
+              }
+            }
+          ],
+          "recording": {
+            "id": "dlx-r6",
+            "title": "Paper Moons (Demo)",
+            "length": 190000
+          }
+        }
+      ]
+    }
+  ]
+}

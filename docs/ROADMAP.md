@@ -57,6 +57,20 @@ contributors and agents.
   Same-titled albums in different folders with different years stay
   separate; disc folders of one album merge.
 - Sidebar pins for albums and playlists; queue toggle in the player bar.
+
+### Metadata matching (decision K10)
+- "Find info" on an album (desktop album view, phone album page) and on a
+  single track (tag editor): searches MusicBrainz, ranks releases by track
+  count, durations (±3 s), titles and album/artist (0–100; ≥ 85
+  recommended, < 50 hidden), shows old → new per field and writes only
+  after "Apply". A single track gets the recording's first official studio
+  album, else single.
+- Writes through the tag editor path (temp file + replace, playing file
+  refused) and adds MusicBrainz release / release-group / recording /
+  track ids. Old values go to `tag_history` (schema v9); "Undo" restores
+  them. Albums without a cover get the Cover Art Archive front cover.
+- MusicBrainz: ≤ 1 request per 1.1 s, one retry on HTTP 503, descriptive
+  User-Agent. No AcoustID fingerprinting yet (untagged files).
 - Phone UI parity: favourites, artists, stats; swipe-back sheets;
   `prefers-reduced-motion` aware animations.
 
@@ -88,38 +102,21 @@ contributors and agents.
 
 ## Next
 
-1. **Release and test on Windows**: media keys and SMTC flyout, tray and
-   close-to-tray, tag editing (also while another program holds the file),
-   playlists, ReplayGain setting, the new now-playing view.
-2. **Try the APK on a phone**: permission prompt and Music folder scan,
-   playback with the screen off, notification controls, cover tint and
-   the lyric line, back button, status/navigation bar insets.
-3. **Android follow-ups**: ReplayGain (ExoPlayer has none), picking
-   folders other than `Music`, a signed release APK, tag writing on shared
-   storage, attaching `.lrc` files (the picker returns `content://` URIs).
-4. **Metadata matching (post-v0, not decided yet)** – proposed design:
-   - Match per **album**, not per track: compare a folder's track count and
-     durations with MusicBrainz releases (Picard's approach).
-   - **Preview and confirm**: old and new values side by side; nothing is
-     written without confirmation; low-score matches are not offered.
-   - **Undo**: keep the previous tags in the database before writing.
-   - Write through the existing tag-editing path (temp file + replace,
-     loaded file refused).
-   - First version: album search + cover from the Cover Art Archive.
-     AcoustID / `fpcalc` fingerprinting only if untagged libraries turn out
-     to be a real problem (extra binary + API key).
-   - Limits: MusicBrainz allows about one request per second and requires
-     a descriptive client identification; album-level matching keeps large
-     libraries feasible.
-   - Scope: "find missing info and covers", not a replacement for
-     MusicBrainz Picard.
+1. **Try metadata matching on real albums** (desktop and phone): the
+   MusicBrainz responses so far are recorded fixtures. A live check:
+   `cd src-tauri && cargo test live_musicbrainz -- --ignored --nocapture`.
+2. **Signed Android release**: add the `ANDROID_KEYSTORE_*` secrets so APK
+   updates install over the previous version (not urgent).
+3. **Later, not decided**: AcoustID fingerprinting for untagged files;
+   matching a whole library in the background.
 
 ## Known limitations
 - Linux MPRIS state lags ~1–2 s (souvlaki's D-Bus loop).
 - Online search/download is desktop only and depends on `yt-dlp`
   (and YouTube); a wrong recording is still possible when no hit is
   close to the album track.
+- Metadata matching has only been tested against recorded MusicBrainz
+  responses, not the live service; "Undo" does not remove an added cover.
 - Artist splitting is heuristic: a duet tagged "A, B & C" splits into
   "A" and "B & C"; three single-word rappers joined by `&` stay one name.
-- Android: not yet tried on a device; ReplayGain is not applied; only the
-  `Music` folder can be added; "Open files" is hidden.
+- Android: "Open files" is hidden; online search and download are desktop only.

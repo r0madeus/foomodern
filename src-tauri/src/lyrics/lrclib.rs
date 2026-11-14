@@ -1,8 +1,10 @@
 //! HTTP client for LRCLIB (https://lrclib.net).
 
 use super::{LyricsError, LyricsResult, LyricsSource, TrackQuery, lrc};
+use crate::net::{Feature, NetPolicy};
 use reqwest::{Client, StatusCode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub const DEFAULT_BASE_URL: &str = "https://lrclib.net";
@@ -142,6 +144,7 @@ pub fn pick_best_match(
 pub struct LrclibClient {
     http: Client,
     base_url: String,
+    policy: Arc<NetPolicy>,
 }
 
 impl LrclibClient {
@@ -154,7 +157,23 @@ impl LrclibClient {
         Ok(Self {
             http,
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            policy: Arc::new(NetPolicy::default()),
         })
+    }
+
+    /// Makes every request ask `policy` first.
+    pub fn with_policy(mut self, policy: Arc<NetPolicy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// The HTTP client; every request goes through here, so the lyrics
+    /// switch in Settings cannot be bypassed.
+    fn http(&self) -> std::result::Result<&Client, LyricsError> {
+        self.policy
+            .require(Feature::Lyrics)
+            .map_err(|_| LyricsError::Disabled)?;
+        Ok(&self.http)
     }
 
     pub async fn fetch(
@@ -173,7 +192,7 @@ impl LrclibClient {
         }
 
         let res = self
-            .http
+            .http()?
             .get(format!("{}/api/get", self.base_url))
             .query(&params)
             .send()
@@ -197,7 +216,7 @@ impl LrclibClient {
             ("artist_name", query.artist.as_str()),
         ];
         let search_res = self
-            .http
+            .http()?
             .get(format!("{}/api/search", self.base_url))
             .query(&search_params)
             .send()
@@ -211,5 +230,70 @@ impl LrclibClient {
             StatusCode::NOT_FOUND => Ok(None),
             status => Err(LyricsError::HttpStatus(status.as_u16())),
         }
+    }
+}
+
+/// A proof-of-work challenge from `POST /api/request-challenge`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Challenge {
+    pub prefix: String,
+    pub target: String,
+}
+
+/// Body of `POST /api/publish`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishBody {
+    pub track_name: String,
+    pub artist_name: String,
+    pub album_name: String,
+    pub duration: u64,
+    pub plain_lyrics: String,
+    pub synced_lyrics: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishReply {
+    Created,
+    /// The token was refused (wrong or expired challenge): ask for a new one.
+    BadToken,
+}
+
+impl LrclibClient {
+    pub async fn request_challenge(&self) -> std::result::Result<Challenge, LyricsError> {
+        let res = self
+            .http()?
+            .post(format!("{}/api/request-challenge", self.base_url))
+            .send()
+            .await?;
+        if !res.status().is_success() {
+            return Err(LyricsError::HttpStatus(res.status().as_u16()));
+        }
+        Ok(res.json().await?)
+    }
+
+    pub async fn publish(
+        &self,
+        token: &str,
+        body: &PublishBody,
+    ) -> std::result::Result<PublishReply, LyricsError> {
+        let res = self
+            .http()?
+            .post(format!("{}/api/publish", self.base_url))
+            .header("X-Publish-Token", token)
+            .json(body)
+            .send()
+            .await?;
+        let status = res.status();
+        if status.is_success() {
+            return Ok(PublishReply::Created);
+        }
+        if status == StatusCode::BAD_REQUEST {
+            let text = res.text().await.unwrap_or_default();
+            if text.contains("PublishToken") || text.to_lowercase().contains("token") {
+                return Ok(PublishReply::BadToken);
+            }
+        }
+        Err(LyricsError::HttpStatus(status.as_u16()))
     }
 }

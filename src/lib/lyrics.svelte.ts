@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { appSettings } from './appSettings.svelte'
 
-export type LyricsSource = 'localLrc' | 'lrclib'
+export type LyricsSource = 'localLrc' | 'lrclib' | 'embedded' | 'netease'
 
 export interface LyricLine {
   timeSeconds: number
@@ -35,6 +35,42 @@ export function findActiveIndex(lines: LyricLine[], pos: number): number {
   return ans
 }
 
+export type ShareBlock =
+  | 'noLocalLyrics'
+  | 'needsMetadata'
+  | 'onLrclib'
+  | 'otherSource'
+  | 'offline'
+  | 'busy'
+
+export interface ShareStatus {
+  available: boolean
+  reason: ShareBlock | null
+}
+
+export type SharePhase = 'idle' | 'sharing' | 'done' | 'cancelled' | 'failed'
+
+export interface Coverage {
+  withLyrics: number
+  withoutLyrics: number
+  unchecked: number
+}
+
+export interface BulkSaveOutcome {
+  saved: number
+  skipped: number
+}
+
+/** True when the lyrics shown are the user's own (a .lrc file or the file's tag). */
+export function isOwnLyrics(res: LyricsResult | null): boolean {
+  return (
+    res !== null &&
+    res.kind !== 'notFound' &&
+    res.kind !== 'instrumental' &&
+    (res.source === 'localLrc' || res.source === 'embedded')
+  )
+}
+
 const KEY = 'foomodern.lyricsOpen'
 
 function loadOpen(): boolean {
@@ -54,7 +90,14 @@ class LyricsStore {
   /** Load lyrics even while the panel is closed (the phone player shows them inline). */
   always = false
 
+  /** Can the lyrics of `shareFor` be published on LRCLIB? Null until checked. */
+  shareStatus = $state<ShareStatus | null>(null)
+  sharePhase = $state<SharePhase>('idle')
+  shareError = $state<string | null>(null)
+  shareFor = $state<string | null>(null)
+
   #requestSeq = 0
+  #shareSeq = 0
 
   toggle(): void {
     this.setOpen(!this.open)
@@ -149,6 +192,58 @@ class LyricsStore {
       if (seq === this.#requestSeq) this.loading = false
     }
   }
+
+  /** Asks Rust whether the track's own lyrics can be shared (and why not). */
+  async checkShare(path: string, durationSeconds: number | null): Promise<void> {
+    // A running share keeps the state until it ends (Rust allows one at a time).
+    if (this.sharePhase === 'sharing') return
+    const seq = ++this.#shareSeq
+    this.shareFor = path
+    this.shareStatus = null
+    this.sharePhase = 'idle'
+    this.shareError = null
+    try {
+      const status = await invoke<ShareStatus>('lyrics_share_status', { path, durationSeconds })
+      if (seq === this.#shareSeq) this.shareStatus = status
+    } catch {
+      if (seq === this.#shareSeq) this.shareStatus = { available: false, reason: 'offline' }
+    }
+  }
+
+  /** Publishes the track's own lyrics on LRCLIB. Can take a few minutes. */
+  async share(path: string, durationSeconds: number | null): Promise<void> {
+    if (this.sharePhase === 'sharing') return
+    this.#shareSeq++
+    this.shareFor = path
+    this.sharePhase = 'sharing'
+    this.shareError = null
+    try {
+      const outcome = await invoke<'published' | 'cancelled'>('lyrics_share', { path, durationSeconds })
+      this.sharePhase = outcome === 'published' ? 'done' : 'cancelled'
+      if (outcome === 'published') this.shareStatus = { available: false, reason: 'onLrclib' }
+    } catch (e) {
+      this.sharePhase = 'failed'
+      this.shareError = String(e)
+    }
+  }
+
+  async cancelShare(): Promise<void> {
+    try {
+      await invoke('lyrics_share_cancel')
+    } catch {
+      // nothing to cancel
+    }
+  }
+
+  /** Writes every cached lyrics of the library with the chosen save mode. */
+  saveCached(): Promise<BulkSaveOutcome> {
+    return invoke<BulkSaveOutcome>('lyrics_save_cached')
+  }
+
+  coverage(): Promise<Coverage> {
+    return invoke<Coverage>('lyrics_coverage')
+  }
 }
+
 
 export const lyrics = new LyricsStore()

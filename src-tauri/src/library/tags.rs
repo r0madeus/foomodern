@@ -76,6 +76,25 @@ pub struct TagChanges {
     pub year: Option<Option<i32>>,
     #[serde(deserialize_with = "keep_clear_set")]
     pub genre: Option<Option<String>>,
+    /// MusicBrainz identifiers (release, release group, recording, release
+    /// track). The editor never sets these; the metadata matcher does.
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_release_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_release_group_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_recording_id: Option<Option<String>>,
+    #[serde(deserialize_with = "keep_clear_set")]
+    pub mb_track_id: Option<Option<String>>,
+}
+
+/// The MusicBrainz identifiers stored in a file's tags.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MbIds {
+    pub release_id: Option<String>,
+    pub release_group_id: Option<String>,
+    pub recording_id: Option<String>,
+    pub track_id: Option<String>,
 }
 
 impl TagChanges {
@@ -108,6 +127,10 @@ impl TagChanges {
             disc_no: self.disc_no,
             year: self.year,
             genre: text(&self.genre),
+            mb_release_id: text(&self.mb_release_id),
+            mb_release_group_id: text(&self.mb_release_group_id),
+            mb_recording_id: text(&self.mb_recording_id),
+            mb_track_id: text(&self.mb_track_id),
         })
     }
 }
@@ -128,6 +151,25 @@ fn from_tag(tag: &Tag) -> EditableTags {
         year: tag.date().map(|d| i32::from(d.year)).filter(|y| *y > 0),
         genre: non_empty(tag.genre()),
     }
+}
+
+fn mb_ids_from_tag(tag: &Tag) -> MbIds {
+    MbIds {
+        release_id: non_empty(tag.get_string(ItemKey::MusicBrainzReleaseId)),
+        release_group_id: non_empty(tag.get_string(ItemKey::MusicBrainzReleaseGroupId)),
+        recording_id: non_empty(tag.get_string(ItemKey::MusicBrainzRecordingId)),
+        track_id: non_empty(tag.get_string(ItemKey::MusicBrainzTrackId)),
+    }
+}
+
+/// MusicBrainz ids of a file (empty when the file has none).
+pub fn read_mb_ids(path: &Path) -> Result<MbIds, TagError> {
+    let tagged = lofty::read_from_path(path)?;
+    Ok(tagged
+        .primary_tag()
+        .or_else(|| tagged.first_tag())
+        .map(mb_ids_from_tag)
+        .unwrap_or_default())
 }
 
 /// Same tag the library scanner reads: the primary tag, else the first one.
@@ -187,6 +229,20 @@ fn apply(tag: &mut Tag, c: &TagChanges) {
         Some(None) => tag.remove_genre(),
         Some(Some(v)) => tag.set_genre(v.clone()),
     }
+    for (change, key) in [
+        (&c.mb_release_id, ItemKey::MusicBrainzReleaseId),
+        (&c.mb_release_group_id, ItemKey::MusicBrainzReleaseGroupId),
+        (&c.mb_recording_id, ItemKey::MusicBrainzRecordingId),
+        (&c.mb_track_id, ItemKey::MusicBrainzTrackId),
+    ] {
+        match change {
+            None => {}
+            Some(None) => tag.remove_key(key),
+            Some(Some(v)) => {
+                tag.insert_text(key, v.clone());
+            }
+        }
+    }
 }
 
 /// Makes sure the file has its format's primary tag, creating it (seeded from
@@ -212,6 +268,22 @@ fn temp_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.foomodern-tags.tmp"))
 }
 
+/// Writes the (modified) tags of `tagged` to a temporary copy of `path` and
+/// replaces the file with it. On any error the original is left as it was.
+fn save_replacing(path: &Path, tagged: &TaggedFile) -> Result<(), TagError> {
+    let tmp = temp_path(path);
+    let result = (|| {
+        std::fs::copy(path, &tmp)?;
+        tagged.save_to_path(&tmp, WriteOptions::default())?;
+        std::fs::rename(&tmp, path)?;
+        Ok::<(), TagError>(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// Applies `changes` to the file at `path`. Unchanged fields are not
 /// touched. On any error the original file is left as it was.
 pub fn write_tags(path: &Path, changes: &TagChanges) -> Result<(), TagError> {
@@ -225,18 +297,57 @@ pub fn write_tags(path: &Path, changes: &TagChanges) -> Result<(), TagError> {
         ));
     };
     apply(tag, &changes);
+    save_replacing(path, &tagged)
+}
 
-    let tmp = temp_path(path);
-    let result = (|| {
-        std::fs::copy(path, &tmp)?;
-        tagged.save_to_path(&tmp, WriteOptions::default())?;
-        std::fs::rename(&tmp, path)?;
-        Ok::<(), TagError>(())
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+/// The text of the lyrics item of a tag, whichever key the format uses.
+/// lofty maps `ItemKey::Lyrics` to the Vorbis `LYRICS` comment, the MP4
+/// `(c)lyr` atom and the APE `Lyrics` item, but not to ID3v2: there the
+/// text lives in the `USLT` frame, which is `ItemKey::UnsyncLyrics`.
+fn lyrics_from_tag(tag: &Tag) -> Option<String> {
+    non_empty(tag.get_string(ItemKey::Lyrics))
+        .or_else(|| non_empty(tag.get_string(ItemKey::UnsyncLyrics)))
+}
+
+/// The lyrics stored in the file's tags (`None` when missing or blank).
+pub fn read_lyrics(path: &Path) -> Option<String> {
+    let tagged = lofty::read_from_path(path).ok()?;
+    tagged
+        .primary_tag()
+        .and_then(lyrics_from_tag)
+        .or_else(|| tagged.tags().iter().find_map(lyrics_from_tag))
+}
+
+/// Stores `text` in the lyrics tag of `path` (temp file + replace, like
+/// [`write_tags`]). Returns `false` without touching the file when it
+/// already has non-empty lyrics.
+pub fn write_lyrics(path: &Path, text: &str) -> Result<bool, TagError> {
+    if text.trim().is_empty() {
+        return Err(TagError::Invalid("no lyrics to write".into()));
     }
-    result
+    let mut tagged = lofty::read_from_path(path)?;
+    if tagged.tags().iter().any(|t| lyrics_from_tag(t).is_some()) {
+        return Ok(false);
+    }
+    ensure_primary(&mut tagged);
+    let primary = tagged.primary_tag_type();
+    let Some(tag) = tagged.tag_mut(primary) else {
+        return Err(TagError::Invalid(
+            "this file format does not support tags".into(),
+        ));
+    };
+    let key = if primary == TagType::Id3v2 {
+        ItemKey::UnsyncLyrics
+    } else {
+        ItemKey::Lyrics
+    };
+    if !tag.insert_text(key, text.to_owned()) {
+        return Err(TagError::Invalid(
+            "this tag format cannot hold lyrics".into(),
+        ));
+    }
+    save_replacing(path, &tagged)?;
+    Ok(true)
 }
 
 /// Message shown when the user tries to edit the file the player has open.

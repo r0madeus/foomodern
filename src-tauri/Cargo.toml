@@ -28,6 +28,8 @@ log = "=0.4.35"
 thiserror = "=2.0.21"
 rusqlite = { version = "=0.42.0", features = ["bundled"] }
 lofty = "=0.25.5"
+# Already in Cargo.lock as a transitive dependency; used for the LRCLIB publish proof-of-work.
+sha2 = "=0.10.9"
 walkdir = "=2.5.0"
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "query"] }
 tokio = { version = "=1.54.1", features = ["rt"] }

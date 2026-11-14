@@ -113,3 +113,61 @@ pub trait AudioEngine: Send + Sync {
     /// Choose the ReplayGain mode. Takes effect for the current and later tracks.
     fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()>;
 }
+
+/// Wraps an engine so that online streams (`http(s)://` paths) are only
+/// loaded while the online features are allowed. Local files always pass.
+/// Without this, a stream resolved before the user went offline would keep
+/// being fetched by the engine.
+pub struct NetGuardedEngine {
+    inner: Box<dyn AudioEngine>,
+    net: std::sync::Arc<crate::net::NetPolicy>,
+}
+
+impl NetGuardedEngine {
+    pub fn new(inner: Box<dyn AudioEngine>, net: std::sync::Arc<crate::net::NetPolicy>) -> Self {
+        Self { inner, net }
+    }
+
+    fn blocked(&self, path: &Path) -> bool {
+        crate::session::is_stream_url(path) && !self.net.allowed(crate::net::Feature::Online)
+    }
+}
+
+impl AudioEngine for NetGuardedEngine {
+    fn load(&self, path: &Path) -> EngineResult<()> {
+        if self.blocked(path) {
+            return Err(EngineError::Command(crate::net::DISABLED_MESSAGE.into()));
+        }
+        self.inner.load(path)
+    }
+
+    fn set_next(&self, path: Option<&Path>) -> EngineResult<()> {
+        // Leave the next slot empty; the player then fails the load of that
+        // entry when the current track ends, instead of streaming it.
+        self.inner.set_next(path.filter(|p| !self.blocked(p)))
+    }
+
+    fn play(&self) -> EngineResult<()> {
+        self.inner.play()
+    }
+
+    fn pause(&self) -> EngineResult<()> {
+        self.inner.pause()
+    }
+
+    fn stop(&self) -> EngineResult<()> {
+        self.inner.stop()
+    }
+
+    fn seek(&self, seconds: f64) -> EngineResult<()> {
+        self.inner.seek(seconds)
+    }
+
+    fn set_volume(&self, percent: f64) -> EngineResult<()> {
+        self.inner.set_volume(percent)
+    }
+
+    fn set_replaygain(&self, mode: ReplayGain) -> EngineResult<()> {
+        self.inner.set_replaygain(mode)
+    }
+}

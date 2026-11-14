@@ -2,6 +2,7 @@
 //! releases. Only reads the latest release; downloading and installing is
 //! left to the user (the in-app updater needs a signing key first).
 
+use crate::net::{Feature, NetPolicy};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -56,13 +57,27 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
 }
 
 /// The latest release if it is newer than `current`.
-pub async fn check(current: &str) -> Result<Option<UpdateInfo>, reqwest::Error> {
+pub async fn check(current: &str, policy: &NetPolicy) -> Result<Option<UpdateInfo>, String> {
+    check_at(LATEST_URL, current, policy).await
+}
+
+/// [`check`] against another address (tests).
+async fn check_at(
+    url: &str,
+    current: &str,
+    policy: &NetPolicy,
+) -> Result<Option<UpdateInfo>, String> {
+    policy.require(Feature::Updates).map_err(str::to_owned)?;
+    fetch_release(url, current).await.map_err(|e| e.to_string())
+}
+
+async fn fetch_release(url: &str, current: &str) -> Result<Option<UpdateInfo>, reqwest::Error> {
     let release: Release = crate::net::client_builder()
         .user_agent(concat!("FooModern/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
         .build()?
-        .get(LATEST_URL)
+        .get(url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await?
@@ -104,6 +119,65 @@ mod tests {
         assert!(!is_newer("v1.0", "dev"));
     }
 
+    /// A one-shot HTTP server that counts the requests it receives.
+    fn serve(body: &'static str) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{Read, Write};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/latest", listener.local_addr().unwrap());
+        let count = std::sync::Arc::new(AtomicUsize::new(0));
+        let seen = std::sync::Arc::clone(&count);
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                seen.fetch_add(1, Ordering::SeqCst);
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(reply.as_bytes());
+            }
+        });
+        (url, count)
+    }
+
+    #[test]
+    fn update_check_is_refused_without_a_request_when_off() {
+        use std::sync::atomic::Ordering;
+        let (url, count) = serve(
+            r#"{"tag_name":"v99.0.0","html_url":"https://github.com/r0madeus/foomodern/releases/tag/v99.0.0"}"#,
+        );
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let policy = NetPolicy::default();
+
+        // Offline mode, and the updates switch alone: error, no request.
+        policy.set_offline(true);
+        let err = rt.block_on(check_at(&url, "0.1.0", &policy)).unwrap_err();
+        assert_eq!(err, "disabled in Settings");
+        policy.set_offline(false);
+        policy.set_feature(Feature::Updates, false);
+        let err = rt.block_on(check_at(&url, "0.1.0", &policy)).unwrap_err();
+        assert_eq!(err, "disabled in Settings");
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+
+        // Other switches off does not stop updates.
+        policy.set_feature(Feature::Updates, true);
+        for f in [Feature::Lyrics, Feature::Online, Feature::Metadata] {
+            policy.set_feature(f, false);
+        }
+        let found = rt
+            .block_on(check_at(&url, "0.1.0", &policy))
+            .unwrap()
+            .expect("newer release");
+        assert_eq!(found.version, "99.0.0");
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+
     /// Hits the real GitHub API: `cargo test -- --ignored live_latest_release`.
     #[test]
     #[ignore]
@@ -113,10 +187,14 @@ mod tests {
             .build()
             .unwrap();
         let found = rt
-            .block_on(check("0.0.1"))
+            .block_on(check("0.0.1", &NetPolicy::default()))
             .unwrap()
             .expect("a release newer than 0.0.1");
         assert!(found.url.starts_with(RELEASES_PREFIX), "{found:?}");
-        assert_eq!(rt.block_on(check("999.0.0")).unwrap(), None);
+        assert_eq!(
+            rt.block_on(check("999.0.0", &NetPolicy::default()))
+                .unwrap(),
+            None
+        );
     }
 }

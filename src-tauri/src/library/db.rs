@@ -13,7 +13,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -152,6 +152,18 @@ CREATE TABLE artists_meta (
 );
 ";
 
+pub(super) const SCHEMA_V9: &str = "
+CREATE TABLE IF NOT EXISTS tag_history (
+    id       INTEGER PRIMARY KEY,
+    batch_id INTEGER NOT NULL,
+    track_id INTEGER,
+    path     TEXT NOT NULL,
+    saved_at INTEGER NOT NULL,
+    old_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tag_history_batch ON tag_history(batch_id);
+";
+
 /// Opens-time setup: pragmas and migrations.
 pub fn init(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -231,6 +243,12 @@ pub fn init(conn: &Connection) -> Result<()> {
                 log::debug!("could not remove cover {cover}: {e}");
             }
         }
+    }
+    if version < 9 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V9)?;
+        tx.pragma_update(None, "user_version", 9)?;
+        tx.commit()?;
     }
     Ok(())
 }
@@ -1948,4 +1966,102 @@ pub fn artist_profile(conn: &Connection, name: &str) -> Result<ArtistProfile> {
         albums,
         tracks,
     })
+}
+
+// ---------------------------------------------------------------------
+// Tag history (undo for automatic metadata matching)
+// ---------------------------------------------------------------------
+
+/// One saved "before" state of a track's tags.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagHistoryRow {
+    pub id: i64,
+    pub batch_id: i64,
+    pub track_id: Option<i64>,
+    pub path: String,
+    pub old_json: String,
+}
+
+/// A fresh batch id (one per apply call).
+pub fn next_tag_batch_id(conn: &Connection) -> Result<i64> {
+    let max: Option<i64> =
+        conn.query_row("SELECT MAX(batch_id) FROM tag_history", [], |r| r.get(0))?;
+    Ok(max.unwrap_or(0) + 1)
+}
+
+pub fn insert_tag_history(
+    conn: &Connection,
+    batch_id: i64,
+    track_id: Option<i64>,
+    path: &str,
+    saved_at: i64,
+    old_json: &str,
+) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO tag_history(batch_id, track_id, path, saved_at, old_json)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![batch_id, track_id, path, saved_at, old_json],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn delete_tag_history_row(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM tag_history WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+pub fn tag_history_batch(conn: &Connection, batch_id: i64) -> Result<Vec<TagHistoryRow>> {
+    let mut st = conn.prepare(
+        "SELECT id, batch_id, track_id, path, old_json FROM tag_history
+         WHERE batch_id = ?1 ORDER BY id",
+    )?;
+    let rows = st.query_map([batch_id], |r| {
+        Ok(TagHistoryRow {
+            id: r.get(0)?,
+            batch_id: r.get(1)?,
+            track_id: r.get(2)?,
+            path: r.get(3)?,
+            old_json: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<_, _>>()?)
+}
+
+/// Id of the library track stored for `path`.
+pub fn track_id_by_path(conn: &Connection, path: &str) -> Result<Option<i64>> {
+    Ok(conn
+        .query_row("SELECT id FROM tracks WHERE path = ?1", [path], |r| {
+            r.get(0)
+        })
+        .optional()?)
+}
+
+/// Album row of the album a track currently belongs to.
+pub fn track_album(conn: &Connection, track_id: i64) -> Result<Option<AlbumRow>> {
+    Ok(conn
+        .query_row(
+            &format!("{ALBUM_SELECT} WHERE a.id = (SELECT album_id FROM tracks WHERE id = ?1)"),
+            [track_id],
+            album_row,
+        )
+        .optional()?)
+}
+
+/// One track by id, in the same shape as album listings.
+pub fn track_by_id(conn: &Connection, track_id: i64) -> Result<Option<TrackRow>> {
+    Ok(conn
+        .query_row(
+            &format!("{TRACK_SELECT} WHERE t.id = ?1"),
+            [track_id],
+            track_row,
+        )
+        .optional()?)
+}
+
+pub fn set_album_cover(conn: &Connection, album_id: i64, cover: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE albums SET cover = ?1 WHERE id = ?2",
+        rusqlite::params![cover, album_id],
+    )?;
+    Ok(())
 }

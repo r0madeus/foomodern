@@ -19,6 +19,7 @@
   import PlaylistView from './lib/PlaylistView.svelte'
   import LyricsPanel from './lib/LyricsPanel.svelte'
   import TagEditor from './lib/TagEditor.svelte'
+  import MetadataMatchModal from './lib/MetadataMatchModal.svelte'
   import { player } from './lib/player.svelte'
   import { library } from './lib/library.svelte'
   import { lyrics } from './lib/lyrics.svelte'
@@ -183,8 +184,8 @@
     pinned.init().catch((e) => (player.error = String(e)))
     void appSettings.load().then(() => {
       if (appSettings.platform !== 'android') void online.init()
+      updates.autoCheck()
     })
-    updates.autoCheck()
   })
 
   // The full-screen player (desktop "now playing", or the phone UI) shows
@@ -541,3 +542,4 @@
 {/if}
 
 <TagEditor />
+<MetadataMatchModal />

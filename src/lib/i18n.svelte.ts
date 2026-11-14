@@ -118,6 +118,41 @@ const TR: Record<string, string> = {
   'Play a track to see lyrics.': 'Sözleri görmek için bir şarkı çal.',
   Sync: 'Senkronize et',
   Retry: 'Tekrar dene',
+  'Embedded tag': 'Gömülü etiket',
+  NetEase: 'NetEase',
+  'Save lyrics': 'Sözleri kaydet',
+  'Next to the song (.lrc file)': 'Şarkının yanına (.lrc dosyası)',
+  'Inside the song file (tag)': 'Şarkı dosyasının içine (etiket)',
+  "Only in the app's cache": 'Yalnız uygulamanın önbelleğinde',
+  "Lyrics found online are also saved permanently, so they work offline and in other players. An existing .lrc file or lyrics tag is never replaced. Lyrics in a song's tag are written once the song is no longer the one playing.":
+    'Çevrimiçi bulunan sözler kalıcı olarak da kaydedilir; böylece çevrimdışı ve başka oynatıcılarda da çalışır. Var olan bir .lrc dosyası ya da söz etiketi asla değiştirilmez. Etikete yazma, şarkı çalan şarkı olmaktan çıkınca yapılır.',
+  'NetEase Cloud Music': 'NetEase Cloud Music',
+  'Also search NetEase Cloud Music (unofficial; used when LRCLIB has nothing)':
+    'NetEase Cloud Music’te de ara (resmî olmayan; LRCLIB’de bir şey yoksa kullanılır)',
+  'Save cached lyrics to songs': 'Önbellekteki sözleri şarkılara kaydet',
+  'Writes the lyrics already found for your library with the setting above. Songs that already have lyrics are skipped.':
+    'Kütüphanen için daha önce bulunan sözleri yukarıdaki ayara göre yazar. Sözü olan şarkılar atlanır.',
+  '{saved} saved, {skipped} skipped': '{saved} kaydedildi, {skipped} atlandı',
+  'Lyrics coverage': 'Söz kapsamı',
+  'How many songs of your library have lyrics.': 'Kütüphanendeki kaç şarkının sözü var.',
+  '{with} with lyrics · {without} checked, none found · {unchecked} not looked up yet':
+    '{with} şarkının sözü var · {without} arandı, bulunamadı · {unchecked} henüz aranmadı',
+  'Counting…': 'Sayılıyor…',
+  Count: 'Say',
+  'Share on LRCLIB': 'LRCLIB’de paylaş',
+  'Your lyrics will be published publicly on lrclib.net. Sending takes a few minutes of processor work (LRCLIB requires it against spam).':
+    'Sözlerin lrclib.net’te herkese açık olarak yayınlanacak. Gönderim birkaç dakika işlemci kullanır (LRCLIB istenmeyen gönderilere karşı bunu şart koşuyor).',
+  Publish: 'Yayınla',
+  'Sharing… (this can take a few minutes)': 'Paylaşılıyor… (birkaç dakika sürebilir)',
+  'Shared on LRCLIB. Thank you!': 'LRCLIB’de paylaşıldı. Teşekkürler!',
+  'Sharing cancelled.': 'Paylaşım iptal edildi.',
+  'Could not share: {error}': 'Paylaşılamadı: {error}',
+  'No lyrics of your own to share.': 'Paylaşılacak kendi sözün yok.',
+  'Needs title, artist, album and duration in the tags.': 'Etiketlerde başlık, sanatçı, albüm ve süre gerekir.',
+  'LRCLIB already has these lyrics.': 'LRCLIB’de bu sözler zaten var.',
+  'These lyrics came from another service.': 'Bu sözler başka bir servisten geldi.',
+  'Could not reach LRCLIB.': 'LRCLIB’ye ulaşılamadı.',
+  'Another share is running.': 'Başka bir paylaşım sürüyor.',
 
   // Lists and sorting
   'Sort by': 'Sırala',
@@ -223,6 +258,31 @@ const TR: Record<string, string> = {
   ' ({n} not found in this library)': ' ({n} tanesi bu kütüphanede bulunamadı)',
   Imported: 'İçe aktarılan',
 
+  // Find info (MusicBrainz)
+  'Find info': 'Bilgileri bul',
+  'Find info for this track': 'Bu parça için bilgileri bul',
+  Recommended: 'Önerilen',
+  Check: 'Kontrol et',
+  Apply: 'Uygula',
+  'Applying…': 'Uygulanıyor…',
+  Undo: 'Geri al',
+  'Undoing…': 'Geri alınıyor…',
+  'Searching MusicBrainz…': 'MusicBrainz aranıyor…',
+  'MusicBrainz could not be reached': 'MusicBrainz\'e ulaşılamadı',
+  'No matching release was found on MusicBrainz.': 'MusicBrainz\'te eşleşen bir sürüm bulunamadı.',
+  'Matches from MusicBrainz. Nothing is written until you apply.':
+    'MusicBrainz eşleşmeleri. Sen uygulamadan hiçbir şey yazılmaz.',
+  Matches: 'Eşleşmeler',
+  Changes: 'Değişiklikler',
+  'Match score {score}': 'Eşleşme puanı {score}',
+  'No matching track on this release; left unchanged.': 'Bu sürümde eşleşen parça yok; değiştirilmedi.',
+  'No visible changes': 'Görünür değişiklik yok',
+  'MusicBrainz ids are saved in the tags too, and a cover is added if the album has none.':
+    'MusicBrainz kimlikleri de etiketlere yazılır; albümün kapağı yoksa kapak eklenir.',
+  'The changes were undone.': 'Değişiklikler geri alındı.',
+  'Cover added': 'Kapak eklendi',
+  'Save or discard your edits first.': 'Önce düzenlemelerini kaydet ya da vazgeç.',
+
   // Tags
   'Edit tags': 'Etiketleri düzenle',
   'Edit tags…': 'Etiketleri düzenle…',
@@ -314,6 +374,32 @@ const TR: Record<string, string> = {
   '{n} active': '{n} etkin',
   'Clear finished': 'Bitenleri temizle',
   'Search & Downloads': 'Ara ve İndir',
+  // Offline mode and internet switches
+  Internet: 'İnternet',
+  'Offline mode': 'Çevrimdışı mod',
+  'Nothing connects to the internet': 'Hiçbir şey internete bağlanmaz',
+  'Offline mode is on, so the switches above are off.':
+    'Çevrimdışı mod açık, bu yüzden yukarıdaki anahtarlar kapalı.',
+  'Turned off in Settings': 'Ayarlar’dan kapalı',
+  'Not checked': 'Denetlenmedi',
+  'Lyrics (LRCLIB, NetEase)': 'Şarkı sözleri (LRCLIB, NetEase)',
+  'Looks up lyrics online and lets you share your own on LRCLIB. Lyrics next to your songs and in their tags keep working.':
+    'Sözleri internetten arar ve kendi sözlerini LRCLIB’de paylaşmanı sağlar. Şarkıların yanındaki ve etiketlerindeki sözler çalışmaya devam eder.',
+  'Online search and downloads (YouTube, iTunes)': 'Çevrimiçi arama ve indirme (YouTube, iTunes)',
+  'Online search, streaming and downloads, including album search and covers through iTunes.':
+    'Çevrimiçi arama, dinleme ve indirme; iTunes üzerinden albüm arama ve kapaklar dahil.',
+  'Artist info (Deezer, Wikipedia, iTunes)': 'Sanatçı bilgisi (Deezer, Wikipedia, iTunes)',
+  'Artist portraits, biographies and missing albums. Anything already saved is still shown.':
+    'Sanatçı fotoğrafları, biyografiler ve eksik albümler. Daha önce kaydedilenler yine gösterilir.',
+  'Find info (MusicBrainz, Cover Art Archive)': 'Bilgi bul (MusicBrainz, Cover Art Archive)',
+  'Finds album and track tags and covers on MusicBrainz.':
+    'Albüm ve şarkı etiketlerini ve kapaklarını MusicBrainz’de bulur.',
+  'Update check (GitHub)': 'Güncelleme denetimi (GitHub)',
+  'Checks once a day whether a new version of FooModern is available.':
+    'FooModern’in yeni bir sürümü olup olmadığını günde bir kez denetler.',
+  'Search your library…': 'Kütüphanende ara…',
+  'Online search is turned off in Settings.': 'Çevrimiçi arama Ayarlar’dan kapalı.',
+  'Type to search your local library.': 'Yerel kütüphanende aramak için yaz.',
   'Download folder': 'İndirme klasörü',
   'Choose download folder': 'İndirme klasörünü seç',
   'Locate yt-dlp executable': 'yt-dlp dosyasını seç',

@@ -748,6 +748,51 @@ impl Library {
         scan::rescan_files(self, files)
     }
 
+    pub fn track_by_id(&self, track_id: i64) -> Result<Option<TrackRow>> {
+        db::track_by_id(&self.conn(), track_id)
+    }
+
+    pub fn track_id_by_path(&self, path: &str) -> Result<Option<i64>> {
+        db::track_id_by_path(&self.conn(), path)
+    }
+
+    /// The album a track currently belongs to.
+    pub fn track_album(&self, track_id: i64) -> Result<Option<AlbumRow>> {
+        db::track_album(&self.conn(), track_id)
+    }
+
+    /// Sets an album's cover file (path inside the covers cache) and
+    /// notifies the host.
+    pub fn set_album_cover(&self, album_id: i64, cover: &str) -> Result<()> {
+        db::set_album_cover(&self.conn(), album_id, cover)?;
+        self.bump();
+        Ok(())
+    }
+
+    /// Next id for a group of tag changes that can be undone together.
+    pub fn next_tag_batch_id(&self) -> Result<i64> {
+        db::next_tag_batch_id(&self.conn())
+    }
+
+    /// Stores the tags a track had before a metadata write (JSON).
+    pub fn save_tag_history(
+        &self,
+        batch_id: i64,
+        track_id: Option<i64>,
+        path: &str,
+        old_json: &str,
+    ) -> Result<i64> {
+        db::insert_tag_history(&self.conn(), batch_id, track_id, path, unix_now(), old_json)
+    }
+
+    pub fn delete_tag_history_row(&self, id: i64) -> Result<()> {
+        db::delete_tag_history_row(&self.conn(), id)
+    }
+
+    pub fn tag_history_batch(&self, batch_id: i64) -> Result<Vec<db::TagHistoryRow>> {
+        db::tag_history_batch(&self.conn(), batch_id)
+    }
+
     /// Queues the given folders for scanning and starts the worker thread if
     /// none is running. Folders already queued are not queued twice.
     pub fn start_scan(self: &Arc<Self>, folders: Vec<FolderInfo>) {

@@ -450,3 +450,242 @@ fn parses_search_hits_with_channel_and_duration() {
     assert_eq!(hits[1].channel, "Up");
     assert_eq!(hits[1].duration_seconds, None);
 }
+
+// ---- offline mode and the per-feature internet switches ----
+
+fn net_block_on<F: std::future::Future>(fut: F) -> F::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(fut)
+}
+
+fn test_library(dir: &Path) -> Arc<Library> {
+    Arc::new(
+        Library::open(
+            &dir.join("lib.sqlite3"),
+            &dir.join("covers"),
+            crate::library::Hooks::none(),
+        )
+        .unwrap(),
+    )
+}
+
+fn test_service(dir: &Path, policy: &Arc<NetPolicy>) -> OnlineService {
+    OnlineService::new(
+        dir.join("online-covers"),
+        dir.join("downloads"),
+        Arc::new(|_| {}),
+        Arc::clone(policy),
+    )
+}
+
+/// A "yt-dlp" that records every start in `marker`.
+#[cfg(unix)]
+fn marker_ytdlp(dir: &Path) -> (PathBuf, PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let marker = dir.join("ytdlp-started");
+    let script = dir.join("fake-ytdlp");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho started >> '{}'\necho 2099.01.01\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (script, marker)
+}
+
+#[test]
+fn online_entry_points_are_refused_when_online_is_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = test_library(dir.path());
+    let store = SessionStore::new(dir.path().join("session.json"));
+    let policy = store.net_policy();
+    let svc = test_service(dir.path(), &policy);
+    let track = album_track("Song", "Artist", 100.0);
+    let album = OnlineAlbum {
+        id: "itunes:1".into(),
+        title: "Album".into(),
+        artist: "Artist".into(),
+        year: None,
+        track_count: 1,
+        cover: None,
+        cover_url: None,
+        source_url: None,
+    };
+    let request = || DownloadRequest {
+        kind: DownloadKind::Track,
+        title: "Song".into(),
+        artist: "Artist".into(),
+        cover: None,
+        tracks: vec![album_track("Song", "Artist", 100.0)],
+    };
+
+    type TurnOff = Box<dyn Fn(&NetPolicy)>;
+    let cases: [(&str, TurnOff); 3] = [
+        ("offline mode", Box::new(|p| p.set_offline(true))),
+        (
+            "online switch",
+            Box::new(|p| p.set_feature(Feature::Online, false)),
+        ),
+        (
+            "both",
+            Box::new(|p| {
+                p.set_offline(true);
+                p.set_feature(Feature::Online, false);
+            }),
+        ),
+    ];
+    for (name, off) in cases {
+        policy.set_offline(false);
+        policy.set_feature(Feature::Online, true);
+        off(&policy);
+        let msg = |e: OnlineError| e.to_string();
+        assert_eq!(
+            net_block_on(svc.search("some query", "yt-dlp")).map_err(msg),
+            Err("disabled in Settings".to_string()),
+            "{name}"
+        );
+        assert_eq!(
+            net_block_on(svc.album_detail(&album, "yt-dlp")).map_err(msg),
+            Err("disabled in Settings".to_string()),
+            "{name}"
+        );
+        assert_eq!(
+            net_block_on(svc.resolve_stream(&track, "yt-dlp")).map_err(msg),
+            Err("disabled in Settings".to_string()),
+            "{name}"
+        );
+        assert_eq!(
+            svc.enqueue_download(request(), &store, &lib).map_err(msg),
+            Err("disabled in Settings".to_string()),
+            "{name}"
+        );
+        assert!(svc.downloads().is_empty(), "{name}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn status_does_not_run_ytdlp_when_online_is_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = test_library(dir.path());
+    let store = SessionStore::new(dir.path().join("session.json"));
+    let (script, marker) = marker_ytdlp(dir.path());
+    store.set_ytdlp_path(Some(script));
+    let policy = store.net_policy();
+    let svc = test_service(dir.path(), &policy);
+
+    policy.set_offline(true);
+    let status = svc.status(&store, &lib);
+    assert!(!status.ytdlp_available && status.ytdlp_version.is_none());
+    assert!(!status.ffmpeg_available);
+    policy.set_offline(false);
+    policy.set_feature(Feature::Online, false);
+    assert!(!svc.status(&store, &lib).ytdlp_available);
+    assert!(!marker.exists(), "yt-dlp must not be started");
+
+    // Other switches off, online on: the tool is probed as before.
+    policy.set_feature(Feature::Online, true);
+    for f in [Feature::Lyrics, Feature::ArtistInfo, Feature::Metadata] {
+        policy.set_feature(f, false);
+    }
+    let status = svc.status(&store, &lib);
+    assert!(status.ytdlp_available);
+    assert!(marker.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn queued_downloads_are_skipped_without_starting_ytdlp() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = test_library(dir.path());
+    let (script, marker) = marker_ytdlp(dir.path());
+    let policy = Arc::new(NetPolicy::default());
+    policy.set_offline(true);
+
+    let job = |id| DownloadJob {
+        id,
+        kind: DownloadKind::Track,
+        title: "Song".into(),
+        artist: "Artist".into(),
+        cover: None,
+        state: DownloadState::Queued,
+        done_tracks: 0,
+        total_tracks: 1,
+        current_track: None,
+        error: None,
+        output_dir: None,
+    };
+    let jobs = Arc::new(Mutex::new(vec![job(1), job(2)]));
+    let (tx, rx) = mpsc::channel();
+    for id in [1, 2] {
+        tx.send(DownloadWork {
+            job_id: id,
+            tracks: vec![album_track("Song", "Artist", 100.0)],
+            download_dir: dir.path().join("out"),
+            ytdlp_bin: script.to_string_lossy().into_owned(),
+            lib: Arc::clone(&lib),
+        })
+        .unwrap();
+    }
+    drop(tx);
+    download_worker(
+        rx,
+        Arc::clone(&jobs),
+        Arc::new(Mutex::new(HashSet::new())),
+        Arc::new(|_| {}),
+        dir.path().join("covers"),
+        reqwest::Client::new(),
+        Arc::clone(&policy),
+    );
+    let jobs = jobs.lock().unwrap();
+    assert!(jobs.iter().all(|j| j.state == DownloadState::Failed));
+    assert!(
+        jobs.iter()
+            .all(|j| j.error.as_deref() == Some("disabled in Settings"))
+    );
+    assert!(!marker.exists(), "yt-dlp must not be started");
+    assert!(!dir.path().join("out").exists());
+}
+
+#[test]
+fn artist_info_returns_the_cache_only_when_off_and_keeps_it_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = test_library(dir.path());
+    let policy = Arc::new(NetPolicy::default());
+    let svc = test_service(dir.path(), &policy);
+    let image = dir.path().join("portrait.jpg");
+    std::fs::write(&image, b"jpg").unwrap();
+    let image = image.to_string_lossy().into_owned();
+    lib.save_artist_meta("Nadia Okafor", Some(&image), Some("Cached bio."))
+        .unwrap();
+    let before = lib.artist_meta("Nadia Okafor").unwrap().unwrap();
+
+    for off in [
+        (|p: &NetPolicy| p.set_offline(true)) as fn(&NetPolicy),
+        |p: &NetPolicy| p.set_feature(Feature::ArtistInfo, false),
+    ] {
+        let policy = Arc::new(NetPolicy::default());
+        off(&policy);
+        let svc = test_service(dir.path(), &policy);
+        let info = net_block_on(svc.artist_info(&lib, "Nadia Okafor", false)).unwrap();
+        assert_eq!(info.image.as_deref(), Some(image.as_str()));
+        assert_eq!(info.bio.as_deref(), Some("Cached bio."));
+        assert!(info.albums.is_empty());
+        // Unknown artist: nothing, and nothing stored.
+        let none = net_block_on(svc.artist_info(&lib, "Nobody", false)).unwrap();
+        assert_eq!(none, ArtistOnlineInfo::default());
+        assert!(lib.artist_meta("Nobody").unwrap().is_none());
+        assert_eq!(lib.artist_meta("Nadia Okafor").unwrap().unwrap(), before);
+    }
+
+    // The low-level fetch also returns nothing without asking anyone.
+    policy.set_feature(Feature::ArtistInfo, false);
+    let fetched = net_block_on(svc.enrich_artist("Nadia Okafor", false, true, true));
+    assert_eq!(fetched, ArtistOnlineInfo::default());
+}

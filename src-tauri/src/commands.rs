@@ -149,17 +149,26 @@ pub fn library_track_cover(
 
 /// The latest GitHub release if it is newer than this build.
 #[tauri::command]
-pub async fn app_check_update(app: tauri::AppHandle) -> Res<Option<crate::update::UpdateInfo>> {
+pub async fn app_check_update(
+    app: tauri::AppHandle,
+    store: State<'_, Arc<SessionStore>>,
+) -> Res<Option<crate::update::UpdateInfo>> {
     let current = app.package_info().version.to_string();
-    crate::update::check(&current)
-        .await
-        .map_err(|e| e.to_string())
+    crate::update::check(&current, &store.net_policy()).await
 }
 
 /// Opens a release page of this project in the browser.
 #[tauri::command]
-pub fn app_open_release(app: tauri::AppHandle, url: String) -> Res<()> {
+pub fn app_open_release(
+    app: tauri::AppHandle,
+    store: State<'_, Arc<SessionStore>>,
+    url: String,
+) -> Res<()> {
     use tauri_plugin_opener::OpenerExt;
+    store
+        .net_policy()
+        .require(crate::net::Feature::Updates)
+        .map_err(str::to_owned)?;
     if !url.starts_with(crate::update::RELEASES_PREFIX) {
         return Err("not a FooModern release page".into());
     }
@@ -630,6 +639,8 @@ pub fn playlist_from_queue(
 // App settings
 // ---------------------------------------------------------------------
 
+use crate::lyrics::SaveMode;
+use crate::net::Feature;
 use crate::session::SessionStore;
 use crate::tray::TrayStatus;
 
@@ -643,6 +654,25 @@ pub struct AppSettings {
     tray_available: bool,
     /// `"android"` or `"desktop"`; the UI adapts its layout and dialogs.
     platform: &'static str,
+    /// Where lyrics found online are saved: `sidecar`, `embed` or `off`.
+    lyrics_save: SaveMode,
+    /// Also search NetEase Cloud Music when LRCLIB has nothing.
+    lyrics_netease: bool,
+    /// Master switch: nothing contacts the internet.
+    offline_mode: bool,
+    /// The user's own per-feature switches (kept while offline mode is on).
+    net_lyrics: bool,
+    net_online: bool,
+    net_artist_info: bool,
+    net_metadata: bool,
+    net_updates: bool,
+    /// What is really allowed right now (offline mode applied). The UI
+    /// uses these to hide or disable controls; Rust enforces them anyway.
+    allow_lyrics: bool,
+    allow_online: bool,
+    allow_artist_info: bool,
+    allow_metadata: bool,
+    allow_updates: bool,
 }
 
 fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
@@ -654,6 +684,19 @@ fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
         } else {
             "desktop"
         },
+        lyrics_save: store.lyrics_save(),
+        lyrics_netease: store.lyrics_netease(),
+        offline_mode: store.offline_mode(),
+        net_lyrics: store.net_feature(Feature::Lyrics),
+        net_online: store.net_feature(Feature::Online),
+        net_artist_info: store.net_feature(Feature::ArtistInfo),
+        net_metadata: store.net_feature(Feature::Metadata),
+        net_updates: store.net_feature(Feature::Updates),
+        allow_lyrics: store.net_allowed(Feature::Lyrics),
+        allow_online: store.net_allowed(Feature::Online),
+        allow_artist_info: store.net_allowed(Feature::ArtistInfo),
+        allow_metadata: store.net_allowed(Feature::Metadata),
+        allow_updates: store.net_allowed(Feature::Updates),
     }
 }
 
@@ -673,6 +716,57 @@ pub fn app_set_close_to_tray(
     enabled: bool,
 ) -> AppSettings {
     store.set_close_to_tray(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_lyrics_save(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    mode: SaveMode,
+) -> AppSettings {
+    store.set_lyrics_save(mode);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_lyrics_netease(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_lyrics_netease(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_offline_mode(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_offline_mode(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+/// Switches one internet feature (`lyrics`, `online`, `artistInfo`,
+/// `metadata`, `updates`).
+#[tauri::command]
+pub fn app_set_net_feature(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    feature: Feature,
+    enabled: bool,
+) -> AppSettings {
+    store.set_net_feature(feature, enabled);
     store.save_now(&player.export_session());
     app_settings_now(&store, &tray)
 }
@@ -772,25 +866,176 @@ pub async fn tags_write(
 }
 
 // ---------------------------------------------------------------------
+// Metadata matching (MusicBrainz)
+// ---------------------------------------------------------------------
+
+use crate::metadata::{AlbumCandidate, ApplyOutcome, MetadataService, Proposal, TrackCandidate};
+
+#[tauri::command]
+pub async fn metadata_match_album(
+    lib: State<'_, Arc<Library>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    album_id: i64,
+) -> Res<Vec<AlbumCandidate>> {
+    let (lib, metadata) = (Arc::clone(&lib), Arc::clone(&metadata));
+    metadata
+        .match_album(&lib, album_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn metadata_match_track(
+    lib: State<'_, Arc<Library>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    track_id: i64,
+) -> Res<Vec<TrackCandidate>> {
+    let (lib, metadata) = (Arc::clone(&lib), Arc::clone(&metadata));
+    metadata
+        .match_track(&lib, track_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Shows written tags in the player bar and queue as well.
+fn refresh_player_meta(lib: &Library, player: &Player, outcome: &ApplyOutcome) {
+    for path in &outcome.updated_paths {
+        match lib.track_meta(path) {
+            Ok(Some(meta)) => {
+                player.update_track_meta(path, &meta.title, &meta.artist);
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!("could not read back {path}: {e}"),
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn metadata_apply(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    proposal: Proposal,
+) -> Res<ApplyOutcome> {
+    let (lib, player, metadata) = (Arc::clone(&lib), Arc::clone(&player), Arc::clone(&metadata));
+    // Never hold the player lock across the network or disk work.
+    let current = player.current_path();
+    let outcome = metadata
+        .apply(&lib, proposal, current)
+        .await
+        .map_err(|e| e.to_string())?;
+    refresh_player_meta(&lib, &player, &outcome);
+    Ok(outcome)
+}
+
+#[tauri::command]
+pub async fn metadata_undo(
+    lib: State<'_, Arc<Library>>,
+    player: State<'_, Arc<Player>>,
+    metadata: State<'_, Arc<MetadataService>>,
+    batch_id: i64,
+) -> Res<ApplyOutcome> {
+    let (lib, player, metadata) = (Arc::clone(&lib), Arc::clone(&player), Arc::clone(&metadata));
+    let current = player.current_path();
+    let outcome = metadata
+        .undo(&lib, batch_id, current)
+        .await
+        .map_err(|e| e.to_string())?;
+    refresh_player_meta(&lib, &player, &outcome);
+    Ok(outcome)
+}
+
+// ---------------------------------------------------------------------
 // Lyrics
 // ---------------------------------------------------------------------
 
-use crate::lyrics::{LyricsResult, LyricsService, attach_local_lrc};
+use crate::lyrics::{
+    BulkSaveOutcome, Coverage, LyricsOptions, LyricsResult, LyricsService, ShareOutcome,
+    ShareStatus, attach_local_lrc,
+};
 
 #[tauri::command]
 pub async fn lyrics_for_track(
     lib: State<'_, Arc<Library>>,
     lyrics: State<'_, Arc<LyricsService>>,
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
     path: String,
     duration_seconds: Option<f64>,
     force: bool,
 ) -> Res<LyricsResult> {
     let lib = Arc::clone(&lib);
     let lyrics = Arc::clone(&lyrics);
+    let opts = LyricsOptions::new(
+        store.lyrics_save(),
+        store.lyrics_netease() && store.net_allowed(Feature::Lyrics),
+        player.current_path(),
+    );
     lyrics
-        .for_track(lib, path, duration_seconds, force)
+        .for_track_with(lib, path, duration_seconds, force, &opts)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Writes every cached (found) lyrics of the library with the chosen save
+/// mode. Returns when done; the UI shows the progress state meanwhile.
+#[tauri::command]
+pub async fn lyrics_save_cached(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
+) -> Res<BulkSaveOutcome> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    let (mode, current) = (store.lyrics_save(), player.current_path());
+    tokio::task::spawn_blocking(move || lyrics.save_cached_blocking(&lib, mode, current.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lyrics_coverage(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+) -> Res<Coverage> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    tokio::task::spawn_blocking(move || lyrics.coverage_blocking(&lib))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lyrics_share_status(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    path: String,
+    duration_seconds: Option<f64>,
+) -> Res<ShareStatus> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    lyrics
+        .share_status(lib, path, duration_seconds)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Publishes the track's own lyrics on LRCLIB (can take minutes).
+#[tauri::command]
+pub async fn lyrics_share(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    path: String,
+    duration_seconds: Option<f64>,
+) -> Res<ShareOutcome> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    lyrics
+        .share(lib, path, duration_seconds)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn lyrics_share_cancel(lyrics: State<'_, Arc<LyricsService>>) {
+    lyrics.cancel_share();
 }
 
 #[tauri::command]
@@ -1206,34 +1451,7 @@ pub async fn artist_enrich(
     name: String,
     lang: Option<String>,
 ) -> Res<crate::online::ArtistOnlineInfo> {
-    let existing = le(lib.artist_meta(&name))?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-        .unwrap_or(0);
-    let fresh = existing
-        .as_ref()
-        .is_some_and(|m| now.saturating_sub(m.fetched_at) < 30 * 86_400);
-    let cached_image = existing
-        .as_ref()
-        .and_then(|m| m.image.clone())
-        .filter(|p| std::path::Path::new(p).exists());
-    let cached_bio = existing.as_ref().and_then(|m| m.bio.clone());
-    let need_image = !fresh || cached_image.is_none();
-    let need_bio = !fresh || cached_bio.is_none();
-
-    let fetched = online
-        .enrich_artist(&name, lang.as_deref() == Some("tr"), need_image, need_bio)
-        .await;
-
-    let final_image = fetched.image.or(cached_image);
-    let final_bio = fetched.bio.or(cached_bio);
-    if final_image.is_some() || final_bio.is_some() {
-        let _ = lib.save_artist_meta(&name, final_image.as_deref(), final_bio.as_deref());
-    }
-    Ok(crate::online::ArtistOnlineInfo {
-        image: final_image,
-        bio: final_bio,
-        albums: fetched.albums,
-    })
+    online
+        .artist_info(&lib, &name, lang.as_deref() == Some("tr"))
+        .await
 }

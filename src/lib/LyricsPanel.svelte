@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition'
   import Icon from './Icon.svelte'
   import LyricLines from './LyricLines.svelte'
+  import LyricsShare from './LyricsShare.svelte'
   import TintedBackdrop from './TintedBackdrop.svelte'
   import { lyrics, type LyricsSource } from './lyrics.svelte'
   import { motionDuration } from './motion'
@@ -16,6 +17,8 @@
   const SOURCE_LABELS: Record<LyricsSource, string> = {
     localLrc: 'Local .lrc',
     lrclib: 'LRCLIB',
+    embedded: 'Embedded tag',
+    netease: 'NetEase',
   }
 
   const current = $derived(player.snapshot.current)
@@ -97,5 +100,6 @@
       class="flex-1 px-5"
       scrollClass="[mask-image:linear-gradient(to_bottom,transparent,black_4%,black_90%,transparent)]"
     />
+    <LyricsShare class="px-5 pb-3" />
   {/if}
 </aside>

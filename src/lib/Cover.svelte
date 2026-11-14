@@ -1,5 +1,6 @@
 <script lang="ts">
   import { convertFileSrc } from '@tauri-apps/api/core'
+  import { appSettings } from './appSettings.svelte'
 
   let { cover, title, class: className = '' }: { cover: string | null; title: string; class?: string } = $props()
 
@@ -18,6 +19,9 @@
     for (const ch of title) h = (h * 31 + ch.codePointAt(0)!) % 360
     return h
   })
+  // A remote cover (online search results) is a request from the webview
+  // itself, so it is not shown while the internet features are off.
+  const remote = $derived(cover?.startsWith('http://') || cover?.startsWith('https://'))
   let failed = $state(false)
   let loaded = $state(false)
   let imgEl = $state<HTMLImageElement | null>(null)
@@ -28,10 +32,10 @@
   })
 </script>
 
-{#if cover && !failed}
+{#if cover && !failed && !(remote && !appSettings.allowOnline)}
   <img
     bind:this={imgEl}
-    src={cover.startsWith('http://') || cover.startsWith('https://') ? cover : convertFileSrc(cover)}
+    src={remote ? cover : convertFileSrc(cover)}
     alt="Cover of {title}"
     loading="lazy"
     class={[

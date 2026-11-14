@@ -5,6 +5,7 @@
   import FavoriteButton from './FavoriteButton.svelte'
   import Icon from './Icon.svelte'
   import OnlineAlbumDetail from './OnlineAlbumDetail.svelte'
+  import { appSettings } from './appSettings.svelte'
   import { count, t } from './i18n.svelte'
   import { library, type AlbumRow, type TrackRow } from './library.svelte'
   import {
@@ -21,6 +22,8 @@
   }: { onOpenSettings: () => void; onOpenLocalAlbum: (albumId: number) => void } = $props()
 
   const ytdlpAvailable = $derived(online.status?.ytdlpAvailable ?? false)
+  /** Online search, streaming and downloads are switched off in Settings. */
+  const onlineOff = $derived(!appSettings.allowOnline)
   const trimmedQuery = $derived(online.query.trim())
   const hasCurrentOnline = $derived(
     trimmedQuery !== '' && online.searchedQuery === trimmedQuery && online.results !== null,
@@ -77,6 +80,7 @@
 
   function submitSearch(e: SubmitEvent) {
     e.preventDefault()
+    if (onlineOff) return
     void online.search()
   }
 
@@ -103,8 +107,10 @@
             id="global-search-input"
             type="search"
             bind:value={online.query}
-            placeholder={t('Search your library & online (Enter for online)…')}
-            aria-label={t('Search library and online')}
+            placeholder={onlineOff
+              ? t('Search your library…')
+              : t('Search your library & online (Enter for online)…')}
+            aria-label={onlineOff ? t('Search your library') : t('Search library and online')}
             class="h-10 w-full rounded-full border border-zinc-200 bg-white pr-16 pl-9 text-sm outline-none placeholder:text-zinc-400 focus:border-teal-500 dark:border-zinc-800 dark:bg-zinc-900 dark:placeholder:text-zinc-500"
           />
           {#if online.query}
@@ -122,16 +128,27 @@
             </kbd>
           {/if}
         </div>
-        <button
-          type="submit"
-          disabled={online.searching || trimmedQuery === ''}
-          class="h-10 shrink-0 rounded-full bg-teal-500 px-5 text-sm font-semibold text-zinc-950 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {online.searching ? t('Searching…') : t('Online search')}
-        </button>
+        {#if !onlineOff}
+          <button
+            type="submit"
+            disabled={online.searching || trimmedQuery === ''}
+            class="h-10 shrink-0 rounded-full bg-teal-500 px-5 text-sm font-semibold text-zinc-950 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {online.searching ? t('Searching…') : t('Online search')}
+          </button>
+        {/if}
       </form>
 
-      {#if online.status && !online.status.ytdlpAvailable}
+      {#if onlineOff}
+        <p class="flex flex-wrap items-center gap-2 text-xs text-zinc-500" role="status">
+          <span>{t('Online search is turned off in Settings.')}</span>
+          <button type="button" class="font-medium text-teal-700 hover:underline dark:text-teal-300" onclick={onOpenSettings}>
+            {t('Settings')}
+          </button>
+        </p>
+      {/if}
+
+      {#if !onlineOff && online.status && !online.status.ytdlpAvailable}
         <div class="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           <span class="min-w-0 flex-1">
             {t(
@@ -172,11 +189,13 @@
           </div>
           <p class="mt-1 font-medium">{t('Search library and online')}</p>
           <p class="max-w-md text-sm text-zinc-500">
-            {t(
-              'Type to search your local library immediately, or press Enter to search, stream, and download online.',
-            )}
+            {onlineOff
+              ? t('Type to search your local library.')
+              : t(
+                  'Type to search your local library immediately, or press Enter to search, stream, and download online.',
+                )}
           </p>
-          {#if online.status}
+          {#if online.status && !onlineOff}
             <p class="mt-2 max-w-lg truncate text-xs text-zinc-400">
               {t('Download folder')}: {online.status.downloadDir}
             </p>
@@ -268,6 +287,7 @@
             {/if}
           </section>
 
+          {#if !onlineOff}
           <section aria-labelledby="online-results-heading" class="flex flex-col gap-5">
             <h3
               id="online-results-heading"
@@ -431,6 +451,7 @@
               </div>
             {/if}
           </section>
+          {/if}
         </div>
       {/if}
     </div>
