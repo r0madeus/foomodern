@@ -363,3 +363,90 @@ mod ytdlp_process {
         assert_eq!(path, dir.join("01 - Çakıl Taşları.m4a"));
     }
 }
+
+fn album_track(title: &str, artist: &str, seconds: f64) -> OnlineTrack {
+    OnlineTrack {
+        id: "itunes:1".into(),
+        title: title.into(),
+        artist: artist.into(),
+        album: "Album".into(),
+        album_artist: artist.into(),
+        track_no: Some(1),
+        disc_no: Some(1),
+        year: Some(1996),
+        duration_seconds: Some(seconds),
+        source_url: None,
+        cover: None,
+        cover_url: None,
+    }
+}
+
+fn hit(url: &str, title: &str, channel: &str, seconds: f64) -> YtCandidate {
+    YtCandidate {
+        url: url.into(),
+        title: title.into(),
+        channel: channel.into(),
+        duration_seconds: Some(seconds),
+    }
+}
+
+#[test]
+fn chooses_the_album_recording_over_live_and_wrong_length_hits() {
+    let track = album_track("Bu Akşam", "Duman", 245.0);
+    let hits = [
+        hit("u/live", "Duman - Bu Akşam (Live)", "Duman", 251.0),
+        hit(
+            "u/clip",
+            "Duman - Bu Akşam (Official Video)",
+            "DumanVEVO",
+            290.0,
+        ),
+        hit("u/topic", "Bu Akşam", "Duman - Topic", 246.0),
+        hit("u/cover", "Bu Akşam cover", "Someone", 244.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/topic"));
+
+    // Without a Topic upload the closest plain upload wins, not the live one.
+    let hits = [
+        hits[0].clone(),
+        hits[1].clone(),
+        hit("u/plain", "Duman - Bu Akşam", "x", 247.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/plain"));
+}
+
+#[test]
+fn a_live_track_may_pick_a_live_upload_and_bad_hits_fall_back() {
+    let track = album_track("Hayatı Tespih Yapmışım (Live)", "Barış Manço", 300.0);
+    let hits = [hit("u/live", "Hayatı Tespih Yapmışım (Live)", "x", 301.0)];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/live"));
+
+    // Every hit is far too short or long: no pick, the caller falls back.
+    let track = album_track("Song", "Band", 200.0);
+    let hits = [
+        hit("u/a", "Song", "x", 60.0),
+        hit("u/b", "Song", "x", 600.0),
+    ];
+    assert_eq!(choose_candidate(&track, &hits), None);
+}
+
+#[test]
+fn whole_words_only_for_variant_markers() {
+    let track = album_track("Oliver", "Band", 200.0);
+    let hits = [hit("u/a", "Band - Oliver", "x", 200.0)];
+    assert_eq!(choose_candidate(&track, &hits).as_deref(), Some("u/a"));
+}
+
+#[test]
+fn parses_search_hits_with_channel_and_duration() {
+    let json = r#"{"_type":"playlist","entries":[
+        {"id":"abc","title":"Bu Akşam","channel":"Duman - Topic","duration":246.0},
+        {"id":"def","title":"Other","uploader":"Up","url":"https://www.youtube.com/watch?v=def"}
+    ]}"#;
+    let hits = parse_yt_candidates(json).unwrap();
+    assert_eq!(hits.len(), 2);
+    assert_eq!(hits[0].url, "https://www.youtube.com/watch?v=abc");
+    assert_eq!(hits[0].channel, "Duman - Topic");
+    assert_eq!(hits[1].channel, "Up");
+    assert_eq!(hits[1].duration_seconds, None);
+}

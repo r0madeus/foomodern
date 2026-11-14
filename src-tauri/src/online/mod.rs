@@ -506,9 +506,10 @@ impl OnlineService {
             (None, Some(url)) => ensure_cached_cover(&self.client, &self.covers_dir, url).await,
             (None, None) => None,
         };
-        let target = yt_search_query(track);
         let bin = ytdlp_bin.to_owned();
+        let track = track.clone();
         let stream_url = tokio::task::spawn_blocking(move || {
+            let target = pick_source(&bin, &track);
             let args = ["--no-playlist", "-f", "bestaudio/best", "-g", &target];
             let out = run_ytdlp_lines(&bin, &args, YTDLP_RESOLVE_TIMEOUT, &|| false)?;
             out.into_iter()
@@ -1061,7 +1062,7 @@ fn download_one_track(
 
     let out_tpl = target_dir.join(format!("{stem}.%(ext)s"));
     let out_tpl_str = display_path(&out_tpl);
-    let query = yt_search_query(track);
+    let query = pick_source(ytdlp_bin, track);
 
     let mut args: Vec<&str> = vec![
         "--no-playlist",
@@ -1365,6 +1366,141 @@ async fn fetch_itunes_album_detail(
 pub fn is_http_url(s: &str) -> bool {
     let t = s.trim();
     t.starts_with("http://") || t.starts_with("https://")
+}
+
+/// Words that mark a different recording than the album track, unless the
+/// track's own title has them too.
+const VARIANT_WORDS: &[&str] = &[
+    "live",
+    "canlı",
+    "cover",
+    "remix",
+    "karaoke",
+    "instrumental",
+    "8d",
+    "slowed",
+    "sped up",
+    "nightcore",
+    "reverb",
+    "lyrics video",
+    "concert",
+    "konser",
+];
+
+/// One YouTube search hit, as needed to choose the right recording.
+#[derive(Debug, Clone, PartialEq)]
+pub struct YtCandidate {
+    pub url: String,
+    pub title: String,
+    pub channel: String,
+    pub duration_seconds: Option<f64>,
+}
+
+pub fn parse_yt_candidates(json: &str) -> Result<Vec<YtCandidate>, OnlineError> {
+    let root: YtNode = serde_json::from_str(json)?;
+    Ok(root
+        .entries
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|n| {
+            Some(YtCandidate {
+                url: resolve_yt_url(&n)?,
+                title: n.title.clone().unwrap_or_default(),
+                channel: n.channel.clone().or(n.uploader.clone()).unwrap_or_default(),
+                duration_seconds: n.duration,
+            })
+        })
+        .collect())
+}
+
+/// Whole-word match on text whose punctuation counts as spaces, so "live"
+/// hits "(Live)" but not "Oliver"; `word` may hold spaces ("sped up").
+fn has_word(text: &str, word: &str) -> bool {
+    let words: String = text
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    let padded = format!(
+        " {} ",
+        words.split_whitespace().collect::<Vec<_>>().join(" ")
+    );
+    padded.contains(&format!(" {word} "))
+}
+
+/// Picks the search hit most likely to be the album recording of `track`,
+/// or `None` when no hit is plausible. A hit whose length is far from the
+/// track's is rejected; YouTube's official "Artist - Topic" audio uploads,
+/// matching titles and higher ranks score up; live, cover, remix and similar
+/// variants score down unless the track title has the same word.
+pub fn choose_candidate(track: &OnlineTrack, candidates: &[YtCandidate]) -> Option<String> {
+    let artist = track.artist.trim().to_lowercase();
+    let title = track.title.trim().to_lowercase();
+    let mut best: Option<(i64, &YtCandidate)> = None;
+    for (rank, c) in candidates.iter().enumerate() {
+        let mut score = 10 - 2 * rank as i64;
+        if let (Some(want), Some(got)) = (track.duration_seconds, c.duration_seconds) {
+            let diff = (want - got).abs();
+            if diff > (want * 0.15).max(10.0) {
+                continue;
+            }
+            score += if diff <= 3.0 {
+                30
+            } else if diff <= 8.0 {
+                15
+            } else {
+                0
+            };
+        }
+        let channel = c.channel.trim().to_lowercase();
+        if let Some(name) = channel.strip_suffix(" - topic") {
+            score += if !artist.is_empty() && (name == artist || artist.contains(name)) {
+                40
+            } else {
+                5
+            };
+        } else if !artist.is_empty() && channel.contains(&artist) {
+            score += 10;
+        }
+        let hit = c.title.to_lowercase();
+        if !title.is_empty() && hit.contains(&title) {
+            score += 10;
+        }
+        for word in VARIANT_WORDS {
+            if has_word(&hit, word) && !has_word(&title, word) {
+                score -= 50;
+            }
+        }
+        if best.is_none_or(|(s, _)| score > s) {
+            best = Some((score, c));
+        }
+    }
+    best.filter(|(score, _)| *score > -20)
+        .map(|(_, c)| c.url.clone())
+}
+
+/// What to hand yt-dlp for `track`: its own page when known, else the best of
+/// the top search hits ([`choose_candidate`]), else the first hit.
+#[cfg(not(target_os = "android"))]
+fn pick_source(ytdlp_bin: &str, track: &OnlineTrack) -> String {
+    let fallback = yt_search_query(track);
+    if !fallback.starts_with("ytsearch1:") {
+        return fallback;
+    }
+    let target = fallback.replacen("ytsearch1:", "ytsearch5:", 1);
+    let picked = run_ytdlp_json(
+        ytdlp_bin,
+        &["--flat-playlist", "--dump-single-json", &target],
+    )
+    .and_then(|raw| parse_yt_candidates(&raw))
+    .map(|hits| choose_candidate(track, &hits));
+    match picked {
+        Ok(Some(url)) => url,
+        Ok(None) => fallback,
+        Err(e) => {
+            log::warn!("could not rank search hits for '{}': {e}", track.title);
+            fallback
+        }
+    }
 }
 
 pub fn yt_search_query(track: &OnlineTrack) -> String {
