@@ -2,6 +2,7 @@
 
 use crate::audio::ReplayGain;
 use crate::library::scan::write_atomic;
+use crate::lyrics::SaveMode;
 use crate::player::PlayerSnapshot;
 use crate::queue::RepeatMode;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,10 @@ fn default_volume() -> f64 {
 }
 
 fn default_close_to_tray() -> bool {
+    true
+}
+
+fn default_lyrics_netease() -> bool {
     true
 }
 
@@ -70,6 +75,14 @@ pub struct SessionState {
     /// Albums and playlists pinned by the user to the desktop sidebar.
     #[serde(default)]
     pub pinned: Vec<PinnedRef>,
+    /// Where lyrics found online are saved besides the cache. Owned by
+    /// [`SessionStore`].
+    #[serde(default)]
+    pub lyrics_save: SaveMode,
+    /// Also search NetEase Cloud Music when LRCLIB has nothing. Owned by
+    /// [`SessionStore`].
+    #[serde(default = "default_lyrics_netease")]
+    pub lyrics_netease: bool,
 }
 
 impl Default for SessionState {
@@ -86,6 +99,8 @@ impl Default for SessionState {
             download_dir: None,
             ytdlp_path: None,
             pinned: Vec::new(),
+            lyrics_save: SaveMode::default(),
+            lyrics_netease: default_lyrics_netease(),
         }
     }
 }
@@ -187,6 +202,8 @@ pub struct SessionStore {
     download_dir: Mutex<Option<PathBuf>>,
     ytdlp_path: Mutex<Option<PathBuf>>,
     pinned: Mutex<Vec<PinnedRef>>,
+    lyrics_save: Mutex<SaveMode>,
+    lyrics_netease: AtomicBool,
 }
 
 impl SessionStore {
@@ -198,6 +215,8 @@ impl SessionStore {
             download_dir: Mutex::new(None),
             ytdlp_path: Mutex::new(None),
             pinned: Mutex::new(Vec::new()),
+            lyrics_save: Mutex::new(SaveMode::default()),
+            lyrics_netease: AtomicBool::new(default_lyrics_netease()),
         }
     }
 
@@ -211,7 +230,26 @@ impl SessionStore {
         *self.ytdlp_path.lock().unwrap_or_else(|e| e.into_inner()) =
             clean_opt_path(state.ytdlp_path.clone());
         *self.pinned.lock().unwrap_or_else(|e| e.into_inner()) = state.pinned.clone();
+        *self.lyrics_save.lock().unwrap_or_else(|e| e.into_inner()) = state.lyrics_save;
+        self.lyrics_netease
+            .store(state.lyrics_netease, Ordering::SeqCst);
         state
+    }
+
+    pub fn lyrics_save(&self) -> SaveMode {
+        *self.lyrics_save.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn set_lyrics_save(&self, mode: SaveMode) {
+        *self.lyrics_save.lock().unwrap_or_else(|e| e.into_inner()) = mode;
+    }
+
+    pub fn lyrics_netease(&self) -> bool {
+        self.lyrics_netease.load(Ordering::SeqCst)
+    }
+
+    pub fn set_lyrics_netease(&self, enabled: bool) {
+        self.lyrics_netease.store(enabled, Ordering::SeqCst);
     }
 
     pub fn close_to_tray(&self) -> bool {
@@ -267,6 +305,8 @@ impl SessionStore {
         state.download_dir = self.download_dir();
         state.ytdlp_path = self.ytdlp_path();
         state.pinned = self.pinned();
+        state.lyrics_save = self.lyrics_save();
+        state.lyrics_netease = self.lyrics_netease();
         if let Err(e) = save(&self.path, &state) {
             log::warn!("failed to save session state: {e}");
         } else {
@@ -354,6 +394,8 @@ mod tests {
                     id: 3,
                 },
             ],
+            lyrics_save: SaveMode::Embed,
+            lyrics_netease: false,
         };
         save(&file, &state).unwrap();
         assert_eq!(load(&file), state);
@@ -422,6 +464,35 @@ mod tests {
         // Later saves driven by player events keep the value.
         again.maybe_save_position(SessionState::default);
         assert!(!load(&file).close_to_tray);
+    }
+
+    #[test]
+    fn lyrics_settings_default_and_persist_through_the_store() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("session.json");
+
+        // Old files and missing files: sidecar saving, NetEase on.
+        std::fs::write(&file, r#"{"volume":55.0}"#).unwrap();
+        let state = load(&file);
+        assert_eq!(state.lyrics_save, SaveMode::Sidecar);
+        assert!(state.lyrics_netease);
+
+        let store = SessionStore::new(file.clone());
+        assert_eq!(store.lyrics_save(), SaveMode::Sidecar);
+        assert!(store.lyrics_netease());
+        store.set_lyrics_save(SaveMode::Off);
+        store.set_lyrics_netease(false);
+        store.save_now(&SessionState::default());
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(json["lyricsSave"], "off");
+        assert_eq!(json["lyricsNetease"], false);
+
+        let again = SessionStore::new(file);
+        let state = again.load();
+        assert_eq!(state.lyrics_save, SaveMode::Off);
+        assert_eq!(again.lyrics_save(), SaveMode::Off);
+        assert!(!again.lyrics_netease());
     }
 
     #[test]

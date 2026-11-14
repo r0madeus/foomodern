@@ -6,7 +6,8 @@
   import { player, type ReplayGain } from './player.svelte'
   import { prefs } from './prefs.svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { appSettings } from './appSettings.svelte'
+  import { appSettings, type LyricsSave } from './appSettings.svelte'
+  import { lyrics, type Coverage } from './lyrics.svelte'
   import FoldersView from './FoldersView.svelte'
   import { online } from './online.svelte'
   import { updates } from './updates.svelte'
@@ -30,6 +31,44 @@
     { value: 'track', label: 'Track' },
     { value: 'album', label: 'Album' },
   ]
+
+  const LYRICS_SAVE: { value: LyricsSave; label: string }[] = [
+    { value: 'sidecar', label: 'Next to the song (.lrc file)' },
+    { value: 'embed', label: 'Inside the song file (tag)' },
+    { value: 'off', label: "Only in the app's cache" },
+  ]
+
+  // Bulk save and coverage count run in Rust; only small numbers come back.
+  let lyricsBusy = $state<'save' | 'count' | null>(null)
+  let lyricsSaved = $state<string | null>(null)
+  let coverage = $state<Coverage | null>(null)
+  let lyricsToolError = $state<string | null>(null)
+
+  async function saveCachedLyrics() {
+    lyricsBusy = 'save'
+    lyricsSaved = null
+    lyricsToolError = null
+    try {
+      const r = await lyrics.saveCached()
+      lyricsSaved = t('{saved} saved, {skipped} skipped', { saved: r.saved, skipped: r.skipped })
+    } catch (e) {
+      lyricsToolError = String(e)
+    } finally {
+      lyricsBusy = null
+    }
+  }
+
+  async function countLyrics() {
+    lyricsBusy = 'count'
+    lyricsToolError = null
+    try {
+      coverage = await lyrics.coverage()
+    } catch (e) {
+      lyricsToolError = String(e)
+    } finally {
+      lyricsBusy = null
+    }
+  }
 
   let version = $state<string | null>(null)
   // Android: "all files access", needed to write tags and to read or write
@@ -151,6 +190,97 @@
       <div class="mt-1 border-t border-zinc-200/70 pt-3 dark:border-zinc-800/70">
         <FoldersView embedded />
       </div>
+    </section>
+
+    <section aria-labelledby="set-lyrics" class="flex flex-col gap-3">
+      <h3 id="set-lyrics" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Lyrics")}</h3>
+      <div class="flex flex-col gap-2">
+        <div class="min-w-0">
+          <p id="lyr-save-label" class="text-sm font-medium">{t("Save lyrics")}</p>
+          <p id="lyr-save-help" class="text-sm text-zinc-500">
+            {t("Lyrics found online are also saved permanently, so they work offline and in other players. An existing .lrc file or lyrics tag is never replaced. Lyrics in a song's tag are written once the song is no longer the one playing.")}
+          </p>
+        </div>
+        <div role="radiogroup" aria-labelledby="lyr-save-label" aria-describedby="lyr-save-help" class="flex flex-col gap-1">
+          {#each LYRICS_SAVE as m (m.value)}
+            <label class="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="lyrics-save"
+                class="size-4 accent-teal-600"
+                value={m.value}
+                checked={appSettings.lyricsSave === m.value}
+                disabled={!appSettings.loaded}
+                onchange={() => void appSettings.setLyricsSave(m.value)}
+              />
+              {t(m.label)}
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      <label class="flex cursor-pointer items-start justify-between gap-6">
+        <span class="min-w-0">
+          <span class="block text-sm font-medium">{t("NetEase Cloud Music")}</span>
+          <span class="block text-sm text-zinc-500">
+            {t("Also search NetEase Cloud Music (unofficial; used when LRCLIB has nothing)")}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          class="mt-1 size-4 shrink-0 accent-teal-600"
+          checked={appSettings.lyricsNetease}
+          disabled={!appSettings.loaded}
+          onchange={(e) => void appSettings.setLyricsNetease(e.currentTarget.checked)}
+        />
+      </label>
+
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium">{t("Save cached lyrics to songs")}</p>
+          <p class="text-sm text-zinc-500">
+            {t("Writes the lyrics already found for your library with the setting above. Songs that already have lyrics are skipped.")}
+          </p>
+          {#if lyricsSaved}<p class="mt-0.5 text-xs text-zinc-500" role="status">{lyricsSaved}</p>{/if}
+        </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          disabled={lyricsBusy !== null || appSettings.lyricsSave === 'off'}
+          onclick={() => void saveCachedLyrics()}
+        >
+          {lyricsBusy === 'save' ? t('Saving…') : t('Save')}
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium">{t("Lyrics coverage")}</p>
+          <p class="text-sm text-zinc-500" role="status">
+            {#if coverage}
+              {t('{with} with lyrics · {without} checked, none found · {unchecked} not looked up yet', {
+                with: coverage.withLyrics.toLocaleString(i18n.locale),
+                without: coverage.withoutLyrics.toLocaleString(i18n.locale),
+                unchecked: coverage.unchecked.toLocaleString(i18n.locale),
+              })}
+            {:else}
+              {t("How many songs of your library have lyrics.")}
+            {/if}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          disabled={lyricsBusy !== null}
+          onclick={() => void countLyrics()}
+        >
+          {lyricsBusy === 'count' ? t('Counting…') : t('Count')}
+        </button>
+      </div>
+      {#if lyricsToolError}
+        <p class="text-xs text-red-600 dark:text-red-400" role="alert">{lyricsToolError}</p>
+      {/if}
     </section>
 
     {#if appSettings.platform === 'android'}

@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition'
   import Icon from '../Icon.svelte'
   import LyricLines from '../LyricLines.svelte'
+  import LyricsShare from '../LyricsShare.svelte'
   import TintedBackdrop from '../TintedBackdrop.svelte'
   import { motionDuration, viewportHeight } from '../motion'
   import { player, formatTime } from '../player.svelte'
@@ -44,6 +45,7 @@
   </header>
 
   <LyricLines big dim={tint.dim} class="flex-1 px-6" />
+  <LyricsShare class="shrink-0 px-6 pt-2" />
 
   <div class="shrink-0 px-6 pt-3">
     <input

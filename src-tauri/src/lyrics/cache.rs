@@ -56,6 +56,11 @@ impl LyricsCache {
         Some(entry.result)
     }
 
+    /// Forgets an entry (e.g. the not-found one after sharing the lyrics).
+    pub fn remove(&self, key: &str) {
+        let _ = std::fs::remove_file(self.dir.join(key));
+    }
+
     pub fn put(
         &self,
         key: &str,

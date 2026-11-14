@@ -118,6 +118,41 @@ const TR: Record<string, string> = {
   'Play a track to see lyrics.': 'Sözleri görmek için bir şarkı çal.',
   Sync: 'Senkronize et',
   Retry: 'Tekrar dene',
+  'Embedded tag': 'Gömülü etiket',
+  NetEase: 'NetEase',
+  'Save lyrics': 'Sözleri kaydet',
+  'Next to the song (.lrc file)': 'Şarkının yanına (.lrc dosyası)',
+  'Inside the song file (tag)': 'Şarkı dosyasının içine (etiket)',
+  "Only in the app's cache": 'Yalnız uygulamanın önbelleğinde',
+  "Lyrics found online are also saved permanently, so they work offline and in other players. An existing .lrc file or lyrics tag is never replaced. Lyrics in a song's tag are written once the song is no longer the one playing.":
+    'Çevrimiçi bulunan sözler kalıcı olarak da kaydedilir; böylece çevrimdışı ve başka oynatıcılarda da çalışır. Var olan bir .lrc dosyası ya da söz etiketi asla değiştirilmez. Etikete yazma, şarkı çalan şarkı olmaktan çıkınca yapılır.',
+  'NetEase Cloud Music': 'NetEase Cloud Music',
+  'Also search NetEase Cloud Music (unofficial; used when LRCLIB has nothing)':
+    'NetEase Cloud Music’te de ara (resmî olmayan; LRCLIB’de bir şey yoksa kullanılır)',
+  'Save cached lyrics to songs': 'Önbellekteki sözleri şarkılara kaydet',
+  'Writes the lyrics already found for your library with the setting above. Songs that already have lyrics are skipped.':
+    'Kütüphanen için daha önce bulunan sözleri yukarıdaki ayara göre yazar. Sözü olan şarkılar atlanır.',
+  '{saved} saved, {skipped} skipped': '{saved} kaydedildi, {skipped} atlandı',
+  'Lyrics coverage': 'Söz kapsamı',
+  'How many songs of your library have lyrics.': 'Kütüphanendeki kaç şarkının sözü var.',
+  '{with} with lyrics · {without} checked, none found · {unchecked} not looked up yet':
+    '{with} şarkının sözü var · {without} arandı, bulunamadı · {unchecked} henüz aranmadı',
+  'Counting…': 'Sayılıyor…',
+  Count: 'Say',
+  'Share on LRCLIB': 'LRCLIB’de paylaş',
+  'Your lyrics will be published publicly on lrclib.net. Sending takes a few minutes of processor work (LRCLIB requires it against spam).':
+    'Sözlerin lrclib.net’te herkese açık olarak yayınlanacak. Gönderim birkaç dakika işlemci kullanır (LRCLIB istenmeyen gönderilere karşı bunu şart koşuyor).',
+  Publish: 'Yayınla',
+  'Sharing… (this can take a few minutes)': 'Paylaşılıyor… (birkaç dakika sürebilir)',
+  'Shared on LRCLIB. Thank you!': 'LRCLIB’de paylaşıldı. Teşekkürler!',
+  'Sharing cancelled.': 'Paylaşım iptal edildi.',
+  'Could not share: {error}': 'Paylaşılamadı: {error}',
+  'No lyrics of your own to share.': 'Paylaşılacak kendi sözün yok.',
+  'Needs title, artist, album and duration in the tags.': 'Etiketlerde başlık, sanatçı, albüm ve süre gerekir.',
+  'LRCLIB already has these lyrics.': 'LRCLIB’de bu sözler zaten var.',
+  'These lyrics came from another service.': 'Bu sözler başka bir servisten geldi.',
+  'Could not reach LRCLIB.': 'LRCLIB’ye ulaşılamadı.',
+  'Another share is running.': 'Başka bir paylaşım sürüyor.',
 
   // Lists and sorting
   'Sort by': 'Sırala',

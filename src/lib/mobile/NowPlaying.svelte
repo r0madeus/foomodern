@@ -11,6 +11,7 @@
   import { motionDuration, viewportHeight } from '../motion'
   import { player, formatTime } from '../player.svelte'
   import { lyrics } from '../lyrics.svelte'
+  import LyricsShare from '../LyricsShare.svelte'
   import { nowCover } from '../nowCover.svelte'
   import { tintFrom } from '../tint'
 
@@ -209,6 +210,7 @@
           <p class="px-4 pb-1 text-sm text-red-200">{lyrics.error}</p>
         {/if}
         <LyricLines dim={tint.dim} class={hasLyrics ? 'h-[420px] px-4' : 'px-4'} />
+        <LyricsShare class="px-4 pt-2 pb-3" />
       </div>
     </section>
   </div>

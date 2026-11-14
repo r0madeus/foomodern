@@ -630,6 +630,7 @@ pub fn playlist_from_queue(
 // App settings
 // ---------------------------------------------------------------------
 
+use crate::lyrics::SaveMode;
 use crate::session::SessionStore;
 use crate::tray::TrayStatus;
 
@@ -643,6 +644,10 @@ pub struct AppSettings {
     tray_available: bool,
     /// `"android"` or `"desktop"`; the UI adapts its layout and dialogs.
     platform: &'static str,
+    /// Where lyrics found online are saved: `sidecar`, `embed` or `off`.
+    lyrics_save: SaveMode,
+    /// Also search NetEase Cloud Music when LRCLIB has nothing.
+    lyrics_netease: bool,
 }
 
 fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
@@ -654,6 +659,8 @@ fn app_settings_now(store: &SessionStore, tray: &TrayStatus) -> AppSettings {
         } else {
             "desktop"
         },
+        lyrics_save: store.lyrics_save(),
+        lyrics_netease: store.lyrics_netease(),
     }
 }
 
@@ -673,6 +680,30 @@ pub fn app_set_close_to_tray(
     enabled: bool,
 ) -> AppSettings {
     store.set_close_to_tray(enabled);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_lyrics_save(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    mode: SaveMode,
+) -> AppSettings {
+    store.set_lyrics_save(mode);
+    store.save_now(&player.export_session());
+    app_settings_now(&store, &tray)
+}
+
+#[tauri::command]
+pub fn app_set_lyrics_netease(
+    store: State<'_, Arc<SessionStore>>,
+    tray: State<'_, TrayStatus>,
+    player: State<'_, Arc<Player>>,
+    enabled: bool,
+) -> AppSettings {
+    store.set_lyrics_netease(enabled);
     store.save_now(&player.export_session());
     app_settings_now(&store, &tray)
 }
@@ -855,22 +886,93 @@ pub async fn metadata_undo(
 // Lyrics
 // ---------------------------------------------------------------------
 
-use crate::lyrics::{LyricsResult, LyricsService, attach_local_lrc};
+use crate::lyrics::{
+    BulkSaveOutcome, Coverage, LyricsOptions, LyricsResult, LyricsService, ShareOutcome,
+    ShareStatus, attach_local_lrc,
+};
 
 #[tauri::command]
 pub async fn lyrics_for_track(
     lib: State<'_, Arc<Library>>,
     lyrics: State<'_, Arc<LyricsService>>,
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
     path: String,
     duration_seconds: Option<f64>,
     force: bool,
 ) -> Res<LyricsResult> {
     let lib = Arc::clone(&lib);
     let lyrics = Arc::clone(&lyrics);
+    let opts = LyricsOptions::new(
+        store.lyrics_save(),
+        store.lyrics_netease(),
+        player.current_path(),
+    );
     lyrics
-        .for_track(lib, path, duration_seconds, force)
+        .for_track_with(lib, path, duration_seconds, force, &opts)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Writes every cached (found) lyrics of the library with the chosen save
+/// mode. Returns when done; the UI shows the progress state meanwhile.
+#[tauri::command]
+pub async fn lyrics_save_cached(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    store: State<'_, Arc<SessionStore>>,
+    player: State<'_, Arc<Player>>,
+) -> Res<BulkSaveOutcome> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    let (mode, current) = (store.lyrics_save(), player.current_path());
+    tokio::task::spawn_blocking(move || lyrics.save_cached_blocking(&lib, mode, current.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lyrics_coverage(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+) -> Res<Coverage> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    tokio::task::spawn_blocking(move || lyrics.coverage_blocking(&lib))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn lyrics_share_status(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    path: String,
+    duration_seconds: Option<f64>,
+) -> Res<ShareStatus> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    lyrics
+        .share_status(lib, path, duration_seconds)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Publishes the track's own lyrics on LRCLIB (can take minutes).
+#[tauri::command]
+pub async fn lyrics_share(
+    lib: State<'_, Arc<Library>>,
+    lyrics: State<'_, Arc<LyricsService>>,
+    path: String,
+    duration_seconds: Option<f64>,
+) -> Res<ShareOutcome> {
+    let (lib, lyrics) = (Arc::clone(&lib), Arc::clone(&lyrics));
+    lyrics
+        .share(lib, path, duration_seconds)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn lyrics_share_cancel(lyrics: State<'_, Arc<LyricsService>>) {
+    lyrics.cancel_share();
 }
 
 #[tauri::command]
