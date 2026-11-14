@@ -3,7 +3,8 @@
 A free, cross-platform music player: foobar2000-level audio (gapless,
 ReplayGain, every format FFmpeg plays) with a modern interface.
 
-Status: early prototype (v0 in progress). Windows first, Android later.
+Status: prototype (v0.5). Windows and Android; Linux works for development.
+Progress and plans: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
@@ -37,10 +38,14 @@ npm ci
 npm run tauri dev
 ```
 
+Optional for online search and download (desktop): `yt-dlp` on PATH (or
+its path set in Settings) and `ffmpeg` for m4a conversion.
+
 ### Checks
 
 ```bash
 npm run check
+npm test
 cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 

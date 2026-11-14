@@ -1,6 +1,6 @@
 # FooModern – status and roadmap
 
-Last updated: 2026-11-13. The owner's decision notes live in the 2ncibeyn
+Last updated: 2026-11-14. The owner's decision notes live in the 2ncibeyn
 vault (`projects/muzik-calar/`); this file is the in-repo summary for
 contributors and agents.
 
@@ -26,6 +26,39 @@ contributors and agents.
 - System tray: Show, Play/Pause, Next, Previous, Quit; close-to-tray
 - Attach a local `.lrc` file manually
 - Windows release workflow (`v*` tags) building the NSIS installer
+- Turkish UI (`t()` dictionary; follows the system or Settings)
+- Single instance: a second launch shows the existing window
+
+### v0.5 (desktop unless noted)
+- **Online search and download** (`src-tauri/src/online`): one Search
+  view for the library and online results. Albums come from the iTunes
+  Search API, tracks and streams from `yt-dlp` (YouTube). Album tracks
+  are matched to a recording by ranking the top five hits (length,
+  official "Artist - Topic" uploads, no live/cover/remix variants).
+  Playing a track queues the rest of its list; stream URLs are resolved
+  just in time and never saved with the session. Downloads are tagged,
+  get the album cover, land in the library and can be cancelled; every
+  `yt-dlp` run has a time limit. Needs `yt-dlp` on PATH (or set in
+  Settings); `ffmpeg` is optional (converts to m4a).
+- **Favourites** (schema v4): star tracks, a Favourites list.
+- **Playlist covers** (schema v5): automatic 2×2 collage, gradient+icon
+  presets or a custom image.
+- **Listening history and stats** (schema v6): one row per finished,
+  skipped or interrupted listen (≥ 3 s); a stats view with periods, top
+  tracks/artists/albums/genres and listening rhythm.
+- **Artists** (schema v7): compound tags are split into artists
+  (`feat.`/`ft.`, `,` and `;`; `&`/`+`, "Tyler, The Creator" and
+  "Earth, Wind & Fire" stay whole; rules shared by Rust and the UI via
+  `fixtures/artist-split-cases.json`), an artist directory and profiles
+  with portrait (Deezer), bio (Wikipedia) and missing albums (iTunes),
+  cached locally.
+- **Albums** (schema v8): an album is one (folder, album, album artist)
+  group; its year is the most common track year (latest on a tie).
+  Same-titled albums in different folders with different years stay
+  separate; disc folders of one album merge.
+- Sidebar pins for albums and playlists; queue toggle in the player bar.
+- Phone UI parity: favourites, artists, stats; swipe-back sheets;
+  `prefers-reduced-motion` aware animations.
 
 ### Android (same app, decision K7)
 - Audio through Media3/ExoPlayer behind `AudioEngine`, in a local Tauri
@@ -83,6 +116,10 @@ contributors and agents.
 
 ## Known limitations
 - Linux MPRIS state lags ~1–2 s (souvlaki's D-Bus loop).
-- UI text is English only.
+- Online search/download is desktop only and depends on `yt-dlp`
+  (and YouTube); a wrong recording is still possible when no hit is
+  close to the album track.
+- Artist splitting is heuristic: a duet tagged "A, B & C" splits into
+  "A" and "B & C"; three single-word rappers joined by `&` stay one name.
 - Android: not yet tried on a device; ReplayGain is not applied; only the
   `Music` folder can be added; "Open files" is hidden.
