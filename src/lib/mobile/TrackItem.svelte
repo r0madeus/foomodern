@@ -54,7 +54,7 @@
     tabindex="0"
     class="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
     onclick={onPlay}
-    onkeydown={(e) => e.key === 'Enter' && onPlay()}
+    onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onPlay()}
   >
     {#if number !== null}
       <span class={['w-6 shrink-0 text-center text-sm tabular-nums', current ? 'text-teal-400' : 'text-zinc-500']}>

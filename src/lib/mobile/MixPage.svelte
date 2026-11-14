@@ -17,29 +17,32 @@
   let loading = $state(true)
   let saving = $state(false)
 
-  $effect(() => {
-    const target = id
-    void home.version
-    let stale = false
+  let loadSeq = 0
+  async function load(target: string) {
+    const seq = ++loadSeq
     loading = true
-    home
-      .mixDetail(target)
-      .then((res) => {
-        if (!stale) {
-          detail = res
-          loading = false
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          detail = null
-          loading = false
-        }
-      })
-    return () => {
-      stale = true
+    let res: HomeMixDetail | null = null
+    try {
+      res = await home.mixDetail(target)
+    } catch {
+      res = null
     }
+    if (seq !== loadSeq) return
+    detail = res
+    loading = false
+  }
+
+  // Loaded when the page opens or the mix changes, not on every home refresh,
+  // so the list does not reorder while playing from it.
+  $effect(() => {
+    void load(id)
   })
+
+  async function play(startPath: string | null, shuffle?: boolean) {
+    if (!detail) return
+    const ok = await home.playMix(detail.mix.id, startPath, shuffle)
+    if (!ok) await load(detail.mix.id)
+  }
 
   async function savePlaylist() {
     if (!detail || saving) return
@@ -96,7 +99,7 @@
             type="button"
             class="rounded-full p-3 text-zinc-300 active:bg-white/10"
             aria-label={t('Shuffle play')}
-            onclick={() => void home.playMix(detail!.mix.id, 0, true)}
+            onclick={() => void play(null, true)}
           >
             <Icon name="shuffle" class="size-6" />
           </button>
@@ -104,7 +107,7 @@
             type="button"
             class="flex size-14 items-center justify-center rounded-full bg-teal-500 text-zinc-950 shadow-lg active:scale-95"
             aria-label={t('Play')}
-            onclick={() => void home.playMix(detail!.mix.id, 0, false)}
+            onclick={() => void play(null, false)}
           >
             <Icon name="play" class="size-7" />
           </button>
@@ -119,7 +122,7 @@
           cover={track.cover}
           trackId={track.id}
           {track}
-          onPlay={() => void home.playMix(detail!.mix.id, i)}
+          onPlay={() => void play(track.path)}
         />
       {/each}
     </div>

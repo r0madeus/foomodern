@@ -297,9 +297,8 @@
               <ToggleSwitch
                 ariaLabelledby="tray-label"
                 ariaDescribedby="tray-help"
-                checked={appSettings.closeToTray}
+                bind:checked={() => appSettings.closeToTray, (next) => void appSettings.setCloseToTray(next)}
                 disabled={!appSettings.loaded}
-                onchange={(next) => void appSettings.setCloseToTray(next)}
               />
             </div>
           {/if}
@@ -345,8 +344,7 @@
             <ToggleSwitch
               ariaLabelledby="gapless-label"
               ariaDescribedby="gapless-help"
-              checked={player.snapshot.gapless}
-              onchange={(next) => void player.setGapless(next)}
+              bind:checked={() => player.snapshot.gapless, (next) => void player.setGapless(next)}
             />
           </div>
 
@@ -361,8 +359,7 @@
               <ToggleSwitch
                 ariaLabelledby="wasapi-label"
                 ariaDescribedby="wasapi-help"
-                checked={player.snapshot.wasapiExclusive}
-                onchange={(next) => void player.setWasapiExclusive(next)}
+                bind:checked={() => player.snapshot.wasapiExclusive, (next) => void player.setWasapiExclusive(next)}
               />
             </div>
           {/if}
@@ -438,9 +435,8 @@
             <ToggleSwitch
               ariaLabelledby="offline-label"
               ariaDescribedby="offline-help"
-              checked={appSettings.offlineMode}
+              bind:checked={() => appSettings.offlineMode, (next) => void appSettings.setOfflineMode(next)}
               disabled={!appSettings.loaded}
-              onchange={(next) => void appSettings.setOfflineMode(next)}
             />
           </div>
 
@@ -460,9 +456,8 @@
               <ToggleSwitch
                 ariaLabelledby={`net-${f.feature}-label`}
                 ariaDescribedby={`net-${f.feature}-help`}
-                checked={NET_VALUE[f.feature]()}
+                bind:checked={() => NET_VALUE[f.feature](), (next) => void appSettings.setNetFeature(f.feature, next)}
                 disabled={!appSettings.loaded || appSettings.offlineMode}
-                onchange={(next) => void appSettings.setNetFeature(f.feature, next)}
               />
             </div>
           {/each}

@@ -13,7 +13,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-const SCHEMA_VERSION: i64 = 9;
+const SCHEMA_VERSION: i64 = 10;
 
 pub(super) const SCHEMA_V1: &str = "
 CREATE TABLE folders (
@@ -152,6 +152,12 @@ CREATE TABLE artists_meta (
 );
 ";
 
+/// Home-feed queries match listen events to tracks by path when the track
+/// id was lost, so `path` needs an index.
+const SCHEMA_V10: &str = "
+CREATE INDEX IF NOT EXISTS listen_events_path ON listen_events(path);
+";
+
 pub(super) const SCHEMA_V9: &str = "
 CREATE TABLE IF NOT EXISTS tag_history (
     id       INTEGER PRIMARY KEY,
@@ -248,6 +254,12 @@ pub fn init(conn: &Connection) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         tx.execute_batch(SCHEMA_V9)?;
         tx.pragma_update(None, "user_version", 9)?;
+        tx.commit()?;
+    }
+    if version < 10 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_V10)?;
+        tx.pragma_update(None, "user_version", 10)?;
         tx.commit()?;
     }
     Ok(())
@@ -2414,18 +2426,20 @@ fn focus_mix_data(conn: &Connection, now: i64) -> Result<Option<(String, Vec<Tra
 
     let top_genre: Option<String> = conn
         .query_row(
-            "SELECT TRIM(t.genre)
+            "WITH genre_counts AS (
+                 SELECT TRIM(genre) AS g, COUNT(*) AS n
+                 FROM tracks
+                 WHERE genre IS NOT NULL AND TRIM(genre) != ''
+                 GROUP BY TRIM(genre) COLLATE NOCASE
+             )
+             SELECT TRIM(t.genre)
              FROM listen_events e
              LEFT JOIN tracks tp ON e.track_id IS NULL AND tp.path = e.path
              JOIN tracks t ON t.id = COALESCE(e.track_id, tp.id)
+             JOIN genre_counts gc ON gc.g = TRIM(t.genre) COLLATE NOCASE AND gc.n >= ?2
              WHERE e.started_at >= ?1
                AND e.skipped = 0
                AND t.genre IS NOT NULL AND TRIM(t.genre) != ''
-               AND (
-                   SELECT COUNT(*)
-                   FROM tracks t2
-                   WHERE TRIM(COALESCE(t2.genre, '')) = TRIM(t.genre) COLLATE NOCASE
-               ) >= ?2
              GROUP BY TRIM(t.genre) COLLATE NOCASE
              ORDER BY SUM(e.listened_ms) DESC, COUNT(*) DESC
              LIMIT 1",
@@ -2538,6 +2552,26 @@ pub fn home_mix_queue_tracks(conn: &Connection, mix_id: &str, now: i64) -> Resul
             artist: Some(t.artist),
         })
         .collect())
+}
+
+/// Where playback of a freshly recomputed mix should start. `start_path`
+/// is matched against the recomputed tracks (the mix may have changed since
+/// the UI rendered it); `None` starts at the first track. Errors leave the
+/// caller's queue untouched.
+pub fn resolve_mix_start(
+    tracks: &[Track],
+    start_path: Option<&str>,
+) -> std::result::Result<usize, String> {
+    if tracks.is_empty() {
+        return Err("This mix is empty or no longer available".to_owned());
+    }
+    match start_path {
+        None => Ok(0),
+        Some(wanted) => tracks
+            .iter()
+            .position(|t| t.path.as_path() == Path::new(wanted))
+            .ok_or_else(|| "That track is no longer in this mix".to_owned()),
+    }
 }
 
 pub fn save_mix_as_playlist(

@@ -3,7 +3,7 @@
 A free, cross-platform music player: foobar2000-level audio (gapless,
 ReplayGain, every format FFmpeg plays) with a modern interface.
 
-Status: prototype (v0.5). Windows and Android; Linux works for development.
+Status: prototype (v0.8). Windows and Android; Linux works for development.
 Progress and plans: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack

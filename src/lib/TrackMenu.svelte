@@ -110,6 +110,15 @@
     }
   })
 
+  // Submenus are portaled outside the menu element, so Escape needs its own handler there.
+  function onSubKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      close()
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -131,8 +140,8 @@
     const c = ctx
     if (!c) return
     close()
-    if (c.onPlay) c.onPlay()
-    else await player.openFiles([c.track.path])
+    // No fallback: replacing the whole queue with one song would be surprising.
+    c.onPlay?.()
   }
 
   async function doPlayNext() {
@@ -250,10 +259,12 @@
     style:top="{pos.top}px"
     style:width="{WIDTH}px"
   >
-    <button type="button" role="menuitem" class={itemCls} onclick={() => void doPlay()}>
-      <Icon name="play" class="size-4 shrink-0 text-zinc-500" />
-      <span class="truncate">{t('Play')}</span>
-    </button>
+    {#if ctx.onPlay}
+      <button type="button" role="menuitem" class={itemCls} onclick={() => void doPlay()}>
+        <Icon name="play" class="size-4 shrink-0 text-zinc-500" />
+        <span class="truncate">{t('Play')}</span>
+      </button>
+    {/if}
     <button type="button" role="menuitem" class={itemCls} onclick={() => void doPlayNext()}>
       <Icon name="queue" class="size-4 shrink-0 text-zinc-500" />
       <span class="truncate">{t('Play next')}</span>
@@ -384,6 +395,8 @@
     <div
       use:portal
       bind:this={submenuEl}
+      tabindex="-1"
+      onkeydown={onSubKey}
       role="menu"
       aria-label={t('Add to playlist')}
       class="fixed z-50 flex max-h-72 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 text-sm text-zinc-800 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -452,6 +465,8 @@
     <div
       use:portal
       bind:this={submenuEl}
+      tabindex="-1"
+      onkeydown={onSubKey}
       role="menu"
       aria-label={t('Go to artist')}
       class="fixed z-50 flex max-h-72 flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 text-sm text-zinc-800 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"

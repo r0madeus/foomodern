@@ -119,6 +119,22 @@ contributors and agents.
   actively playing).
 - The cover's dominant colour is computed in Rust (`library::cover_color`).
 
+### Library navigation and desktop controls (v0.8)
+- Sortable columns: Songs sorts in the backend (`SortSpec`, ascending or
+  descending, including duration); playlists sort the loaded list.
+- Track menu (right-click or the row's "more" button): play, play next
+  (`Queue::insert_next`, also under shuffle), add to queue, favourite, add to
+  playlist, go to artist or album, edit tags, show in folder.
+- Artist and album names are links in every list, the player bar and the
+  now-playing screens.
+- Settings > Internet: scan all artists for photos and biographies, with
+  progress and cancel; respects offline mode and the artist-info switch.
+- Sidebar: collapsible, with download progress above Settings; desktop theme
+  switch (system / dark / light).
+- Desktop keyboard: Space (play/pause), Left/Right (seek 5 s), Ctrl+Left/Right
+  (previous/next), Ctrl+Up/Down (volume), M (mute), S (shuffle), R (repeat), Ctrl+K (search). Media keys stay with the
+  OS integration in Rust.
+
 ## Next
 
 1. **Try metadata matching on real albums** (desktop and phone): the

@@ -54,7 +54,7 @@
             tabindex="0"
             class="min-w-0 flex-1 px-4 text-left outline-none"
             onclick={() => player.playIndex(i)}
-            onkeydown={(e) => e.key === 'Enter' && player.playIndex(i)}
+            onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && player.playIndex(i)}
           >
             <span class="block truncate text-[15px]">{track.title}</span>
             <span class="block truncate text-[13px] text-zinc-400">
