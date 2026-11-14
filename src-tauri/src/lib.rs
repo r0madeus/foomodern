@@ -296,6 +296,7 @@ pub fn run() {
             commands::online_download_track,
             commands::online_download_album,
             commands::online_downloads,
+            commands::online_cancel_download,
             commands::online_clear_finished,
             commands::pinned_list,
             commands::pinned_toggle,

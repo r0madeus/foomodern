@@ -996,6 +996,13 @@ pub fn online_downloads(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJo
 }
 
 #[tauri::command]
+pub fn online_cancel_download(online: State<'_, Arc<OnlineService>>, id: u64) -> Vec<DownloadJob> {
+    online
+        .cancel_download(id)
+        .unwrap_or_else(|| online.downloads())
+}
+
+#[tauri::command]
 pub fn online_clear_finished(online: State<'_, Arc<OnlineService>>) -> Vec<DownloadJob> {
     online.clear_finished()
 }

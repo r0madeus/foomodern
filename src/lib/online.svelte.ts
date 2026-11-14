@@ -51,7 +51,7 @@ export interface OnlineAlbumDetail {
 }
 
 export type DownloadKind = 'track' | 'album'
-export type DownloadState = 'queued' | 'downloading' | 'done' | 'failed'
+export type DownloadState = 'queued' | 'downloading' | 'done' | 'failed' | 'cancelled'
 
 export interface DownloadJob {
   id: number
@@ -238,6 +238,14 @@ class OnlineStore {
     try {
       const job = await invoke<DownloadJob>('online_download_album', { album, tracks })
       this.#upsertJob(job)
+    } catch (e) {
+      this.error = String(e)
+    }
+  }
+
+  async cancelDownload(id: number): Promise<void> {
+    try {
+      this.downloads = await invoke<DownloadJob[]>('online_cancel_download', { id })
     } catch (e) {
       this.error = String(e)
     }

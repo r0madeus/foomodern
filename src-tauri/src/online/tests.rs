@@ -271,3 +271,95 @@ fn parses_deezer_artist_and_filters_wikipedia_bio() {
     }"#;
     assert!(parse_wikipedia_bio(band).is_some());
 }
+
+#[cfg(unix)]
+mod ytdlp_process {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// A stand-in `yt-dlp` that runs `body` as a shell script.
+    fn fake_ytdlp(dir: &Path, body: &str) -> String {
+        let path = dir.join("yt-dlp");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn passes_utf8_flags_and_reads_large_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Echo the arguments and the UTF-8 env, then 1 MB more than a pipe holds.
+        let bin = fake_ytdlp(
+            tmp.path(),
+            r#"echo "$@ $PYTHONUTF8"; head -c 1048576 /dev/zero | tr '\0' 'x'"#,
+        );
+        let out = run_ytdlp_bytes(&bin, &["-g", "q"], Duration::from_secs(10), &|| false).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.starts_with("--encoding utf-8 -g q 1\n"),
+            "{}",
+            &text[..40]
+        );
+        assert_eq!(text.len(), "--encoding utf-8 -g q 1\n".len() + 1_048_576);
+    }
+
+    #[test]
+    fn kills_a_hung_process_after_the_timeout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "sleep 30");
+        let started = std::time::Instant::now();
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_millis(300), &|| false).unwrap_err();
+        assert!(err.to_string().contains("timed out"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn stops_when_cancelled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "sleep 30");
+        let started = std::time::Instant::now();
+        let cancel_after = started + Duration::from_millis(200);
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_secs(60), &|| {
+            std::time::Instant::now() >= cancel_after
+        })
+        .unwrap_err();
+        assert!(matches!(err, OnlineError::Cancelled), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn reports_stderr_of_a_failed_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = fake_ytdlp(tmp.path(), "echo 'ERROR: no video' >&2; exit 1");
+        let err = run_ytdlp_bytes(&bin, &[], Duration::from_secs(10), &|| false).unwrap_err();
+        assert_eq!(err.to_string(), "ERROR: no video");
+    }
+
+    #[test]
+    fn finds_the_download_when_the_printed_path_is_unusable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("Şebnem Ferah").join("Kelebek (1996)");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.m4a.part"), b"partial").unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.webp"), b"thumb").unwrap();
+        std::fs::write(dir.join("01 - Çakıl Taşları.m4a"), b"audio").unwrap();
+        // The printed path came back mangled; the download still succeeds.
+        let bin = fake_ytdlp(tmp.path(), "echo '/garbled/01 - ??ak?l Ta?lar?.m4a'");
+        let track = OnlineTrack {
+            id: "itunes:1".into(),
+            title: "Çakıl Taşları".into(),
+            artist: "Şebnem Ferah".into(),
+            album: "Kelebek".into(),
+            album_artist: "Şebnem Ferah".into(),
+            track_no: Some(1),
+            disc_no: Some(1),
+            year: Some(1996),
+            duration_seconds: None,
+            source_url: None,
+            cover: None,
+            cover_url: None,
+        };
+        let path = download_one_track(&track, tmp.path(), &bin, true, None, &|| false).unwrap();
+        assert_eq!(path, dir.join("01 - Çakıl Taşları.m4a"));
+    }
+}

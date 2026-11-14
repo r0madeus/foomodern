@@ -26,7 +26,9 @@
     trimmedQuery !== '' && online.searchedQuery === trimmedQuery && online.results !== null,
   )
   const hasFinishedDownloads = $derived(
-    online.downloads.some((j) => j.state === 'done' || j.state === 'failed'),
+    online.downloads.some(
+      (j) => j.state === 'done' || j.state === 'failed' || j.state === 'cancelled',
+    ),
   )
   const activeCount = $derived(
     online.downloads.filter((j) => j.state === 'queued' || j.state === 'downloading').length,
@@ -490,12 +492,25 @@
                   {t('Done')} ({job.doneTracks}/{job.totalTracks})
                 {:else if job.state === 'failed'}
                   {t('Failed')}
+                {:else if job.state === 'cancelled'}
+                  {t('Cancelled')}
                 {:else if job.state === 'queued'}
                   {t('Queued')}
                 {:else}
                   {job.doneTracks}/{job.totalTracks}
                 {/if}
               </span>
+              {#if job.state === 'downloading' || job.state === 'queued'}
+                <button
+                  type="button"
+                  class="shrink-0 rounded-full p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  title={t('Cancel download')}
+                  aria-label={t('Cancel download')}
+                  onclick={() => void online.cancelDownload(job.id)}
+                >
+                  <Icon name="close" class="size-3.5" />
+                </button>
+              {/if}
             </div>
 
             {#if job.state === 'downloading' || job.state === 'queued'}

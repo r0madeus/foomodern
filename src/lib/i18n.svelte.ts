@@ -299,6 +299,8 @@ const TR: Record<string, string> = {
   Queued: 'Sırada',
   Done: 'Bitti',
   Failed: 'Başarısız',
+  Cancelled: 'İptal edildi',
+  'Cancel download': 'İndirmeyi iptal et',
   'No tracks found for this album.': 'Bu albüm için parça bulunamadı.',
   'Search songs, albums, or paste a link…': 'Şarkı, albüm ara veya bağlantı yapıştır…',
   'Search music online': 'Çevrimiçi müzik ara',

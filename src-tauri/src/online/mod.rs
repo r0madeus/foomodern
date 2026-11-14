@@ -8,7 +8,7 @@ use crate::net::client_builder;
 use crate::session::SessionStore;
 use image::ImageFormat;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +36,13 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(12);
 const USER_AGENT: &str = concat!("FooModern/", env!("CARGO_PKG_VERSION"));
 #[cfg(not(target_os = "android"))]
 const MAX_KEPT_JOBS: usize = 25;
+/// Upper bounds for one yt-dlp run; a hung process is killed after them.
+#[cfg(not(target_os = "android"))]
+const YTDLP_QUERY_TIMEOUT: Duration = Duration::from_secs(90);
+#[cfg(not(target_os = "android"))]
+const YTDLP_RESOLVE_TIMEOUT: Duration = Duration::from_secs(60);
+#[cfg(not(target_os = "android"))]
+const YTDLP_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 
 #[derive(Debug, thiserror::Error)]
 pub enum OnlineError {
@@ -47,6 +54,8 @@ pub enum OnlineError {
     Json(#[from] serde_json::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("cancelled")]
+    Cancelled,
     #[cfg(target_os = "android")]
     #[error("online search and download are only available on desktop")]
     Unsupported,
@@ -130,6 +139,7 @@ pub enum DownloadState {
     Downloading,
     Done,
     Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -172,6 +182,8 @@ pub struct OnlineService {
     covers_dir: PathBuf,
     default_download_dir: PathBuf,
     jobs: Arc<Mutex<Vec<DownloadJob>>>,
+    /// Jobs the user cancelled; the worker skips or aborts them.
+    cancelled: Arc<Mutex<HashSet<u64>>>,
     next_job_id: AtomicU64,
     stream_covers: Mutex<HashMap<String, String>>,
     #[cfg(not(target_os = "android"))]
@@ -188,6 +200,7 @@ impl OnlineService {
         #[cfg(not(target_os = "android"))]
         let (worker_tx, worker_rx) = mpsc::channel::<DownloadWork>();
         let jobs = Arc::new(Mutex::new(Vec::new()));
+        let cancelled = Arc::new(Mutex::new(HashSet::new()));
 
         let client = client_builder()
             .timeout(HTTP_TIMEOUT)
@@ -198,6 +211,7 @@ impl OnlineService {
         #[cfg(not(target_os = "android"))]
         {
             let worker_jobs = Arc::clone(&jobs);
+            let worker_cancelled = Arc::clone(&cancelled);
             let worker_observer = Arc::clone(&on_jobs);
             let worker_covers = covers_dir.clone();
             let worker_client = client.clone();
@@ -207,6 +221,7 @@ impl OnlineService {
                     download_worker(
                         worker_rx,
                         worker_jobs,
+                        worker_cancelled,
                         worker_observer,
                         worker_covers,
                         worker_client,
@@ -221,6 +236,7 @@ impl OnlineService {
             covers_dir,
             default_download_dir,
             jobs,
+            cancelled,
             next_job_id: AtomicU64::new(1),
             stream_covers: Mutex::new(HashMap::new()),
             #[cfg(not(target_os = "android"))]
@@ -276,6 +292,35 @@ impl OnlineService {
         let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
         jobs.retain(|j| matches!(j.state, DownloadState::Queued | DownloadState::Downloading));
         jobs.clone()
+    }
+
+    /// Cancels a queued or running download. Returns the job list, or `None`
+    /// when the job is unknown or already finished.
+    #[cfg(not(target_os = "android"))]
+    pub fn cancel_download(&self, id: u64) -> Option<Vec<DownloadJob>> {
+        let snapshot = {
+            let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
+            let job = jobs.iter_mut().find(|j| j.id == id)?;
+            match job.state {
+                DownloadState::Queued => {
+                    job.state = DownloadState::Cancelled;
+                }
+                DownloadState::Downloading => {}
+                _ => return None,
+            }
+            self.cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(id);
+            jobs.clone()
+        };
+        (self.on_jobs)(&snapshot);
+        Some(snapshot)
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn cancel_download(&self, _id: u64) -> Option<Vec<DownloadJob>> {
+        None
     }
 
     pub fn next_id(&self) -> u64 {
@@ -465,7 +510,7 @@ impl OnlineService {
         let bin = ytdlp_bin.to_owned();
         let stream_url = tokio::task::spawn_blocking(move || {
             let args = ["--no-playlist", "-f", "bestaudio/best", "-g", &target];
-            let out = run_ytdlp_lines(&bin, &args)?;
+            let out = run_ytdlp_lines(&bin, &args, YTDLP_RESOLVE_TIMEOUT, &|| false)?;
             out.into_iter()
                 .find(|l| !l.trim().is_empty())
                 .ok_or_else(|| OnlineError::Message("yt-dlp did not return a stream URL".into()))
@@ -818,10 +863,12 @@ fn url_encode_segment(s: &str) -> String {
 #[cfg(not(target_os = "android"))]
 fn trim_finished_jobs(jobs: &mut Vec<DownloadJob>) {
     while jobs.len() > MAX_KEPT_JOBS {
-        if let Some(pos) = jobs
-            .iter()
-            .rposition(|j| matches!(j.state, DownloadState::Done | DownloadState::Failed))
-        {
+        if let Some(pos) = jobs.iter().rposition(|j| {
+            matches!(
+                j.state,
+                DownloadState::Done | DownloadState::Failed | DownloadState::Cancelled
+            )
+        }) {
             jobs.remove(pos);
         } else {
             break;
@@ -850,6 +897,7 @@ fn update_job(
 fn download_worker(
     rx: mpsc::Receiver<DownloadWork>,
     jobs: Arc<Mutex<Vec<DownloadJob>>>,
+    cancelled: Arc<Mutex<HashSet<u64>>>,
     on_jobs: JobsObserver,
     covers_dir: PathBuf,
     client: reqwest::Client,
@@ -863,6 +911,16 @@ fn download_worker(
     };
 
     while let Ok(work) = rx.recv() {
+        let is_cancelled = || {
+            cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .contains(&work.job_id)
+        };
+        if is_cancelled() {
+            // Cancelled while queued; the job is already marked.
+            continue;
+        }
         let ffmpeg_ok = command_first_line("ffmpeg", &["-version"]).is_some();
         update_job(&jobs, &on_jobs, work.job_id, |j| {
             j.state = DownloadState::Downloading;
@@ -873,7 +931,12 @@ fn download_worker(
         let mut last_error: Option<String> = None;
         let mut cached_covers: HashMap<String, Option<Vec<u8>>> = HashMap::new();
 
+        let mut was_cancelled = false;
         for track in &work.tracks {
+            if is_cancelled() {
+                was_cancelled = true;
+                break;
+            }
             update_job(&jobs, &on_jobs, work.job_id, |j| {
                 j.current_track = Some(track.title.clone());
             });
@@ -885,12 +948,17 @@ fn download_worker(
                 &work.ytdlp_bin,
                 ffmpeg_ok,
                 cover_bytes.as_deref(),
+                &is_cancelled,
             ) {
                 Ok(_path) => {
                     succeeded += 1;
                     update_job(&jobs, &on_jobs, work.job_id, |j| {
                         j.done_tracks = succeeded;
                     });
+                }
+                Err(OnlineError::Cancelled) => {
+                    was_cancelled = true;
+                    break;
                 }
                 Err(e) => {
                     log::warn!("failed to download '{}': {e}", track.title);
@@ -903,10 +971,17 @@ fn download_worker(
             register_and_scan_dir(&work.lib, &work.download_dir);
         }
 
+        cancelled
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&work.job_id);
         update_job(&jobs, &on_jobs, work.job_id, |j| {
             j.current_track = None;
             j.done_tracks = succeeded;
-            if succeeded == 0 {
+            if was_cancelled {
+                j.state = DownloadState::Cancelled;
+                j.error = None;
+            } else if succeeded == 0 {
                 j.state = DownloadState::Failed;
                 j.error = last_error.or_else(|| Some("download failed".into()));
             } else if succeeded < j.total_tracks {
@@ -975,6 +1050,7 @@ fn download_one_track(
     ytdlp_bin: &str,
     ffmpeg_available: bool,
     cover_bytes: Option<&[u8]>,
+    cancelled: &dyn Fn() -> bool,
 ) -> Result<PathBuf, OnlineError> {
     let (subdirs, stem) = target_track_stem(track);
     let mut target_dir = download_dir.to_path_buf();
@@ -1002,19 +1078,25 @@ fn download_one_track(
     }
     args.extend(["-o", &out_tpl_str, &query]);
 
-    let lines = run_ytdlp_lines(ytdlp_bin, &args)?;
-    let produced = lines
+    let lines = run_ytdlp_lines(ytdlp_bin, &args, YTDLP_DOWNLOAD_TIMEOUT, cancelled)?;
+    let printed = lines
         .into_iter()
         .rev()
         .map(|l| l.trim().to_owned())
-        .find(|l| !l.is_empty())
-        .ok_or_else(|| OnlineError::Message("yt-dlp produced no output file".into()))?;
-    let path = PathBuf::from(&produced);
-    if !path.is_file() {
-        return Err(OnlineError::Message(format!(
-            "downloaded file missing: {produced}"
-        )));
-    }
+        .find(|l| !l.is_empty());
+    // Prefer the path yt-dlp printed; if it did not survive the console
+    // encoding, look the file up by the name we asked for.
+    let path = printed
+        .as_ref()
+        .map(PathBuf::from)
+        .filter(|p| p.is_file())
+        .or_else(|| find_downloaded_file(&target_dir, &stem))
+        .ok_or_else(|| {
+            OnlineError::Message(format!(
+                "downloaded file missing: {}",
+                printed.unwrap_or_else(|| display_path(&out_tpl))
+            ))
+        })?;
     if let Err(e) = write_downloaded_tags(&path, track, cover_bytes) {
         log::warn!("failed to write tags on {}: {e}", path.display());
     }
@@ -1050,41 +1132,151 @@ fn command_first_line(bin: &str, args: &[&str]) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Kills `child` with everything it started (yt-dlp runs ffmpeg, and the
+/// Windows yt-dlp.exe is a launcher with a Python child).
 #[cfg(not(target_os = "android"))]
-fn run_ytdlp_bytes(bin: &str, args: &[&str]) -> Result<Vec<u8>, OnlineError> {
-    let out = no_window_cmd(bin).args(args).output().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            OnlineError::Message(
-                "yt-dlp was not found. Install yt-dlp or set its path in Settings.".into(),
-            )
-        } else {
-            OnlineError::Io(e)
+fn kill_tree(child: &mut std::process::Child) {
+    let pid = child.id().to_string();
+    #[cfg(windows)]
+    let _ = no_window_cmd("taskkill")
+        .args(["/T", "/F", "/PID", &pid])
+        .output();
+    #[cfg(unix)]
+    let _ = Command::new("kill")
+        .args(["-KILL", "--", &format!("-{pid}")])
+        .output();
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// The newest audio file in `dir` named `stem.<ext>`.
+#[cfg(not(target_os = "android"))]
+fn find_downloaded_file(dir: &Path, stem: &str) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            crate::library::scan::is_audio_file(p)
+                && p.file_stem().is_some_and(|s| s.to_string_lossy() == stem)
+        })
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// Runs yt-dlp with UTF-8 output, killing it after `timeout` or as soon as
+/// `cancelled` returns true. stdout and stderr are drained on their own
+/// threads so a large JSON dump cannot fill the pipe and stall the process.
+#[cfg(not(target_os = "android"))]
+fn run_ytdlp_bytes(
+    bin: &str,
+    args: &[&str],
+    timeout: Duration,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Vec<u8>, OnlineError> {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    let mut cmd = no_window_cmd(bin);
+    #[cfg(unix)]
+    {
+        // Own process group, so a kill also reaches ffmpeg & co.
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd
+        .args(["--encoding", "utf-8"])
+        .args(args)
+        .env("PYTHONUTF8", "1")
+        .env("PYTHONIOENCODING", "utf-8")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                OnlineError::Message(
+                    "yt-dlp was not found. Install yt-dlp or set its path in Settings.".into(),
+                )
+            } else {
+                OnlineError::Io(e)
+            }
+        })?;
+    let drain = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        })
+    };
+    let stdout = drain(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr = drain(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break Ok(status);
         }
-    })?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
+        if cancelled() {
+            break Err(OnlineError::Cancelled);
+        }
+        if started.elapsed() >= timeout {
+            break Err(OnlineError::Message(format!(
+                "yt-dlp timed out after {} s",
+                timeout.as_secs()
+            )));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    if let Err(e) = status {
+        kill_tree(&mut child);
+        // Children that outlive the kill may still hold the pipes; the
+        // drain threads finish on their own, nothing waits for them.
+        return Err(e);
+    }
+    let out = stdout.join().unwrap_or_default();
+    let err = stderr.join().unwrap_or_default();
+    let status = status?;
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&err).trim().to_owned();
         let msg = if stderr.is_empty() {
-            format!("yt-dlp exited with {}", out.status)
+            format!("yt-dlp exited with {status}")
         } else {
             stderr
         };
         return Err(OnlineError::Message(msg));
     }
-    Ok(out.stdout)
+    Ok(out)
 }
 
 #[cfg(not(target_os = "android"))]
 fn run_ytdlp_json(bin: &str, args: &[&str]) -> Result<String, OnlineError> {
-    let mut full = Vec::with_capacity(args.len() + 2);
-    full.extend(["--no-warnings", "--encoding", "utf-8"]);
+    let mut full = Vec::with_capacity(args.len() + 1);
+    full.push("--no-warnings");
     full.extend_from_slice(args);
-    let bytes = run_ytdlp_bytes(bin, &full)?;
+    let bytes = run_ytdlp_bytes(bin, &full, YTDLP_QUERY_TIMEOUT, &|| false)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 #[cfg(not(target_os = "android"))]
-fn run_ytdlp_lines(bin: &str, args: &[&str]) -> Result<Vec<String>, OnlineError> {
-    let bytes = run_ytdlp_bytes(bin, args)?;
+fn run_ytdlp_lines(
+    bin: &str,
+    args: &[&str],
+    timeout: Duration,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Vec<String>, OnlineError> {
+    let bytes = run_ytdlp_bytes(bin, args, timeout, cancelled)?;
     Ok(String::from_utf8_lossy(&bytes)
         .lines()
         .map(str::to_owned)
