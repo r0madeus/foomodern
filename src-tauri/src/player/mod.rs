@@ -1597,9 +1597,16 @@ mod tests {
         assert_eq!(snap.queue_length, 2);
         assert_eq!(p.export_session(), saved);
         assert_eq!(snap.replaygain, ReplayGain::Track);
+        assert!(snap.gapless);
+        assert!(!snap.wasapi_exclusive);
         assert_eq!(
             calls.take(),
-            [Call::Volume(37.0), Call::ReplayGain(ReplayGain::Track)]
+            [
+                Call::Volume(37.0),
+                Call::ReplayGain(ReplayGain::Track),
+                Call::Gapless(true),
+                Call::WasapiExclusive(false),
+            ]
         );
 
         // Playing from stopped loads the saved track and seeks once Duration arrives.
