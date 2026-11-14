@@ -44,19 +44,29 @@
   <EmptyLibrary />
 {:else}
   <div class="flex h-full flex-col">
-    <div class="flex items-center justify-between gap-3 px-5 pb-2">
-      <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-zinc-500">
-          {t("Sort by")}
-          <select
-            class="rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-            bind:value={library.sort}
-          >
-            {#each SORTS as s (s.value)}
-              <option value={s.value}>{t(s.label)}</option>
-            {/each}
-          </select>
-        </label>
+    <div class="flex flex-wrap items-center justify-between gap-3 px-5 pb-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <div
+          class="inline-flex flex-wrap items-center gap-1 rounded-xl border border-zinc-200/80 bg-zinc-100/70 p-1 dark:border-zinc-800 dark:bg-zinc-900/70"
+          role="group"
+          aria-label={t('Sort by')}
+        >
+          {#each SORTS as s (s.value)}
+            <button
+              type="button"
+              aria-pressed={library.sort === s.value}
+              class={[
+                'rounded-lg px-3 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                library.sort === s.value
+                  ? 'bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-zinc-950'
+                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
+              ]}
+              onclick={() => (library.sort = s.value)}
+            >
+              {t(s.label)}
+            </button>
+          {/each}
+        </div>
         {#if q !== '' && rows.total !== null}
           <span class="text-xs text-zinc-500">{t('{n} matching', { n: rows.total })}</span>
         {/if}

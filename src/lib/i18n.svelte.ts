@@ -554,4 +554,14 @@ const TR: Record<string, string> = {
   'Good morning': 'Günaydın',
   'Good afternoon': 'İyi günler',
   'Good evening': 'İyi akşamlar',
+  Appearance: 'Görünüm',
+  Theme: 'Tema',
+  Dark: 'Koyu',
+  Light: 'Açık',
+  'Choose whether FooModern follows your system theme or stays dark or light.':
+    'FooModern’in sistem temasını mı izleyeceğini yoksa hep koyu ya da açık mı kalacağını seç.',
+  All: 'Tümü',
+  General: 'Genel',
+  'Collapse sidebar': 'Kenar çubuğunu daralt',
+  'Expand sidebar': 'Kenar çubuğunu genişlet',
 }

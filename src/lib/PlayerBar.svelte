@@ -33,6 +33,12 @@
   const repeatLabel = $derived(
     t(snap.repeat === 'one' ? 'Repeat: One' : snap.repeat === 'all' ? 'Repeat: All' : 'Repeat: Off'),
   )
+  const ambientGlow = $derived.by(() => {
+    const c = nowCover.color
+    if (!c) return ''
+    const [r, g, b] = c
+    return `radial-gradient(420px 96px at 14% 50%, rgba(${r}, ${g}, ${b}, 0.22), transparent 75%)`
+  })
 
   function commitSeek() {
     if (dragging !== null) void player.seek(dragging)
@@ -50,9 +56,16 @@
 </script>
 
 <footer
-  class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-6 border-t border-zinc-200 bg-white/80 px-5 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80"
+  class="relative grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-6 overflow-hidden border-t border-zinc-200/80 bg-white/85 px-5 py-3 backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-900/85"
 >
-  <div class="flex min-w-0 items-center gap-2">
+  {#if ambientGlow}
+    <div
+      class="pointer-events-none absolute inset-0 transition-opacity duration-500"
+      style:background={ambientGlow}
+      aria-hidden="true"
+    ></div>
+  {/if}
+  <div class="relative flex min-w-0 items-center gap-2">
     {#if snap.current}
       <div class="flex min-w-0 items-center gap-3">
         <button
@@ -90,7 +103,7 @@
     {/if}
   </div>
 
-  <div class="flex flex-col items-center gap-1.5">
+  <div class="relative flex flex-col items-center gap-1.5">
     <div class="flex items-center gap-2">
       <button
         class={[
@@ -115,7 +128,7 @@
         <Icon name="prev" />
       </button>
       <button
-        class="rounded-full bg-teal-600 p-3 text-white shadow-sm hover:bg-teal-500 disabled:opacity-40"
+        class="rounded-full bg-teal-600 p-3 text-white shadow-sm transition hover:scale-105 hover:bg-teal-500 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 dark:bg-teal-500 dark:text-zinc-950 dark:hover:bg-teal-400"
         onclick={player.togglePause}
         disabled={!hasTrack}
         aria-label={t(snap.status === 'playing' ? 'Pause' : 'Play')}
@@ -164,7 +177,7 @@
     </div>
   </div>
 
-  <div class="flex items-center justify-end gap-2">
+  <div class="relative flex items-center justify-end gap-2">
     <button
       class={[
         'rounded-full p-2 transition-colors',

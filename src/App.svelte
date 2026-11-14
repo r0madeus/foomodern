@@ -31,6 +31,7 @@
   import { pinned } from './lib/pinned.svelte'
   import { home } from './lib/home.svelte'
   import { appSettings } from './lib/appSettings.svelte'
+  import { theme } from './lib/theme.svelte'
   import { online } from './lib/online.svelte'
   import MobileApp from './lib/mobile/MobileApp.svelte'
   import NowPlayingView from './lib/NowPlayingView.svelte'
@@ -98,11 +99,30 @@
     return () => narrow.removeEventListener('change', onChange)
   })
   $effect(() => {
-    document.documentElement.classList.toggle('dark', mobile)
+    const dark = mobile || theme.isDark
+    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   })
   $effect(() => {
     document.documentElement.lang = i18n.lang
   })
+
+  const SIDEBAR_KEY = 'foomodern.sidebar.collapsed'
+  let sidebarCollapsed = $state(false)
+  try {
+    sidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    // storage unavailable
+  }
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed
+    try {
+      localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? '1' : '0')
+    } catch {
+      // ignore
+    }
+  }
 
   let playlistId = $state<number | null>(null)
   let selectedAlbumId = $state<number | null>(null)
@@ -245,17 +265,44 @@
 {:else}
 <div class="flex h-screen flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
   <div class="flex min-h-0 flex-1">
-    <aside class="flex w-52 shrink-0 flex-col gap-4 border-r border-zinc-200 px-3 py-4 dark:border-zinc-800">
-      <h1 class="px-2 text-lg font-semibold tracking-tight">FooModern</h1>
+    <aside
+      class={[
+        'flex shrink-0 flex-col gap-4 border-r border-zinc-200/80 bg-zinc-100/70 py-4 transition-[width] duration-200 dark:border-zinc-800/80 dark:bg-zinc-900/50',
+        sidebarCollapsed ? 'w-[4.25rem] px-2' : 'w-56 px-3',
+      ]}
+    >
+      <div class={['flex items-center', sidebarCollapsed ? 'justify-center' : 'justify-between px-1.5']}>
+        {#if !sidebarCollapsed}
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-emerald-600 text-white shadow-xs">
+              <Icon name="music" class="size-4" />
+            </span>
+            <h1 class="truncate text-base font-bold tracking-tight">FooModern</h1>
+          </div>
+        {/if}
+        <button
+          type="button"
+          class="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-200/80 hover:text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          aria-label={t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
+          title={t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
+          onclick={toggleSidebar}
+        >
+          <Icon name="sidebar" class="size-4" />
+        </button>
+      </div>
+
       <nav aria-label={t("Library")} class="flex flex-col gap-0.5">
         {#each NAV as v (v)}
           <button
             class={[
-              'flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm',
+              'flex items-center rounded-lg py-1.5 text-sm transition-colors',
+              sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-2',
               view === v
-                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
-                : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
             ]}
+            title={sidebarCollapsed ? t(LABELS[v]) : undefined}
+            aria-label={sidebarCollapsed ? t(LABELS[v]) : undefined}
             aria-current={view === v ? 'page' : undefined}
             onclick={() => {
               if (v === 'albums') selectedAlbumId = null
@@ -264,17 +311,25 @@
             }}
           >
             <span class="flex items-center gap-2.5">
-              <Icon name={ICONS[v]} class="size-[18px] opacity-80" />
-              {t(LABELS[v])}
+              <Icon name={ICONS[v]} class="size-[18px] opacity-85" />
+              {#if !sidebarCollapsed}
+                <span>{t(LABELS[v])}</span>
+              {/if}
             </span>
-            {#if counts[v]}
-              <span class="text-xs tabular-nums text-zinc-400">{counts[v]?.toLocaleString()}</span>
+            {#if !sidebarCollapsed}
+              {#if counts[v]}
+                <span class="text-xs tabular-nums text-zinc-400">{counts[v]?.toLocaleString()}</span>
+              {:else if v === 'search'}
+                <kbd class="rounded border border-zinc-300/80 px-1 py-0.5 font-sans text-[10px] leading-none text-zinc-400 dark:border-zinc-700">
+                  Ctrl K
+                </kbd>
+              {/if}
             {/if}
           </button>
         {/each}
       </nav>
 
-      {#if pinned.entries.length > 0}
+      {#if pinned.entries.length > 0 && !sidebarCollapsed}
         <nav aria-labelledby="pinned-heading" class="flex max-h-48 shrink-0 flex-col gap-1">
           <div class="flex items-center justify-between px-2">
             <h2
@@ -344,31 +399,35 @@
       {/if}
 
       <nav aria-labelledby="playlists-heading" class="flex min-h-0 flex-1 flex-col gap-0.5">
-        <div class="flex items-center justify-between px-2">
-          <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
-          <span class="flex items-center gap-0.5">
-            <button
-              class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              aria-label={t("Import playlist (M3U)")}
-              title={t("Import playlist (M3U)")}
-              onclick={async () => {
-                const made = await playlists.importM3u()
-                if (made) openPlaylist(made.id)
-              }}
-            >
-              <Icon name="upload" class="size-4" />
-            </button>
-            <button
-              class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              aria-label={t("New playlist")}
-              title={t("New playlist")}
-              onclick={() => (creatingPlaylist = !creatingPlaylist)}
-            >
-              <Icon name="plus" class="size-4" />
-            </button>
-          </span>
-        </div>
-        {#if creatingPlaylist}
+        {#if !sidebarCollapsed}
+          <div class="flex items-center justify-between px-2">
+            <h2 id="playlists-heading" class="text-xs font-medium uppercase tracking-wide text-zinc-400">{t("Playlists")}</h2>
+            <span class="flex items-center gap-0.5">
+              <button
+                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                aria-label={t("Import playlist (M3U)")}
+                title={t("Import playlist (M3U)")}
+                onclick={async () => {
+                  const made = await playlists.importM3u()
+                  if (made) openPlaylist(made.id)
+                }}
+              >
+                <Icon name="upload" class="size-4" />
+              </button>
+              <button
+                class="rounded p-0.5 text-zinc-400 outline-none hover:bg-zinc-200 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-teal-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                aria-label={t("New playlist")}
+                title={t("New playlist")}
+                onclick={() => (creatingPlaylist = !creatingPlaylist)}
+              >
+                <Icon name="plus" class="size-4" />
+              </button>
+            </span>
+          </div>
+        {:else}
+          <h2 id="playlists-heading" class="sr-only">{t("Playlists")}</h2>
+        {/if}
+        {#if creatingPlaylist && !sidebarCollapsed}
           <form
             class="px-1 pb-1"
             onsubmit={(e) => {
@@ -377,7 +436,7 @@
             }}
           >
             <input
-              class="w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
+              class="w-full rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-900"
               placeholder={t("Playlist name")}
               aria-label={t("New playlist name")}
               bind:value={newPlaylistName}
@@ -390,11 +449,14 @@
           <button
             type="button"
             class={[
-              'flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+              'flex items-center rounded-lg px-2 py-1.5 text-sm',
+              sidebarCollapsed ? 'justify-center' : 'justify-between gap-2 text-left',
               view === 'favorites'
-                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
-                : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800',
+                ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                : 'text-zinc-700 hover:bg-zinc-200/70 dark:text-zinc-200 dark:hover:bg-zinc-800/70',
             ]}
+            title={sidebarCollapsed ? t('Favorites') : undefined}
+            aria-label={sidebarCollapsed ? t('Favorites') : undefined}
             aria-current={view === 'favorites' ? 'page' : undefined}
             onclick={() => go('favorites')}
           >
@@ -402,9 +464,11 @@
               <span class="flex size-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-teal-400 to-indigo-600 text-white">
                 <Icon name="star" class="size-3" />
               </span>
-              <span class="truncate">{t('Favorites')}</span>
+              {#if !sidebarCollapsed}
+                <span class="truncate">{t('Favorites')}</span>
+              {/if}
             </span>
-            {#if favorites.ids.size > 0}
+            {#if !sidebarCollapsed && favorites.ids.size > 0}
               <span class="text-xs tabular-nums text-zinc-400">
                 {favorites.ids.size.toLocaleString()}
               </span>
@@ -416,11 +480,14 @@
             <div class="group flex items-center gap-0.5">
               <button
                 class={[
-                  'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+                  'flex min-w-0 flex-1 items-center rounded-lg px-2 py-1.5 text-sm',
+                  sidebarCollapsed ? 'justify-center' : 'gap-2 text-left',
                   active
-                    ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
-                    : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                    ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+                    : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
                 ]}
+                title={sidebarCollapsed ? p.name : undefined}
+                aria-label={sidebarCollapsed ? p.name : undefined}
                 aria-current={active ? 'page' : undefined}
                 onclick={() => openPlaylist(p.id)}
               >
@@ -431,26 +498,30 @@
                   class="size-6 shrink-0 rounded"
                   iconClass="size-3.5"
                 />
-                <span class="min-w-0 flex-1 truncate">{p.name}</span>
-                <span class="shrink-0 text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
+                {#if !sidebarCollapsed}
+                  <span class="min-w-0 flex-1 truncate">{p.name}</span>
+                  <span class="shrink-0 text-xs tabular-nums text-zinc-400">{p.trackCount.toLocaleString()}</span>
+                {/if}
               </button>
-              <button
-                type="button"
-                title={t(isPinned ? 'Unpin' : 'Pin')}
-                aria-label={t(isPinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title: p.name })}
-                class={[
-                  'shrink-0 rounded p-1 transition hover:bg-zinc-200 dark:hover:bg-zinc-800',
-                  isPinned
-                    ? 'text-teal-600 opacity-100 dark:text-teal-400'
-                    : 'text-zinc-400 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
-                ]}
-                onclick={() => void pinned.toggle('playlist', p.id)}
-              >
-                <Icon name="pin" class="size-3.5" />
-              </button>
+              {#if !sidebarCollapsed}
+                <button
+                  type="button"
+                  title={t(isPinned ? 'Unpin' : 'Pin')}
+                  aria-label={t(isPinned ? 'Unpin “{title}”' : 'Pin “{title}”', { title: p.name })}
+                  class={[
+                    'shrink-0 rounded p-1 transition hover:bg-zinc-200 dark:hover:bg-zinc-800',
+                    isPinned
+                      ? 'text-teal-600 opacity-100 dark:text-teal-400'
+                      : 'text-zinc-400 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100',
+                  ]}
+                  onclick={() => void pinned.toggle('playlist', p.id)}
+                >
+                  <Icon name="pin" class="size-3.5" />
+                </button>
+              {/if}
             </div>
           {:else}
-            {#if !creatingPlaylist}
+            {#if !creatingPlaylist && !sidebarCollapsed}
               <p class="px-2 text-xs text-zinc-400">{t("No playlists yet.")}</p>
             {/if}
           {/each}
@@ -459,22 +530,36 @@
 
       <div class="mt-auto flex flex-col gap-2">
         {#if library.scanning}
-          <p class="flex items-center gap-2 px-2 text-xs text-teal-700 dark:text-teal-400" role="status">
-            <span class="size-2 animate-pulse rounded-full bg-teal-500"></span>
-            {library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
+          <p
+            class={['flex items-center gap-2 px-2 text-xs text-teal-700 dark:text-teal-400', sidebarCollapsed && 'justify-center']}
+            role="status"
+            title={library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
+          >
+            <span class="size-2 shrink-0 animate-pulse rounded-full bg-teal-500"></span>
+            {#if !sidebarCollapsed}
+              <span class="truncate">
+                {library.scan ? t('Scanning · {n}', { n: library.scan.scanned.toLocaleString(i18n.locale) }) : t('Scanning…')}
+              </span>
+            {/if}
           </p>
         {/if}
         <button
           class={[
-            'rounded-lg px-2 py-1.5 text-left text-sm',
+            'flex items-center rounded-lg px-2 py-1.5 text-sm transition-colors',
+            sidebarCollapsed ? 'justify-center' : 'gap-2.5 text-left',
             view === 'settings'
-              ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/40 dark:text-teal-100'
-              : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
+              ? 'bg-teal-50 font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-100'
+              : 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800/70',
           ]}
+          title={sidebarCollapsed ? t('Settings') : undefined}
+          aria-label={sidebarCollapsed ? t('Settings') : undefined}
           aria-current={view === 'settings' ? 'page' : undefined}
           onclick={() => go('settings')}
         >
-          {t("Settings")}
+          <Icon name="sliders" class="size-[18px] opacity-85" />
+          {#if !sidebarCollapsed}
+            <span>{t("Settings")}</span>
+          {/if}
         </button>
       </div>
     </aside>

@@ -1,15 +1,8 @@
 @import "tailwindcss";
 
-/* `dark:` follows the system theme, or the `dark` class on <html> (set on
-   phones, where the app is always dark). */
-@custom-variant dark {
-  @media (prefers-color-scheme: dark) {
-    @slot;
-  }
-  &:where(.dark, .dark *) {
-    @slot;
-  }
-}
+/* `dark:` follows the `.dark` class on <html>, kept in sync with the theme
+   preference on desktop and always dark on phones. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   color-scheme: light dark;
@@ -54,15 +47,6 @@ html.dark input.seek {
 }
 html.dark input.seek:not(:disabled):hover {
   --seek-fill: var(--color-teal-400);
-}
-@media (prefers-color-scheme: dark) {
-  input.seek {
-    --seek-fill: var(--color-teal-500);
-    --seek-track: var(--color-zinc-700);
-  }
-  input.seek:not(:disabled):hover {
-    --seek-fill: var(--color-teal-400);
-  }
 }
 input.seek::-webkit-slider-thumb {
   appearance: none;
